@@ -11,14 +11,14 @@ def sync_to():
     destination = request.json['destination']
     source = os.getenv('WELDERVOLUME','')
     if not validate_bucket(destination):
-        return jsonify({"error":destination}), 400
+        return jsonify({"Destination is not a valid bucket":destination}), 400
     if (source == ""):
         return "Source not defined", 400
     command = ['gsutil', '-m', 'rsync', '-r', source, destination]
     output = ""
     for line in run_command(command):
         output += line 
-    return jsonify({'output':output}), 202
+    return jsonify({'output':output}), 200
 
 
 @app.route('/welder/api/syncFrom', methods=['POST'])
@@ -28,14 +28,14 @@ def sync_from():
     source = request.json['source']
     destination = os.getenv('WELDERVOLUME','')
     if not validate_bucket(source):
-        return 'source {0} is not a valid GCS bucket'.format(source), 400
+        return 'Source {0} is not a valid GCS bucket'.format(source), 400
     if (destination == ""):
         return "Destination not defined", 400
     command = ['gsutil', '-m', 'rsync', '-r', source, destination]
     output = ""
     for line in run_command(command):
         output += line 
-    return jsonify({'output':output}), 202
+    return jsonify({'output':output}), 200
 
 
 def validate_bucket(bucket_name):
