@@ -40,12 +40,12 @@ def run_command(source, destination):
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output= list((iter(p.stdout.readline, b'')))
     if('exception' in output[-2].decode('utf-8').lower()):
-        return jsonify({'output':output[-2].decode('utf-8').strip()}), 403
+        return jsonify({'status':'Error', 'message':output[-2].decode('utf-8').strip()}), 403
     else:
         if('Starting synchronization...' in output[-1].decode('utf-8').lower()):
-            return '', 204
+            return jsonify({'status':'Success', 'message':output[-1].decode('utf-8').strip()}), 204
         else:
-            return jsonify({'output':output[-1].decode('utf-8').strip()}), 200
+            return jsonify({'status':'Success', 'message':output[-1].decode('utf-8').strip()}), 200
 
 
 if __name__ == '__main__':
