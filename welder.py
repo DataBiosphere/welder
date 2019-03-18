@@ -11,13 +11,10 @@ def sync_to():
     destination = request.json['destination']
     source = os.getenv('WELDERVOLUME','')
     if not validate_bucket(destination):
-        return jsonify({"Destination is not a valid bucket":destination}), 400
-    if (source == ""):
-        return "Source not defined", 400
-    output = ""
-    for line in run_command(source, destination):
-        output += line 
-    return jsonify({'output':output}), 200
+        return jsonify({'Destination is not a valid bucket':destination}), 400
+    if (source == ''):
+        return 'Source not defined', 400
+    return run_command(source, destination)
 
 
 @app.route('/welder/api/syncFrom', methods=['POST'])
@@ -28,23 +25,28 @@ def sync_from():
     destination = os.getenv('WELDERVOLUME','')
     if not validate_bucket(source):
         return 'Source {0} is not a valid GCS bucket'.format(source), 400
-    if (destination == ""):
-        return "Destination not defined", 400
-    output = ""
-    for line in run_command(source, destination):
-        output += line 
-    return jsonify({'output':output}), 200
+    if (destination == ''):
+        return 'Destination not defined', 400
+    return run_command(source, destination)
 
 
 def validate_bucket(bucket_name):
-    return bucket_name.startswith('gs:\\')
+    return bucket_name.startswith('gs://')
 
 
 def run_command(source, destination):
     command = ['gsutil', '-m', 'rsync', '-r', source, destination]
-    output = ""
+    output = ''
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return list((iter(p.stdout.readline, b'')))
+    output= list((iter(p.stdout.readline, b'')))
+    if('exception' in output[-2].decode('utf-8').lower()):
+        return jsonify({'output':output[-2].decode('utf-8').strip()}), 403
+    else:
+        if('Starting synchronization...' in output[-1].decode('utf-8').lower()):
+            return '', 204
+        else:
+            return jsonify({'output':output[-1].decode('utf-8').strip()}), 200
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0')
