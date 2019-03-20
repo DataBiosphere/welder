@@ -43,7 +43,7 @@ def run_command(source, destination):
         return jsonify({'status':'Error', 'message':output[-2].decode('utf-8').strip()}), 403
     else:
         if('Starting synchronization...' in output[-1].decode('utf-8').lower()):
-            return jsonify({'status':'Success', 'message':output[-1].decode('utf-8').strip()}), 204
+            return jsonify({'status':'Success', 'message':'Files are up to date.'}), 200
         else:
             return jsonify({'status':'Success', 'message':output[-1].decode('utf-8').strip()}), 200
 
