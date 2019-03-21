@@ -4,7 +4,7 @@ from flask import (Flask, request, abort, jsonify)
 app = Flask(__name__)  # create the application instance
 
 
-@app.route('/welder/api/syncTo', methods=['POST'])
+@app.route('/api/syncTo', methods=['POST'])
 def sync_to():
     if not request or 'destination' not in request.json:
         return abort(400)
@@ -17,7 +17,7 @@ def sync_to():
     return run_command(source, destination)
 
 
-@app.route('/welder/api/syncFrom', methods=['POST'])
+@app.route('/api/syncFrom', methods=['POST'])
 def sync_from():
     if not request or 'source' not in request.json:
         return abort(400)
