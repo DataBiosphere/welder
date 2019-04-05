@@ -31,7 +31,7 @@ def sync_from():
         return 'Destination not defined', 400
     rsync_command = ['gsutil', '-m', 'rsync', '-p', '-r', source, destination]
     rsync_output = process_rsync_output(run_command(rsync_command))
-    chown_command = ['chown', '-R', '1000:1000', '.']
+    chown_command = ['chown', '-R', '1000:1000', destination]
     run_command(chown_command)
     return rsync_output
 
@@ -56,7 +56,7 @@ def process_rsync_output(output):
     if 'exception' in output[-2].decode('utf-8').lower():
         return jsonify({'message': output[-2].decode('utf-8').strip()}), 412
     else:
-        if 'Starting synchronization...' in output[-1].decode('utf-8').lower():
+        if 'starting synchronization...' in output[-1].decode('utf-8').lower():
             return jsonify({'message': 'Files are up to date.'}), 200
         else:
             return jsonify({'message': output[-1].decode('utf-8').strip()}), 200
