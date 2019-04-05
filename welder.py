@@ -42,7 +42,7 @@ def validate_bucket(bucket_name):
 
     # Regex for a full GCS path which captures the bucket name.
 
-    gcs_path_pattern = '(?x)^{0}://({1})/(?:.*)?'.format(gcs_scheme, gcs_bucket_name_pattern_base)
+    gcs_path_pattern = '(?x)^{0}:\/\/({1})\/?(?:.*)?'.format(gcs_scheme, gcs_bucket_name_pattern_base)
     
     return re.match(gcs_path_pattern, bucket_name)
 
