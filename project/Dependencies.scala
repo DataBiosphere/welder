@@ -5,6 +5,7 @@ object Dependencies {
   val http4sVersion = "0.20.0"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.7"
+  val newRelicVersion = "5.0.0"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",
@@ -19,7 +20,8 @@ object Dependencies {
     "org.log4s" %% "log4s" % "1.7.0",
     "org.webjars" % "swagger-ui" % "3.20.1",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
-    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % "0.2-4c7acd5"
+    "org.broadinstitute.dsde.workbench" %% "workbench-google2" % "0.2-4c7acd5",
+    "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
   )
 
   val server = common ++ List(

@@ -25,7 +25,7 @@ object Main extends IOApp {
     } yield ()
 
     app
-      .handleErrorWith(error => Stream.emit(Logger[IO].error(error)("Failed to start server")))
+      .handleErrorWith(error => Stream.eval(Logger[IO].error(error)("Failed to start server")))
       .evalMap(_ => IO.never)
       .compile
       .drain

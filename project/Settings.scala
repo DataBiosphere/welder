@@ -8,6 +8,7 @@ import sbt.Keys.{scalacOptions, _}
 import sbt._
 import com.typesafe.sbt.GitPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
+import com.gilt.sbt.newrelic.NewRelic.autoImport._
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -89,7 +90,7 @@ object Settings {
       addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0")
     )
 
-  lazy val commonDockerSetting = List(
+  lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
     dockerBaseImage := "oracle/graalvm-ce:1.0.0-rc16",
     dockerRepository := Some("us.gcr.io"),
@@ -100,7 +101,7 @@ object Settings {
     )
   )
 
-  lazy val serverDockerSetting = commonDockerSetting ++ List(
+  lazy val serverDockerSettings = commonDockerSettings ++ List(
     mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
     packageName in Docker := "broad-dsp-gcr-public/welder-server",
     dockerAlias := DockerAlias(
@@ -111,5 +112,12 @@ object Settings {
     )
   )
 
-  lazy val serverSettings = commonSettings ++ serverDockerSetting
+  lazy val newrelicSettings = List(
+    newrelicVersion := "5.0.0",
+    newrelicLicenseKey := Some("fakeone"),
+    newrelicAppName := "welder - local - dev",
+    newrelicIncludeApi := true
+  )
+
+  lazy val serverSettings = commonSettings ++ serverDockerSettings ++ newrelicSettings
 }

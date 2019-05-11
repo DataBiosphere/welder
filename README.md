@@ -1,6 +1,6 @@
 # Try it out
 
-* Start hamm-api-server `sbt server/run`
+* Start hamm-api-server `sbt server/run` (You need proper configration file)
 * Run automation tests against the running server `sbt automation/test`
 
 # Publish container image to Google container registry

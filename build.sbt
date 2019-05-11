@@ -12,7 +12,6 @@ lazy val welder = project
 lazy val core =
   project
     .in(file("core"))
-    .enablePlugins(BuildInfoPlugin)
     .settings(
       libraryDependencies ++= Dependencies.common,
       Settings.commonSettings,
@@ -30,7 +29,6 @@ lazy val core =
               |
             |/** Auto-generated build information. */
               |object BuildInfo {
-              |  val version = "$v"
               |  val buildTime    = new java.util.Date(${t}L)
               |  val gitHeadCommit = "${git.gitHeadCommit.value.getOrElse("")}"
               |}
@@ -40,10 +38,12 @@ lazy val core =
       }.taskValue
     )
 
+enablePlugins(NewRelic)
+
 lazy val server =
   project
     .in(file("server"))
-    .enablePlugins(JavaAppPackaging)
+    .enablePlugins(JavaAppPackaging, BuildInfoPlugin, NewRelic)
     .settings(
       libraryDependencies ++= Dependencies.server,
       Settings.serverSettings
