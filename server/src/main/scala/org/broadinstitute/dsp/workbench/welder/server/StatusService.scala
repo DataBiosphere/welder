@@ -8,10 +8,11 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe.CirceEntityEncoder._
 
 object StatusService extends Http4sDsl[IO] {
-  implicit def statusResponseEncoder: Encoder[StatusResponse] = Encoder.forProduct2(
-    "buildTime",
-    "gitHeadCommit"
-  )(x => StatusResponse.unapply(x).get)
+  implicit def statusResponseEncoder: Encoder[StatusResponse] =
+    Encoder.forProduct2(
+      "buildTime",
+      "gitHeadCommit"
+    )(x => StatusResponse.unapply(x).get)
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>

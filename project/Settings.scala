@@ -34,8 +34,7 @@ object Settings {
       BuildInfoKey.action("buildTime") {
         java.time.LocalDateTime.now(ZoneId.systemDefault()).toString
       }
-    ),
-    buildInfoPackage := "org.broadinstitute.dsp.workbench.welder.automated"
+    )
   )
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
@@ -87,8 +86,7 @@ object Settings {
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
       addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9"),
-      addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0-M4"),
-      testFrameworks += new TestFramework("minitest.runner.Framework")
+      addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0")
     )
 
   lazy val commonDockerSetting = List(

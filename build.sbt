@@ -7,7 +7,7 @@ lazy val welder = project
     skip in publish := true,
     Settings.commonSettings
   )
-  .aggregate(core, automation, server)
+  .aggregate(core, server)
 
 lazy val core =
   project
@@ -49,14 +49,3 @@ lazy val server =
       Settings.serverSettings
     )
     .dependsOn(core % "test->test;compile->compile")
-
-lazy val automation =
-  project
-    .in(file("automation"))
-    .settings(
-      libraryDependencies ++= Dependencies.automation,
-      Settings.commonSettings,
-      Settings.buildInfoSettings
-    )
-    .dependsOn(core)
-    .dependsOn(server % "test->test;compile->compile")
