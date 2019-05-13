@@ -5,8 +5,5 @@ import io.circe.Decoder
 final case class LocalObjectPath(asString: String) extends AnyVal
 
 object JsonCodec {
-  implicit val localObjectPathDecoder: Decoder[LocalObjectPath] = Decoder.decodeString.emap {
-    str =>
-      if(str.endsWith("ipynb")) Right(LocalObjectPath(str)) else Left("invalid object local path")
-  }
+  implicit val localObjectPathDecoder: Decoder[LocalObjectPath] = Decoder.decodeString.map(LocalObjectPath)
 }
