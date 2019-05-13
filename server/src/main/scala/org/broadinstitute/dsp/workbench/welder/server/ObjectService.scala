@@ -1,15 +1,19 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.time.Instant
+
 import cats.effect.IO
-import io.circe.Decoder
+import io.circe.{Decoder, Encoder}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
-import org.http4s.HttpRoutes
+import org.http4s.{HttpRoutes, Uri}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.circe.CirceEntityDecoder._
+import org.http4s.circe.CirceEntityEncoder._
 import ObjectService._
 import JsonCodec._
 import ca.mrvisser.sealerate
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
 
 class ObjectService(googleStorageService: GoogleStorageService[IO]) extends Http4sDsl[IO] {
@@ -32,7 +36,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO]) extends Http
 
   def localize(req: Localize): IO[Unit] = ???
 
-  def checkMeta(req: GetMetadataRequest): IO[Unit] = ???
+  def checkMeta(req: GetMetadataRequest): IO[MetadataResponse] = ???
 
   def safeDelocalize(req: SafeDelocalize): IO[Unit] = ???
 }
@@ -67,6 +71,15 @@ object ObjectService {
   }
 
   implicit val getMetadataDecoder: Decoder[GetMetadataRequest] = Decoder.forProduct1("localPath")(GetMetadataRequest.apply)
+
+  implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.forProduct6(
+    "isLinked",
+    "syncStatus",
+    "lastEditedBy",
+    "lastEditedTime",
+    "remoteUri",
+    "storageLink"
+  )(x => MetadataResponse.unapply(x).get)
 }
 
 final case class GetMetadataRequest(localObjectPath: LocalObjectPath)
@@ -93,3 +106,12 @@ object PostObjectRequest {
   }
 }
 final case class LocalizeRequest(entries: List[String]) //TODO: fix this
+
+final case class MetadataResponse(
+                                   isLinked: Boolean,
+                                  syncStatus: SyncStatus,
+                                  lastEditedBy: WorkbenchEmail,
+                                  lastEditedTime: Instant,
+                                  remoteUri: Uri,
+                                  storageLinks: String //TODO: fix this
+                                 )
