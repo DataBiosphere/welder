@@ -18,10 +18,10 @@ object Dependencies {
     "org.http4s" %% "http4s-circe" % http4sVersion,
     "org.http4s" %% "http4s-dsl" % http4sVersion,
     "org.log4s" %% "log4s" % "1.7.0",
-    "org.webjars" % "swagger-ui" % "3.20.1",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % "0.2-4c7acd5",
-    "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion
+    "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion,
+    "ca.mrvisser" %% "sealerate" % "0.0.5"
   )
 
   val server = common ++ List(
