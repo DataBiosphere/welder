@@ -1,27 +1,31 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.nio.file.Paths
 import java.time.Instant
 
-import cats.effect.IO
+import ca.mrvisser.sealerate
+import cats.effect.{ContextShift, IO}
 import io.circe.{Decoder, Encoder}
-import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
-import org.http4s.{HttpRoutes, Uri}
-import org.http4s.dsl.Http4sDsl
+import fs2.{Stream, io}
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsp.workbench.welder.JsonCodec._
+import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
+import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
-import ObjectService._
-import JsonCodec._
-import ca.mrvisser.sealerate
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
+import org.http4s.dsl.Http4sDsl
+import org.http4s.{HttpRoutes, Uri}
+import scala.concurrent.ExecutionContext
 
-class ObjectService(googleStorageService: GoogleStorageService[IO]) extends Http4sDsl[IO] {
+class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case req @ GET -> Root / "metadata" =>
       for {
         metadataReq <- req.as[GetMetadataRequest]
-        resp <- Ok(checkMeta(metadataReq))
+        resp <- Ok(checkMetadata(metadataReq))
       } yield resp
     case req @ POST -> Root =>
       for {
@@ -34,19 +38,44 @@ class ObjectService(googleStorageService: GoogleStorageService[IO]) extends Http
       } yield resp
   }
 
-  def localize(req: Localize): IO[Unit] = ???
+  def localize(req: Localize): IO[Unit] = {
+    val res = Stream.emits(req.entries).map {
+      entry =>
+        googleStorageService.getObject(entry.bucketNameAndObjectName.bucketName, entry.bucketNameAndObjectName.blobName, None) //get file from google
+          .through(io.file.writeAll(Paths.get(entry.localObjectPath.asString), blockingEc)) //write file to local disk
+    }.parJoin(10)
 
-  def checkMeta(req: GetMetadataRequest): IO[MetadataResponse] = ???
+    res.compile.drain
+  }
 
-  def safeDelocalize(req: SafeDelocalize): IO[Unit] = ???
+  def checkMetadata(req: GetMetadataRequest): IO[MetadataResponse] = {
+//TODO: get metadata
+    ???
+  }
+
+  def safeDelocalize(req: SafeDelocalize): IO[Unit] = {
+    //TODO: check if it's safe to delocalize
+    io.file.readAll[IO](Paths.get(req.localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
+      body =>
+        googleStorageService.storeObject(GcsBucketName(""), GcsBlobName(""), body, "text/plain", None) //TODO: shall we use traceId?
+    }
+  }
 }
 
 object ObjectService {
-  def apply(googleStorageService: GoogleStorageService[IO]): ObjectService = new ObjectService(googleStorageService)
+  def apply(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext)(implicit cs: ContextShift[IO]): ObjectService = new ObjectService(googleStorageService, blockingEc)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap {
     str =>
       Action.stringToAction.get(str).toRight("invalid action")
+  }
+
+  implicit val entryDecoder: Decoder[Entry] = Decoder.instance {
+    cursor =>
+      for {
+        bucketAndObject <- cursor.downField("sourceUri").as[BucketNameAndObjectName]
+        localObjectPath <- cursor.downField("localDestinationPath").as[LocalObjectPath]
+      } yield Entry(bucketAndObject, localObjectPath)
   }
 
   implicit val localizeDecoder: Decoder[Localize] = Decoder.forProduct1("entries"){
@@ -57,7 +86,7 @@ object ObjectService {
     SafeDelocalize.apply
   }
 
-  implicit val localizeRequestDecoder: Decoder[PostObjectRequest] = Decoder.instance {
+  implicit val postObjectRequestDecoder: Decoder[PostObjectRequest] = Decoder.instance {
     cursor =>
       for {
         action <- cursor.downField("action").as[Action]
@@ -98,17 +127,19 @@ sealed abstract class PostObjectRequest extends Product with Serializable {
   def action: Action
 }
 object PostObjectRequest {
-  final case class Localize(entries: List[String]) extends PostObjectRequest {
+  final case class Localize(entries: List[Entry]) extends PostObjectRequest {
     override def action: Action = Action.Localize
   }
   final case class SafeDelocalize(localObjectPath: LocalObjectPath) extends PostObjectRequest {
     override def action: Action = Action.SafeDelocalize
   }
 }
-final case class LocalizeRequest(entries: List[String]) //TODO: fix this
 
-final case class MetadataResponse(
-                                   isLinked: Boolean,
+final case class Entry(bucketNameAndObjectName: BucketNameAndObjectName, localObjectPath: LocalObjectPath)
+
+final case class LocalizeRequest(entries: List[Entry])
+
+final case class MetadataResponse(isLinked: Boolean,
                                   syncStatus: SyncStatus,
                                   lastEditedBy: WorkbenchEmail,
                                   lastEditedTime: Instant,

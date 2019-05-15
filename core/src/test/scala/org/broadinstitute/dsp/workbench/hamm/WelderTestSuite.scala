@@ -1,4 +1,4 @@
-package org.broadinstitute.dsp.workbench.hamm
+package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.{ContextShift, IO}
 import org.scalatest.Matchers
