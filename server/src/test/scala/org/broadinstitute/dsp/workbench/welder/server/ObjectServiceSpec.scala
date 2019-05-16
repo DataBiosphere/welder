@@ -6,7 +6,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import io.circe.{Json, parser}
-import fs2.{io, text}
+import fs2.io
 import org.broadinstitute.dsde.workbench.google2.Generators._
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.http4s.circe.CirceEntityEncoder._
@@ -38,8 +38,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
     val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
 
-    val testBOdy = fs2.Stream.emits(body) through(text.utf8Decode)
-
     val res = for {
       _ <- FakeGoogleStorageInterpreter.removeObject(bucketName, blobName)
       _ <- FakeGoogleStorageInterpreter.storeObject(bucketName, blobName, body, "text/plain", None)
@@ -50,7 +48,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         .compile
         .toList
         .unsafeRunSync()
-      val re = fs2.Stream.emits(responseBody) through(text.utf8Decode)
 
       responseBody should contain theSameElementsAs (body)
       (new File(localFileDestination)).delete()
