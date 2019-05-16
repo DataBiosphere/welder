@@ -25,7 +25,9 @@ object SyncStatus {
 
   val stringToSyncStatus: Set[SyncStatus] = sealerate.values[SyncStatus]
 }
-final case class BucketNameAndObjectName(bucketName: GcsBucketName, blobName: GcsBlobName)
+final case class BucketNameAndObjectName(bucketName: GcsBucketName, blobName: GcsBlobName) {
+  override def toString: String = s"${bucketName.value}/${blobName.value}"
+}
 
 object JsonCodec {
   implicit val localObjectPathDecoder: Decoder[LocalObjectPath] = Decoder.decodeString.map(LocalObjectPath)
