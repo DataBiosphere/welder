@@ -1,0 +1,107 @@
+swagger: '2.0'
+info:
+  title: welder
+  description: |
+    Data syncing service.
+  version: '0.1'
+  license:
+    name: BSD
+    url: 'http://opensource.org/licenses/BSD-3-Clause'
+  termsOfService: 'https://github.com/databiosphere/welder'
+basePath: /
+produces:
+  - application/json
+##########################################################################################
+## PATHS
+##########################################################################################
+paths:
+  '/objects/metadata':
+    get:
+      summary: 
+      responses:
+        '200':
+          schema:
+            $ref: '#/definitions/Metadata'
+        '404':
+          description: Either requested notebook doesn't exist in google cloud storage, or notebook doesn't have requried metadata associated with it
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+  '/objects':
+    post:
+      summary:
+      parameters:
+        - in: body
+          description:
+          name: body
+          required: true
+          schema:
+            oneOf:
+              - $ref: '#/definitions/Localize'
+              - $ref: '#/definitions/SafeDelocalize'
+      response:
+        '200':
+          description:
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+
+##########################################################################################
+## DEFINITIONS
+##########################################################################################
+definitions:
+  Metadata:
+    description: ''
+    properties:
+      isLinked:
+        type: boolean
+      syncStatus:
+        $ref: '#/definitions/SyncStatus'
+      lastEditedBy:
+        type: string
+        description: Email address of the user who last edited the notebook
+      lastEditedTime:
+        type: integer
+        description: Epoch millis for latest time the notebook is edited
+      remoteUri:
+        type: string
+        description: 'gs://{bucketName}/{objectName}'
+      isExecutionMode:
+        type: boolean
+        description: whether the notebook has execution mode enabled
+      storageLinks:
+        type: string
+        description: #TODO: Fix this
+  SyncStatus:
+    type: string
+    enum:
+      - LIVE
+      - DESYNCHRONIZED
+      - DELETED_REMOTE
+  ErrorReport:
+    type: string
+  Localize:
+    description: ''
+    properties:
+      action:
+        type: string
+      entries:
+        type: array
+        items:
+          $ref: '#/definitions/Entry'
+  Entry:
+    properties:
+      sourceUri:
+        type: string
+      localDestinationPath:
+        type: string
+  SafeDelocalize:
+    description: ''
+    properties:
+      action:
+        type: string
+      localPath:
+        type: string
+

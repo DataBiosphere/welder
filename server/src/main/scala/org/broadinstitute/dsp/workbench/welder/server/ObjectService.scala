@@ -3,15 +3,16 @@ package server
 
 import java.nio.file.Paths
 import java.time.Instant
+import java.util.UUID.randomUUID
 
-import cats.implicits._
 import ca.mrvisser.sealerate
 import cats.effect.{ContextShift, IO}
 import io.circe.{Decoder, Encoder}
 import fs2.{Stream, io}
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.google2
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
@@ -19,10 +20,8 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, Uri}
-import org.broadinstitute.dsde.workbench.google2
 
 import scala.concurrent.ExecutionContext
-import java.util.UUID.randomUUID
 
 class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -69,7 +68,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
             lastEditedBy <- IO.fromEither(userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail).toRight(NotFoundException("lastEditedBy key missing from object metadata ")))
             lastEditedTimeString <- IO.fromEither(userDefinedMetadata.get("lastEditedTime").toRight(NotFoundException("lastEditedTime key missing from object metadata ")))
             lastEditedTime <- IO(Instant.ofEpochMilli(lastEditedBy.value.toLong))
-          } yield MetadataResponse(isLinked, syncStatus, lastEditedBy, lastEditedTime, ???, true, ???) //TODO: read the last two fields from storagelinks configs
+          } yield MetadataResponse(isLinked, syncStatus, lastEditedBy, lastEditedTime, Uri.unsafeFromString("gs://bk/on"), true, "fakeLink") //TODO: read the last two fields from storagelinks configs
       }
     } yield res
   }
