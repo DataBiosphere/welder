@@ -2,7 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import cats.effect._
-import org.http4s.HttpApp
+import org.http4s.{HttpApp, Response}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.http4s.server.middleware.Logger
@@ -18,6 +18,14 @@ class WelderApp(objectService: ObjectService)(implicit cs: ContextShift[IO]) ext
   ).orNotFound
 
   val service: HttpApp[IO] = Logger.httpApp(true, true)(routes)
+
+  val handleError: IO[Response[IO]] => IO[Response[IO]] = {
+    resp =>
+      resp.handleErrorWith{
+        case BadRequestException(msg) => BadRequest(msg)
+        case NotFoundException(msg) => NotFound(msg)
+      }
+  }
 }
 
 object WelderApp {
@@ -26,7 +34,6 @@ object WelderApp {
 
 sealed abstract class WelderException extends NoStackTrace {
   def message: String
-
   override def getMessage: String = message
 }
 final case class BadRequestException(message: String) extends WelderException

@@ -4,13 +4,12 @@ package server
 import java.nio.file.Paths
 import java.time.Instant
 
-import cats.implicits._
 import ca.mrvisser.sealerate
 import cats.effect.{ContextShift, IO}
 import io.circe.{Decoder, Encoder}
 import fs2.{Stream, io}
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
@@ -19,10 +18,8 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, Uri}
-import org.broadinstitute.dsde.workbench.google2
 
 import scala.concurrent.ExecutionContext
-import java.util.UUID.randomUUID
 
 class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -53,34 +50,44 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
   }
 
   def checkMetadata(req: GetMetadataRequest): IO[MetadataResponse] = {
-    for {
-      traceId <- IO(TraceId(randomUUID()))
-      bucketAndObject <- IO.pure(BucketNameAndObjectName(GcsBucketName(""), GcsBlobName(""))) //TODO: fix this. Read bucket and object name from storagelinks config
-      metadata <- googleStorageService.getObjectMetadata(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.lastOrError
-      res <- metadata match {
-        case google2.GetMetadataResponse.NotFound => IO.raiseError(NotFoundException(s"Object(${bucketAndObject}) not found in Google storage"))
-        case google2.GetMetadataResponse.Metadata(crc32, userDefinedMetadata) =>
-          for {
-            isLinkedString <- IO.fromEither(userDefinedMetadata.get("isLinked").toRight(NotFoundException("isLinked key missing from object metadata ")))
-            isLinked <- IO(isLinkedString.toBoolean)
-            fileBody <- googleStorageService.getObject(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.to[Array]
-            calculatedCrc32 = Crc32c.calculateCrc32c(fileBody)
-            syncStatus = if(calculatedCrc32 == crc32) SyncStatus.Live else SyncStatus.Desynchronized //TODO: fix this
-            lastEditedBy <- IO.fromEither(userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail).toRight(NotFoundException("lastEditedBy key missing from object metadata ")))
-            lastEditedTimeString <- IO.fromEither(userDefinedMetadata.get("lastEditedTime").toRight(NotFoundException("lastEditedTime key missing from object metadata ")))
-            lastEditedTime <- IO(Instant.ofEpochMilli(lastEditedBy.value.toLong))
-          } yield MetadataResponse(isLinked, syncStatus, lastEditedBy, lastEditedTime, ???, ???) //TODO: read the last two fields from storagelinks configs
-      }
-    } yield res
+//    for {
+//      traceId <- IO(TraceId(randomUUID()))
+//      bucketAndObject <- IO.pure(BucketNameAndObjectName(GcsBucketName(""), GcsBlobName(""))) //TODO: fix this. Read bucket and object name from storagelinks config
+//      metadata <- googleStorageService.getObjectMetadata(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.lastOrError
+//      res <- metadata match {
+//        case google2.GetMetadataResponse.NotFound => IO.raiseError(NotFoundException(s"Object(${bucketAndObject}) not found in Google storage"))
+//        case google2.GetMetadataResponse.Metadata(crc32, userDefinedMetadata) =>
+//          for {
+//            isLinkedString <- IO.fromEither(userDefinedMetadata.get("isLinked").toRight(NotFoundException("isLinked key missing from object metadata ")))
+//            isLinked <- IO(isLinkedString.toBoolean)
+//            fileBody <- googleStorageService.getObject(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.to[Array]
+//            calculatedCrc32 = Crc32c.calculateCrc32c(fileBody)
+//            syncStatus = if(calculatedCrc32 == crc32) SyncStatus.Live else SyncStatus.Desynchronized //TODO: fix this
+//            lastEditedBy <- IO.fromEither(userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail).toRight(NotFoundException("lastEditedBy key missing from object metadata ")))
+//            lastEditedTimeString <- IO.fromEither(userDefinedMetadata.get("lastEditedTime").toRight(NotFoundException("lastEditedTime key missing from object metadata ")))
+//            lastEditedTime <- IO(Instant.ofEpochMilli(lastEditedBy.value.toLong))
+//          } yield MetadataResponse(isLinked, syncStatus, lastEditedBy, lastEditedTime, Uri.unsafeFromString("gs://bucketName/objectName"), true, "stub") //TODO: read the last two fields from storagelinks configs. Fix isExecution being true
+//      }
+//    } yield res
+    IO.pure(MetadataResponse(true, SyncStatus.Live, WorkbenchEmail("brian@gmail.com"), Instant.now, Uri.unsafeFromString("gs://bucketName/objectName"), true, "stub"))
   }
 
   def safeDelocalize(req: SafeDelocalize): IO[Unit] = {
-    //TODO: check if the file is covered by storagelinks config file
+    for {
+      isInStorageLinks <- IO.pure(true) //TOOD: fix this. check if the file is covered by storagelinks config file
+      metadata <- checkMetadata(GetMetadataRequest(req.localObjectPath))
+      _ <- if(metadata.syncStatus == SyncStatus.Live) {
+        io.file.readAll[IO](Paths.get(req.localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
+          body =>
+            googleStorageService.storeObject(GcsBucketName(""), GcsBlobName(""), body, "text/plain", None) //TODO: shall we use traceId?
+        }
+      } else IO.unit
+
+    } yield ???
+
+    //TODO:
     //TODO: check metadata to see if the file is outdated
-    io.file.readAll[IO](Paths.get(req.localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
-      body =>
-        googleStorageService.storeObject(GcsBucketName(""), GcsBlobName(""), body, "text/plain", None) //TODO: shall we use traceId?
-    }
+
   }
 }
 
@@ -123,12 +130,13 @@ object ObjectService {
 
   implicit val getMetadataDecoder: Decoder[GetMetadataRequest] = Decoder.forProduct1("localPath")(GetMetadataRequest.apply)
 
-  implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.forProduct6(
+  implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.forProduct7(
     "isLinked",
     "syncStatus",
     "lastEditedBy",
     "lastEditedTime",
     "remoteUri",
+    "isExecutionMode",
     "storageLink"
   )(x => MetadataResponse.unapply(x).get)
 }
@@ -165,5 +173,6 @@ final case class MetadataResponse(isLinked: Boolean,
                                   lastEditedBy: WorkbenchEmail,
                                   lastEditedTime: Instant,
                                   remoteUri: Uri,
+                                  isExecutionMode: Boolean,
                                   storageLinks: String //TODO: fix this
                                  )
