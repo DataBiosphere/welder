@@ -16,7 +16,7 @@ object Main extends IOApp {
     implicit val unsafeLogger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
-      appConfig <- Stream.fromEither[IO](Config.appConfig)
+//      appConfig <- Stream.fromEither[IO](Config.appConfig)
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
 //      googleStorageService <- Stream.resource(GoogleStorageService.resource(appConfig.pathToGoogleStorageCredentialJson, blockingEc))
       syncService = ObjectService(null, blockingEc)
