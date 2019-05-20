@@ -1,13 +1,15 @@
-package org.broadinstitute.dsp.workbench.welder.server
+package org.broadinstitute.dsp.workbench.welder
+package server
 
 import cats.effect.IO
 import io.circe.{Decoder, Encoder}
-import org.http4s.HttpRoutes
+import org.http4s.{HttpRoutes, Uri}
 import org.http4s.dsl.Http4sDsl
 import io.circe.parser._
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.circe.CirceEntityDecoder._
+import JsonCodec._
 
 import scala.util.Try
 
@@ -59,18 +61,9 @@ object StorageLinksService extends Http4sDsl[IO] {
 
 }
 
-final case class LocalDirectory(asString: String) extends AnyVal
-final case class GsDirectory(asString: String) extends AnyVal
-final case class StorageLink(localBaseDirectory: LocalDirectory, cloudStorageDirectory: GsDirectory, pattern: String, recursive: Boolean)
+final case class StorageLink(localBaseDirectory: LocalObjectPath, cloudStorageDirectory: Uri, pattern: String, recursive: Boolean)
 
 object StorageLink {
-
-  implicit val localDirectoryEncoder: Encoder[LocalDirectory] = Encoder.encodeString.contramap(_.asString)
-  implicit val gsDirectoryEncoder: Encoder[GsDirectory] = Encoder.encodeString.contramap(_.asString)
-
-  implicit val localDirectoryDecoder: Decoder[LocalDirectory] = Decoder.decodeString.map(LocalDirectory)
-  implicit val gsDirectoryDecoder: Decoder[GsDirectory] = Decoder.decodeString.map(GsDirectory)
-
   implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(
     "localBaseDirectory",
     "cloudStorageDirectory",

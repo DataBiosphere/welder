@@ -20,8 +20,8 @@ object Main extends IOApp {
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
       googleStorageService <- Stream.resource(GoogleStorageService.resource(appConfig.pathToGoogleStorageCredentialJson, blockingEc))
-      syncService = ObjectService(googleStorageService, blockingEc)
-      server <- BlazeServerBuilder[IO].bindHttp(8080, "0.0.0.0").withHttpApp(WelderApp(syncService).service).serve
+      objectService = ObjectService(googleStorageService, blockingEc, appConfig.pathToStorageLinks)
+      server <- BlazeServerBuilder[IO].bindHttp(8080, "0.0.0.0").withHttpApp(WelderApp(objectService).service).serve
     } yield ()
 
     app

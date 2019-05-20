@@ -2,6 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.{ContextShift, IO}
 import org.scalatest.Matchers
+
 import scala.concurrent.ExecutionContext
 
 trait WelderTestSuite extends Matchers {

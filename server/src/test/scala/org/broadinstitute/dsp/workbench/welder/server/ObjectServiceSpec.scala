@@ -5,6 +5,8 @@ import java.io.File
 import java.nio.file.Paths
 
 import cats.effect.IO
+import _root_.io.chrisdavenport.log4cats.Logger
+import _root_.io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.{Json, parser}
 import fs2.io
 import org.broadinstitute.dsde.workbench.google2.Generators._
@@ -13,10 +15,13 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.FlatSpec
 
+
 import scala.concurrent.ExecutionContext.global
 
 class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
-  val objectService = ObjectService(FakeGoogleStorageInterpreter, global)
+  implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
+
+  val objectService = ObjectService(FakeGoogleStorageInterpreter, global, Paths.get("fakePath"))
   "ObjectService" should "be able to localize a file" in {
     val bucketName = genGcsBucketName.sample.get
     val blobName = genGcsBlobName.sample.get

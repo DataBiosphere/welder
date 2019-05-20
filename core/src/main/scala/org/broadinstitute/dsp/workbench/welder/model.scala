@@ -13,12 +13,15 @@ import org.http4s.Uri
 final case class LocalObjectPath(asString: String) extends AnyVal
 sealed abstract class SyncStatus extends Product with Serializable
 object SyncStatus {
+  // crc32 match
   final case object Live extends SyncStatus {
     override def toString: String = "LIVE"
   }
+  // crc32 mismatch
   final case object Desynchronized extends SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
   }
+  // deleted in gcs. (object exists in storagelinks config file but not in in gcs)
   final case object DeletedRemote extends SyncStatus {
     override def toString: String = "DELETED_REMOTE"
   }
@@ -31,6 +34,7 @@ final case class BucketNameAndObjectName(bucketName: GcsBucketName, blobName: Gc
 
 object JsonCodec {
   implicit val localObjectPathDecoder: Decoder[LocalObjectPath] = Decoder.decodeString.map(LocalObjectPath)
+  implicit val localObjectPathEncoder: Encoder[LocalObjectPath] = Encoder.encodeString.contramap(_.asString)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
@@ -38,16 +42,15 @@ object JsonCodec {
   implicit val syncStatusEncoder: Encoder[SyncStatus] = Encoder.encodeString.contramap(_.toString)
   implicit val gcsBucketNameEncoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
   implicit val gcsBlobNameEncoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
-  implicit val bucketNameAndObjectName: Decoder[BucketNameAndObjectName] = Decoder.decodeString.emap{
-    str =>
-      for {
-        parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
-        bucketName <- Either.catchNonFatal(parsed(2))
-                        .leftMap(_.getMessage)
-                        .ensure("bucketName can't be empty")(s => s.nonEmpty)
-        objectName <- Either.catchNonFatal(parsed.drop(3).mkString("/"))
-                        .leftMap(_.getMessage)
-                        .ensure("objectName can't be empty")(s => s.nonEmpty)
-      } yield BucketNameAndObjectName(GcsBucketName(bucketName), GcsBlobName(objectName))
-  }
+  def parseGsDirectory(str: String): Either[String, BucketNameAndObjectName] = for {
+    parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
+    bucketName <- Either.catchNonFatal(parsed(2))
+      .leftMap(_.getMessage)
+      .ensure("bucketName can't be empty")(s => s.nonEmpty)
+    objectName <- Either.catchNonFatal(parsed.drop(3).mkString("/"))
+      .leftMap(_.getMessage)
+      .ensure("objectName can't be empty")(s => s.nonEmpty)
+  } yield BucketNameAndObjectName(GcsBucketName(bucketName), GcsBlobName(objectName))
+
+  implicit val bucketNameAndObjectName: Decoder[BucketNameAndObjectName] = Decoder.decodeString.emap(parseGsDirectory)
 }

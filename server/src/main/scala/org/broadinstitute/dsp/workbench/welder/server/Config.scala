@@ -1,6 +1,9 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.nio.file.Path
+import java.nio.file.Paths
+
 import cats.implicits._
 import org.http4s.Uri
 import pureconfig.ConfigReader
@@ -11,7 +14,10 @@ object Config {
   implicit val uriConfigReader: ConfigReader[Uri] = ConfigReader.fromString(
     s => Uri.fromString(s).leftMap(err => ExceptionThrown(err))
   )
+  implicit val pathConfigReader: ConfigReader[Path] = ConfigReader.fromString(
+    s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err))
+  )
   val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 }
 
-final case class AppConfig(pathToGoogleStorageCredentialJson: String)
+final case class AppConfig(pathToGoogleStorageCredentialJson: String, pathToStorageLinks: Path)
