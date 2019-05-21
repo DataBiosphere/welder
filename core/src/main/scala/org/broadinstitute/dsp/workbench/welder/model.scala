@@ -22,8 +22,8 @@ object SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
   }
   // deleted in gcs. (object exists in storagelinks config file but not in in gcs)
-  final case object DeletedRemote extends SyncStatus {
-    override def toString: String = "DELETED_REMOTE"
+  final case object RemoteNotFound extends SyncStatus {
+    override def toString: String = "REMOTE_NOT_FOUND"
   }
 
   val stringToSyncStatus: Set[SyncStatus] = sealerate.values[SyncStatus]
@@ -42,15 +42,5 @@ object JsonCodec {
   implicit val syncStatusEncoder: Encoder[SyncStatus] = Encoder.encodeString.contramap(_.toString)
   implicit val gcsBucketNameEncoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
   implicit val gcsBlobNameEncoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
-  def parseGsDirectory(str: String): Either[String, BucketNameAndObjectName] = for {
-    parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
-    bucketName <- Either.catchNonFatal(parsed(2))
-      .leftMap(_.getMessage)
-      .ensure("bucketName can't be empty")(s => s.nonEmpty)
-    objectName <- Either.catchNonFatal(parsed.drop(3).mkString("/"))
-      .leftMap(_.getMessage)
-      .ensure("objectName can't be empty")(s => s.nonEmpty)
-  } yield BucketNameAndObjectName(GcsBucketName(bucketName), GcsBlobName(objectName))
-
   implicit val bucketNameAndObjectName: Decoder[BucketNameAndObjectName] = Decoder.decodeString.emap(parseGsDirectory)
 }

@@ -20,8 +20,8 @@ import scala.concurrent.ExecutionContext.global
 
 class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
-
   val objectService = ObjectService(FakeGoogleStorageInterpreter, global, Paths.get("fakePath"))
+
   "ObjectService" should "be able to localize a file" in {
     val bucketName = genGcsBucketName.sample.get
     val blobName = genGcsBlobName.sample.get
