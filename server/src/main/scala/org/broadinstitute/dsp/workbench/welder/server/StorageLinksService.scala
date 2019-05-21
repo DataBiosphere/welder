@@ -8,10 +8,11 @@ import io.circe.parser._
 import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.circe.CirceEntityDecoder._
+import scalacache._
 
 import scala.util.Try
 
-object StorageLinksService extends Http4sDsl[IO] {
+class StorageLinksService(storageLinksCache: Cache[StorageLink]) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
@@ -29,11 +30,17 @@ object StorageLinksService extends Http4sDsl[IO] {
   }
 
   def createStorageLink(storageLink: StorageLink): IO[Unit] = {
-    getStorageLinks().map { currentStorageLinks =>
-      val updatedStorageLinks = currentStorageLinks + storageLink
+    IO.pure(storageLinksCache.put(storageLink))
 
-      reflect.io.File("storagelinks.json").writeAll(updatedStorageLinks.asJson.toString)
-    }.map(_ => ())
+
+
+
+
+//    getStorageLinks().map { currentStorageLinks =>
+//      val updatedStorageLinks = currentStorageLinks + storageLink
+//
+//      reflect.io.File("storagelinks.json").writeAll(updatedStorageLinks.asJson.toString)
+//    }.map(_ => ())
   }
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] = {
@@ -44,11 +51,14 @@ object StorageLinksService extends Http4sDsl[IO] {
   }
 
   def getStorageLinks(): IO[Set[StorageLink]] = {
-    //TODO: handle file not existing
-    decode[Set[StorageLink]](loadStorageLinksFile) match {
-      case Left(_) => IO.pure(Set.empty) //TODO: actually handle error here
-      case Right(foo) => IO.pure(foo)
-    }
+    IO.pure(storageLinksCache.g)
+
+
+//    //TODO: handle file not existing
+//    decode[Set[StorageLink]](loadStorageLinksFile) match {
+//      case Left(_) => IO.pure(Set.empty) //TODO: actually handle error here
+//      case Right(foo) => IO.pure(foo)
+//    }
   }
 
   private def loadStorageLinksFile(): String = {
@@ -62,6 +72,10 @@ object StorageLinksService extends Http4sDsl[IO] {
 final case class LocalDirectory(asString: String) extends AnyVal
 final case class GsDirectory(asString: String) extends AnyVal
 final case class StorageLink(localBaseDirectory: LocalDirectory, cloudStorageDirectory: GsDirectory, pattern: String, recursive: Boolean)
+
+object StorageLinksService {
+  def apply(storageLinksCache: Cache[StorageLink]): StorageLinksService = new StorageLinksService(storageLinksCache)
+}
 
 object StorageLink {
 

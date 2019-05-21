@@ -8,10 +8,10 @@ import org.http4s.server.Router
 import org.http4s.server.middleware.Logger
 import org.http4s.syntax.kleisli._
 
-class WelderApp(syncService: ObjectService)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
+class WelderApp(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
-    "/storageLinks" -> StorageLinksService.service,
+    "/storageLinks" -> storageLinksService.service,
     "/objects" -> syncService.service
   ).orNotFound
 
@@ -19,5 +19,5 @@ class WelderApp(syncService: ObjectService)(implicit cs: ContextShift[IO]) exten
 }
 
 object WelderApp {
-  def apply(syncService: ObjectService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService)
+  def apply(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService, storageLinksService)
 }

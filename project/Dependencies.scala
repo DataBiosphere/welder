@@ -21,7 +21,8 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % "0.2-4c7acd5",
     "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion,
-    "ca.mrvisser" %% "sealerate" % "0.0.5"
+    "ca.mrvisser" %% "sealerate" % "0.0.5",
+    "com.github.cb372" %% "scalacache-caffeine" % "0.27.0"
   )
 
   val server = common ++ List(
