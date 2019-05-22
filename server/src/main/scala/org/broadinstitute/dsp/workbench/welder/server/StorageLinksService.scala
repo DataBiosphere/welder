@@ -1,22 +1,19 @@
 package org.broadinstitute.dsp.workbench.welder.server
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import io.circe.{Decoder, Encoder}
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
-import io.circe.parser._
-import io.circe.syntax._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.circe.CirceEntityDecoder._
-import scalacache._
 
-import scala.util.Try
 
-class StorageLinksService(storageLinksCache: Cache[StorageLink]) extends Http4sDsl[IO] {
+class StorageLinksService(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]]) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
-      Ok(getStorageLinks())
+      Ok(getStorageLinks)
     case req @ DELETE -> Root =>
       for {
         storageLink <- req.as[StorageLink]
@@ -29,44 +26,17 @@ class StorageLinksService(storageLinksCache: Cache[StorageLink]) extends Http4sD
       } yield resp
   }
 
-  def createStorageLink(storageLink: StorageLink): IO[Unit] = {
-    IO.pure(storageLinksCache.put(storageLink))
-
-
-
-
-
-//    getStorageLinks().map { currentStorageLinks =>
-//      val updatedStorageLinks = currentStorageLinks + storageLink
-//
-//      reflect.io.File("storagelinks.json").writeAll(updatedStorageLinks.asJson.toString)
-//    }.map(_ => ())
+  def createStorageLink(storageLink: StorageLink): IO[StorageLink] = {
+    storageLinks.modify(links => (links + (storageLink.localBaseDirectory -> storageLink), links)).map(_ => storageLink)
   }
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] = {
-    getStorageLinks().map { currentStorageLinks =>
-      val updatedStorageLinks = currentStorageLinks - storageLink
-      reflect.io.File("storagelinks.json").writeAll(updatedStorageLinks.asJson.toString)
-    }.map(_ => ())
+    storageLinks.modify(links => (links - storageLink.localBaseDirectory, links)).map(_ => ())
   }
 
-  def getStorageLinks(): IO[Set[StorageLink]] = {
-    IO.pure(storageLinksCache.g)
-
-
-//    //TODO: handle file not existing
-//    decode[Set[StorageLink]](loadStorageLinksFile) match {
-//      case Left(_) => IO.pure(Set.empty) //TODO: actually handle error here
-//      case Right(foo) => IO.pure(foo)
-//    }
+  def getStorageLinks: IO[Set[StorageLink]] = {
+    storageLinks.get.map(links => links.values.toSet)
   }
-
-  private def loadStorageLinksFile(): String = {
-    Try(scala.io.Source.fromFile("storagelinks.json").mkString).recover {
-      case _ => ""
-    }.get
-  }
-
 }
 
 final case class LocalDirectory(asString: String) extends AnyVal
@@ -74,7 +44,7 @@ final case class GsDirectory(asString: String) extends AnyVal
 final case class StorageLink(localBaseDirectory: LocalDirectory, cloudStorageDirectory: GsDirectory, pattern: String, recursive: Boolean)
 
 object StorageLinksService {
-  def apply(storageLinksCache: Cache[StorageLink]): StorageLinksService = new StorageLinksService(storageLinksCache)
+  def apply(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]]): StorageLinksService = new StorageLinksService(storageLinks)
 }
 
 object StorageLink {
