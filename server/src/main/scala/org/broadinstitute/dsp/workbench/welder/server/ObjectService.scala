@@ -67,13 +67,13 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
             result <- metadata match {
                         case google2.GetMetadataResponse.NotFound =>
                           IO.pure(MetadataResponse.RemoteNotFound(sl))
-                        case google2.GetMetadataResponse.Metadata(crc32, userDefinedMetadata) =>
+                        case google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata) =>
                           for {
                             isLinked <- IO.fromEither(userDefinedMetadata.get("isLinked").fold[Either[Throwable, Boolean]](Right(false))(x => Either.catchNonFatal(x.toBoolean)))
                             fileBody <- googleStorageService.getObject(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.to[Array]
-                            calculatedCrc32 = Crc32c.calculateCrc32c(fileBody)
+                            calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
                             syncStatus = if (fileBody.length == 0) SyncStatus.RemoteNotFound
-                              else if (calculatedCrc32 == crc32) SyncStatus.Live
+                              else if (calculatedCrc32c == crc32c) SyncStatus.Live
                               else SyncStatus.Desynchronized
                             lastEditedBy = userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail)
                             lastEditedTime <- userDefinedMetadata.get("lastEditedTime").flatTraverse[IO, Instant] {

@@ -13,11 +13,11 @@ import org.http4s.Uri
 final case class LocalObjectPath(asString: String) extends AnyVal
 sealed abstract class SyncStatus extends Product with Serializable
 object SyncStatus {
-  // crc32 match
+  // crc32c match
   final case object Live extends SyncStatus {
     override def toString: String = "LIVE"
   }
-  // crc32 mismatch
+  // crc32c mismatch
   final case object Desynchronized extends SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
   }
