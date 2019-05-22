@@ -26,6 +26,8 @@ paths:
               - $ref: '#/definitions/Metadata'
         '404':
           description: Either requested notebook doesn't exist in google cloud storage, or notebook doesn't have requried metadata associated with it
+        '412':
+          description: No storage link found for the requested file
         '500':
           description: Internal Server Error
           schema:
@@ -45,6 +47,8 @@ paths:
       response:
         '200':
           description:
+        '412':
+          description: File is out of sync, or no storage link found for the requested file
         '500':
           description: Internal Server Error
           schema:
@@ -56,6 +60,12 @@ paths:
 definitions:
   Metadata:
     description: ''
+    required:
+      - isLinked
+      - syncStatus
+      - remoteUri
+      - isExecutionMode
+      - storageLinks
     properties:
       isLinked:
         type: boolean
@@ -63,10 +73,10 @@ definitions:
         $ref: '#/definitions/SyncStatus'
       lastEditedBy:
         type: string
-        description: Email address of the user who last edited the notebook
+        description: Optional field. Email address of the user who last edited the notebook
       lastEditedTime:
         type: integer
-        description: Epoch millis for latest time the notebook is edited
+        description: Optional field. Epoch millis for latest time the notebook is edited
       remoteUri:
         type: string
         description: 'gs://{bucketName}/{objectName}'
@@ -85,7 +95,7 @@ definitions:
     enum:
       - LIVE
       - DESYNCHRONIZED
-      - DELETED_REMOTE
+      - REMOTE_NOT_FOUND
   ErrorReport:
     type: string
   Localize:

@@ -59,7 +59,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinks).compile.lastOrError
       storageLink = storageLinks.find(_.localBaseDirectory == req.localObjectPath) //TODO: handle recursive flag
-      res <- storageLink.fold[IO[MetadataResponse]](IO.raiseError(NotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
+      res <- storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
         sl =>
           for {
             bucketAndObject <- IO.fromEither(parseGsDirectory(sl.cloudStorageDirectory.renderString).leftMap(e => InternalException(e)))
@@ -75,9 +75,14 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
                             syncStatus = if (fileBody.length == 0) SyncStatus.RemoteNotFound
                               else if (calculatedCrc32 == crc32) SyncStatus.Live
                               else SyncStatus.Desynchronized
-                            lastEditedBy <- IO.fromEither(userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail).toRight(NotFoundException("lastEditedBy key missing from object metadata ")))
-                            lastEditedTimeString <- IO.fromEither(userDefinedMetadata.get("lastEditedTime").toRight(NotFoundException("lastEditedTime key missing from object metadata ")))
-                            lastEditedTime <- IO(Instant.ofEpochMilli(lastEditedBy.value.toLong))
+                            lastEditedBy = userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail)
+                            lastEditedTime <- userDefinedMetadata.get("lastEditedTime").flatTraverse[IO, Instant] {
+                              str =>
+                                Either.catchNonFatal(str.toLong) match {
+                                  case Left(t) => logger.warn(s"Failed to convert $str to epoch millis") *> IO.pure(None)
+                                  case Right(s) => IO.pure(Some(Instant.ofEpochMilli(s)))
+                                }
+                            }
                           } yield MetadataResponse.Found(isLinked, syncStatus, lastEditedBy, lastEditedTime, sl.cloudStorageDirectory, true, sl) //TODO: fix isExecutionMode
                       }
           } yield result
@@ -217,8 +222,8 @@ object MetadataResponse {
   final case class Found(
                           isLinked: Boolean,
                           syncStatus: SyncStatus,
-                          lastEditedBy: WorkbenchEmail,
-                          lastEditedTime: Instant,
+                          lastEditedBy: Option[WorkbenchEmail],
+                          lastEditedTime: Option[Instant],
                           remoteUri: Uri,
                           isExecutionMode: Boolean,
                           storageLinks: StorageLink

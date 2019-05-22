@@ -8,7 +8,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "parseGsDirectory" should "be able to parse gs path correctly" in {
-    forAll{
+    forAll {
       (bucketName: GcsBucketName, objectName: GcsBlobName) =>
         val gsPath = s"gs://${bucketName.value}/a/${objectName.value}"
         parseGsDirectory(gsPath) shouldBe(Right(BucketNameAndObjectName(bucketName, objectName.copy(s"a/${objectName.value}"))))
@@ -16,7 +16,7 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
   }
 
   "parseGsDirectory" should "fail to parse gs path when input is invalid" in {
-    forAll{
+    forAll {
       (bucketName: GcsBucketName) =>
         val gsPath = s"gs://${bucketName.value}"
         parseGsDirectory(gsPath) shouldBe(Left("objectName can't be empty"))
