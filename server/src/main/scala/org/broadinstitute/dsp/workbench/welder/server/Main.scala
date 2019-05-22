@@ -12,6 +12,7 @@ import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import io.circe.syntax._
+import StorageLinksService._
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
