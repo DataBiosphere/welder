@@ -23,7 +23,7 @@ object Main extends IOApp {
     val app: Stream[IO, Unit] = for {
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
-      storageLinksCache <- Stream.resource[IO, Ref[IO, Map[LocalDirectory, StorageLink]]](Resource.make(Ref.of[IO, Map[LocalDirectory, StorageLink]](Map.empty))(x => x.get.map(y => reflect.io.File("storagelinks.json").writeAll(y.values.toSet.asJson.toString)))) //todo: write to file when it's done. see org.broadinstitute.dsde.workbench.util#readFile
+      storageLinksCache <- Stream.resource[IO, Ref[IO, Map[LocalDirectory, StorageLink]]](Resource.make(Ref.of[IO, Map[LocalDirectory, StorageLink]](Map.empty))(x => x.get.map(y => reflect.io.File("storagelinks.json").writeAll(y.values.toSet.asJson.toString))))
       googleStorageService <- Stream.resource(GoogleStorageService.resource(appConfig.pathToGoogleStorageCredentialJson, blockingEc))
       storageLinksService = StorageLinksService(storageLinksCache)
       syncService = ObjectService(googleStorageService)
