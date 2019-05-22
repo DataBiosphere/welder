@@ -46,7 +46,7 @@ object Main extends IOApp {
 
     decode[Set[StorageLink]](storageLinksString) match {
       case Left(_) => Map[LocalDirectory, StorageLink]() //TODO: actually handle error here
-      case Right(foo) => foo.map { link => link.localBaseDirectory -> link}.toMap
+      case Right(storageLinks) => storageLinks.map { link => link.localBaseDirectory -> link}.toMap
     }
   }
 
