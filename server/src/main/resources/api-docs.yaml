@@ -21,7 +21,9 @@ paths:
       responses:
         '200':
           schema:
-            $ref: '#/definitions/Metadata'
+            oneof:
+              - $ref: '#/definitions/MetadataRemoteNotFound'
+              - $ref: '#/definitions/Metadata'
         '404':
           description: Either requested notebook doesn't exist in google cloud storage, or notebook doesn't have requried metadata associated with it
         '500':
@@ -72,8 +74,12 @@ definitions:
         type: boolean
         description: whether the notebook has execution mode enabled
       storageLinks:
-        type: string
-        description: #TODO: Fix this
+        $ref: '#/definitions/StorageLink'
+  MetadataRemoteNotFound:
+    description: "metadata response when the file can't be found in google storage"
+    properties:
+      storageLinks:
+        $ref: '#/definitions/StorageLink'
   SyncStatus:
     type: string
     enum:
@@ -102,6 +108,11 @@ definitions:
     properties:
       action:
         type: string
+      localPath:
+        type: string
+  StorageLink: #TODO: fix this
+    description: ''
+    properties:
       localPath:
         type: string
 

@@ -22,6 +22,7 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, Uri}
 import _root_.io.circe.syntax._
+import StorageLink.storageLinkEncoder
 
 import scala.concurrent.ExecutionContext
 
@@ -64,7 +65,8 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
             bucketAndObject <- IO.fromEither(parseGsDirectory(sl.cloudStorageDirectory.renderString).leftMap(e => InternalException(e)))
             metadata <- googleStorageService.getObjectMetadata(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.lastOrError
             result <- metadata match {
-                        case google2.GetMetadataResponse.NotFound => IO.raiseError(NotFoundException(s"Object(${bucketAndObject}) not found in Google storage")) //TODO: Decide whether we error on 404 or 200 with appropriate message
+                        case google2.GetMetadataResponse.NotFound =>
+                          IO.pure(MetadataResponse.RemoteNotFound(sl))
                         case google2.GetMetadataResponse.Metadata(crc32, userDefinedMetadata) =>
                           for {
                             isLinked <- IO.fromEither(userDefinedMetadata.get("isLinked").fold[Either[Throwable, Boolean]](Right(false))(x => Either.catchNonFatal(x.toBoolean)))
@@ -87,25 +89,19 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinks).compile.lastOrError
       storageLink = storageLinks.find(_.localBaseDirectory == req.localObjectPath)
-      _ <- storageLink.traverse { //TODO: confirm do nothing is expected when we don't find storagelink for the requested local file
+      _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
         sl =>
           for {
             metadata <- checkMetadata(GetMetadataRequest(req.localObjectPath))
             _ <- metadata match {
-              case MetadataResponse.RemoteNotFound => IO.raiseError(BadRequestException(s"Can't find metadata in google storage for ${req.localObjectPath}"))
+              case x: MetadataResponse.RemoteNotFound => delocalize(req.localObjectPath, sl.cloudStorageDirectory, traceId)
               case meta: MetadataResponse.Found =>
                 for {
                   _ <- if(meta.syncStatus == SyncStatus.Live) {
-                    io.file.readAll[IO](Paths.get(req.localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
-                      body =>
-                        for {
-                          bucketNameAndObjectName <- IO.fromEither(parseGsDirectory(sl.cloudStorageDirectory.renderString).leftMap(InternalException))
-                          _ <- googleStorageService.storeObject(bucketNameAndObjectName.bucketName, bucketNameAndObjectName.blobName, body, "text/plain", Some(traceId))
-                        } yield ()
-                    }
+                    delocalize(req.localObjectPath, sl.cloudStorageDirectory, traceId)
                   } else {
                     val msg = s"File is outdated(${meta.syncStatus}), hence not delocalizing"
-                    logger.info(msg) *> IO.raiseError(BadRequestException(msg)) //TODO: confirm this is expected error code
+                    logger.info(msg) *> IO.raiseError(FileOutOfSyncException(msg))
                   }
                 } yield ()
             }
@@ -113,10 +109,20 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
       }
     } yield ()
   }
+
+  private def delocalize(localObjectPath: LocalObjectPath, gsPath: Uri, traceId: TraceId): IO[Unit] = io.file.readAll[IO](Paths.get(localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
+    body =>
+      for {
+        bucketNameAndObjectName <- IO.fromEither(parseGsDirectory(gsPath.renderString).leftMap(InternalException))
+        _ <- googleStorageService.storeObject(bucketNameAndObjectName.bucketName, bucketNameAndObjectName.blobName, body, gcpObjectType, Some(traceId))
+      } yield ()
+  }
 }
 
 object ObjectService {
   def apply(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, pathToStorageLinks: Path)(implicit cs: ContextShift[IO], logger: Logger[IO]): ObjectService = new ObjectService(googleStorageService, blockingEc, pathToStorageLinks)
+
+  val gcpObjectType = "text/plain"
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap {
     str =>
@@ -164,10 +170,12 @@ object ObjectService {
     "storageLink"
   )(x => MetadataResponse.Found.unapply(x).get)
 
+  implicit val metadataResponseRemoteNotFoundEncoder: Encoder[MetadataResponse.RemoteNotFound] = Encoder.forProduct1("storageLink")(x => MetadataResponse.RemoteNotFound.unapply(x).get)
+
   implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.instance {
     x =>
       x match {
-        case MetadataResponse.RemoteNotFound => MetadataResponse.RemoteNotFound.toString.asJson
+        case r: MetadataResponse.RemoteNotFound => r.asJson
         case r: MetadataResponse.Found => r.asJson
       }
   }
@@ -203,9 +211,9 @@ final case class LocalizeRequest(entries: List[Entry])
 
 sealed abstract class MetadataResponse extends Product with Serializable
 object MetadataResponse {
-  final case object RemoteNotFound extends MetadataResponse {
-    override def toString: String = "REMOTE_NOT_FOUND"
-  }
+  final case class RemoteNotFound(storageLink: StorageLink)
+    extends MetadataResponse
+
   final case class Found(
                           isLinked: Boolean,
                           syncStatus: SyncStatus,

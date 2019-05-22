@@ -13,7 +13,7 @@
     </encoder>
   </appender>
 
-  <logger name="org.broadinstitute.dsp.workbench.hamm" level="INFO" additivity="false">
+  <logger name="org.broadinstitute.dsp.workbench.welder" level="INFO" additivity="false">
     <appender-ref ref="FILE"/>
   </logger>
 

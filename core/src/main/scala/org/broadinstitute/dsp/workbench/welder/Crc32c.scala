@@ -6,7 +6,8 @@ import cats.effect.{ContextShift, IO}
 import com.google.common.io.BaseEncoding
 import org.broadinstitute.dsde.workbench.google2.Crc32
 import scala.concurrent.ExecutionContext.global
-// Adapted from https://github.com/googlearchive/crc32c-java/blob/master/src/com/google/cloud/Crc32c.java
+// Adapted from https://github.com/googlearchive/crc32c-java/blob/master/src/com/google/cloud/Crc32c.java, which is the only java implementation for google's crc32c algorithm.
+// Note: The CRC popularly known as CRC32 differs from the CRC32c algorithm used by Cloud Storage.
 
 /**
   * This class generates a CRC32C checksum, defined by rfc3720 section B.4.
