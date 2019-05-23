@@ -22,7 +22,9 @@ package object welder {
       .through(decoder)
   }
 
+  val gsDirectoryReg = "gs:\\/\\/.*".r
   def parseGsDirectory(str: String): Either[String, BucketNameAndObjectName] = for {
+    _ <- gsDirectoryReg.findPrefixOf(str).toRight("gs directory has to be prefixed with gs://")
     parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
     bucketName <- Either.catchNonFatal(parsed(2))
       .leftMap(_ => s"failed to parse bucket name")

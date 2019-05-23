@@ -1,28 +1,27 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID.randomUUID
 
+import _root_.fs2.{Stream, io}
 import _root_.io.chrisdavenport.log4cats.Logger
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
 import cats.effect.{ContextShift, IO}
 import cats.implicits._
-import _root_.fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
+import org.broadinstitute.dsp.workbench.welder.server.StorageLink.storageLinkEncoder
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, Uri}
-import _root_.io.circe.syntax._
-import StorageLink.storageLinkEncoder
 
 import scala.concurrent.ExecutionContext
 
@@ -47,8 +46,8 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
   def localize(req: Localize): IO[Unit] = {
     val res = Stream.emits(req.entries).map {
       entry =>
-        googleStorageService.getObject(entry.bucketNameAndObjectName.bucketName, entry.bucketNameAndObjectName.blobName, None) //get file from google
-          .through(io.file.writeAll(Paths.get(entry.localObjectPath.asString), blockingEc)) //write file to local disk
+        googleStorageService.getObject(entry.bucketNameAndObjectName.bucketName, entry.bucketNameAndObjectName.blobName, None) //get file from google. TODO: pass generation when storing object
+          .through(io.file.writeAll(entry.localObjectPath, blockingEc)) //write file to local disk
     }.parJoin(10)
 
     res.compile.drain
@@ -59,6 +58,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinks).compile.lastOrError
       storageLink = storageLinks.find(_.localBaseDirectory == req.localObjectPath) //TODO: handle recursive flag
+      isLinked = storageLink.nonEmpty
       res <- storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
         sl =>
           for {
@@ -66,14 +66,12 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
             metadata <- googleStorageService.getObjectMetadata(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.lastOrError
             result <- metadata match {
                         case google2.GetMetadataResponse.NotFound =>
-                          IO.pure(MetadataResponse.RemoteNotFound(sl))
+                          IO.pure(MetadataResponse(isLinked, SyncStatus.RemoteNotFound, None, None, true, sl)) //TODO: fix isExecutionMode
                         case google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata) =>
                           for {
-                            isLinked <- IO.fromEither(userDefinedMetadata.get("isLinked").fold[Either[Throwable, Boolean]](Right(false))(x => Either.catchNonFatal(x.toBoolean)))
-                            fileBody <- googleStorageService.getObject(bucketAndObject.bucketName, bucketAndObject.blobName, Some(traceId)).compile.to[Array]
+                            fileBody <- io.file.readAll[IO](sl.localBaseDirectory, blockingEc, 4096).compile.to[Array]
                             calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
-                            syncStatus = if (fileBody.length == 0) SyncStatus.RemoteNotFound
-                              else if (calculatedCrc32c == crc32c) SyncStatus.Live
+                            syncStatus = if (calculatedCrc32c == crc32c) SyncStatus.Live
                               else SyncStatus.Desynchronized
                             lastEditedBy = userDefinedMetadata.get("lastEditedBy").map(WorkbenchEmail)
                             lastEditedTime <- userDefinedMetadata.get("lastEditedTime").flatTraverse[IO, Instant] {
@@ -83,7 +81,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
                                   case Right(s) => IO.pure(Some(Instant.ofEpochMilli(s)))
                                 }
                             }
-                          } yield MetadataResponse.Found(isLinked, syncStatus, lastEditedBy, lastEditedTime, sl.cloudStorageDirectory, true, sl) //TODO: fix isExecutionMode
+                          } yield MetadataResponse(isLinked, syncStatus, lastEditedBy, lastEditedTime, true, sl) //TODO: fix isExecutionMode
                       }
           } yield result
       }
@@ -99,8 +97,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
           for {
             metadata <- checkMetadata(GetMetadataRequest(req.localObjectPath))
             _ <- metadata match {
-              case x: MetadataResponse.RemoteNotFound => delocalize(req.localObjectPath, sl.cloudStorageDirectory, traceId)
-              case meta: MetadataResponse.Found =>
+              case meta: MetadataResponse =>
                 for {
                   _ <- if(meta.syncStatus == SyncStatus.Live) {
                     delocalize(req.localObjectPath, sl.cloudStorageDirectory, traceId)
@@ -115,7 +112,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
     } yield ()
   }
 
-  private def delocalize(localObjectPath: LocalObjectPath, gsPath: Uri, traceId: TraceId): IO[Unit] = io.file.readAll[IO](Paths.get(localObjectPath.asString), blockingEc, 4096).compile.to[Array].flatMap {
+  private def delocalize(localObjectPath: java.nio.file.Path, gsPath: Uri, traceId: TraceId): IO[Unit] = io.file.readAll[IO](localObjectPath, blockingEc, 4096).compile.to[Array].flatMap {
     body =>
       for {
         bucketNameAndObjectName <- IO.fromEither(parseGsDirectory(gsPath.renderString).leftMap(InternalException))
@@ -138,7 +135,7 @@ object ObjectService {
     cursor =>
       for {
         bucketAndObject <- cursor.downField("sourceUri").as[BucketNameAndObjectName]
-        localObjectPath <- cursor.downField("localDestinationPath").as[LocalObjectPath]
+        localObjectPath <- cursor.downField("localDestinationPath").as[Path]
       } yield Entry(bucketAndObject, localObjectPath)
   }
 
@@ -165,28 +162,18 @@ object ObjectService {
 
   implicit val getMetadataDecoder: Decoder[GetMetadataRequest] = Decoder.forProduct1("localPath")(GetMetadataRequest.apply)
 
-  implicit val metadataResponseFoundEncoder: Encoder[MetadataResponse.Found] = Encoder.forProduct7(
+
+  implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.forProduct6(
     "isLinked",
     "syncStatus",
     "lastEditedBy",
     "lastEditedTime",
-    "remoteUri",
     "isExecutionMode",
     "storageLink"
-  )(x => MetadataResponse.Found.unapply(x).get)
-
-  implicit val metadataResponseRemoteNotFoundEncoder: Encoder[MetadataResponse.RemoteNotFound] = Encoder.forProduct1("storageLink")(x => MetadataResponse.RemoteNotFound.unapply(x).get)
-
-  implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.instance {
-    x =>
-      x match {
-        case r: MetadataResponse.RemoteNotFound => r.asJson
-        case r: MetadataResponse.Found => r.asJson
-      }
-  }
+  )(x => MetadataResponse.unapply(x).get)
 }
 
-final case class GetMetadataRequest(localObjectPath: LocalObjectPath)
+final case class GetMetadataRequest(localObjectPath: Path)
 sealed abstract class Action
 object Action {
   final case object Localize extends Action {
@@ -205,27 +192,20 @@ object PostObjectRequest {
   final case class Localize(entries: List[Entry]) extends PostObjectRequest {
     override def action: Action = Action.Localize
   }
-  final case class SafeDelocalize(localObjectPath: LocalObjectPath) extends PostObjectRequest {
+  final case class SafeDelocalize(localObjectPath: Path) extends PostObjectRequest {
     override def action: Action = Action.SafeDelocalize
   }
 }
 
-final case class Entry(bucketNameAndObjectName: BucketNameAndObjectName, localObjectPath: LocalObjectPath)
+final case class Entry(bucketNameAndObjectName: BucketNameAndObjectName, localObjectPath: Path)
 
 final case class LocalizeRequest(entries: List[Entry])
 
-sealed abstract class MetadataResponse extends Product with Serializable
-object MetadataResponse {
-  final case class RemoteNotFound(storageLink: StorageLink)
-    extends MetadataResponse
-
-  final case class Found(
-                          isLinked: Boolean,
-                          syncStatus: SyncStatus,
-                          lastEditedBy: Option[WorkbenchEmail],
-                          lastEditedTime: Option[Instant],
-                          remoteUri: Uri,
-                          isExecutionMode: Boolean,
-                          storageLinks: StorageLink
-                        ) extends MetadataResponse
-}
+final case class MetadataResponse(
+                        isLinked: Boolean,
+                        syncStatus: SyncStatus,
+                        lastEditedBy: Option[WorkbenchEmail],
+                        lastEditedTime: Option[Instant],
+                        isExecutionMode: Boolean,
+                        storageLinks: StorageLink
+                      )

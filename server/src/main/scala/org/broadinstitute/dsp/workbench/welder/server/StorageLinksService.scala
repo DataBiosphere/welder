@@ -1,6 +1,8 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.nio.file.Path
+
 import cats.effect.IO
 import io.circe.{Decoder, Encoder}
 import org.http4s.{HttpRoutes, Uri}
@@ -61,7 +63,7 @@ object StorageLinksService extends Http4sDsl[IO] {
 
 }
 
-final case class StorageLink(localBaseDirectory: LocalObjectPath, cloudStorageDirectory: Uri, pattern: String, recursive: Boolean)
+final case class StorageLink(localBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String, recursive: Boolean)
 
 object StorageLink {
   implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(

@@ -23,6 +23,9 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
 
         val gsPath2 = s"gs:///"
         parseGsDirectory(gsPath2) shouldBe(Left("failed to parse bucket name"))
+
+        val gsPath3 = s"invalidgs://"
+        parseGsDirectory(gsPath3) shouldBe(Left("gs directory has to be prefixed with gs://"))
     }
   }
 }

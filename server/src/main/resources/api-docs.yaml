@@ -68,6 +68,7 @@ definitions:
       - storageLinks
     properties:
       isLinked:
+        description: True if the file is linked to remote storage, and changes are being synchronized.
         type: boolean
       syncStatus:
         $ref: '#/definitions/SyncStatus'
@@ -83,7 +84,7 @@ definitions:
       isExecutionMode:
         type: boolean
         description: whether the notebook has execution mode enabled
-      storageLinks:
+      storageLink:
         $ref: '#/definitions/StorageLink'
   MetadataRemoteNotFound:
     description: "metadata response when the file can't be found in google storage"

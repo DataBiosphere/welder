@@ -1,5 +1,6 @@
 package org.broadinstitute.dsp.workbench.welder
 
+import java.nio.file.{Path, Paths}
 import java.time.Instant
 
 import cats.implicits._
@@ -10,7 +11,6 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
 
-final case class LocalObjectPath(asString: String) extends AnyVal
 sealed abstract class SyncStatus extends Product with Serializable
 object SyncStatus {
   // crc32c match
@@ -33,8 +33,8 @@ final case class BucketNameAndObjectName(bucketName: GcsBucketName, blobName: Gc
 }
 
 object JsonCodec {
-  implicit val localObjectPathDecoder: Decoder[LocalObjectPath] = Decoder.decodeString.map(LocalObjectPath)
-  implicit val localObjectPathEncoder: Encoder[LocalObjectPath] = Encoder.encodeString.contramap(_.asString)
+  implicit val localObjectPathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
+  implicit val localObjectPathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
