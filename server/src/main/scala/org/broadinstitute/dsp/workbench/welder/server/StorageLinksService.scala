@@ -6,12 +6,12 @@ import java.nio.file.Path
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import io.circe.{Decoder, Encoder}
-import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
+import StorageLinksService._
+import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
+import JsonCodec._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpRoutes, Uri}
 
 class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends Http4sDsl[IO] {
 
@@ -21,12 +21,14 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
     case req @ DELETE -> Root =>
       for {
         storageLink <- req.as[StorageLink]
-        resp <- Ok(deleteStorageLink(storageLink))
+        _ <- deleteStorageLink(storageLink)
+        resp <- Ok(())
       } yield resp
     case req @ POST -> Root =>
       for {
         storageLink <- req.as[StorageLink]
-        resp <- Ok(createStorageLink(storageLink))
+        res <- createStorageLink(storageLink)
+        resp <- Ok(res)
       } yield resp
   }
 
@@ -44,23 +46,10 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
   }
 }
 
-final case class StorageLink(localBaseDirectory: Path, localSafeModeBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
   def apply(storageLinks: Ref[IO, Map[Path, StorageLink]]): StorageLinksService = new StorageLinksService(storageLinks)
-
-  implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(
-    "localBaseDirectory",
-    "localSafeModeBaseDirectory",
-    "cloudStorageDirectory",
-    "pattern")(storageLink => StorageLink.unapply(storageLink).get)
-
-  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.forProduct4(
-    "localBaseDirectory",
-    "localSafeModeBaseDirectory",
-    "cloudStorageDirectory",
-    "pattern")(StorageLink.apply)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"

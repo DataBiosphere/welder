@@ -22,10 +22,9 @@ paths:
         '200':
           description: ''
           schema:
-            oneOf:
-              - $ref: '#/definitions/Metadata'
-        '412':
-          description: No storage link found for the requested file
+            oneof:
+              - $ref: '#/definitions/MetadataEditMode'
+              - $ref: '#/definitions/MetadataSafeMode'
         '500':
           description: Internal Server Error
           schema:
@@ -94,18 +93,17 @@ paths:
 ## DEFINITIONS
 ##########################################################################################
 definitions:
-  Metadata:
+  MetadataEditMode:
     description: ''
     required:
-      - isLinked
+      - syncMode
       - syncStatus
       - remoteUri
       - isExecutionMode
       - storageLinks
     properties:
-      isLinked:
-        description: True if the file is linked to remote storage, and changes are being synchronized.
-        type: boolean
+      syncMode:
+        type: '#/definitions/SyncMode'
       syncStatus:
         $ref: '#/definitions/SyncStatus'
       lastEditedBy:
@@ -122,6 +120,18 @@ definitions:
         description: whether the notebook has execution mode enabled
       storageLink:
         $ref: '#/definitions/StorageLink'
+  MetadataSafeMode:
+    description: ''
+    required:
+      - syncMode
+    properties:
+      syncMode:
+        type: '#/definitions/SyncMode'
+  SyncMode:
+    type: string
+    enum:
+      - SAFE
+      - EDIT
   SyncStatus:
     type: string
     enum:
