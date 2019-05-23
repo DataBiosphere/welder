@@ -1,0 +1,121 @@
+swagger: '2.0'
+info:
+  title: welder
+  description: |
+    Data syncing service.
+  version: '0.1'
+  license:
+    name: BSD
+    url: 'http://opensource.org/licenses/BSD-3-Clause'
+  termsOfService: 'https://github.com/databiosphere/welder'
+basePath: /
+produces:
+  - application/json
+##########################################################################################
+## PATHS
+##########################################################################################
+paths:
+  '/objects/metadata':
+    get:
+      summary: 
+      responses:
+        '200':
+          schema:
+            oneof:
+              - $ref: '#/definitions/Metadata'
+        '412':
+          description: No storage link found for the requested file
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+  '/objects':
+    post:
+      summary:
+      parameters:
+        - in: body
+          description:
+          name: body
+          required: true
+          schema:
+            oneOf:
+              - $ref: '#/definitions/Localize'
+              - $ref: '#/definitions/SafeDelocalize'
+      response:
+        '200':
+          description:
+        '412':
+          description: File is out of sync, or no storage link found for the requested file
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+
+##########################################################################################
+## DEFINITIONS
+##########################################################################################
+definitions:
+  Metadata:
+    description: ''
+    required:
+      - isLinked
+      - syncStatus
+      - remoteUri
+      - isExecutionMode
+      - storageLinks
+    properties:
+      isLinked:
+        description: True if the file is linked to remote storage, and changes are being synchronized.
+        type: boolean
+      syncStatus:
+        $ref: '#/definitions/SyncStatus'
+      lastEditedBy:
+        type: string
+        description: Optional field. Email address of the user who last edited the notebook
+      lastEditedTime:
+        type: integer
+        description: Optional field. Epoch millis for latest time the notebook is edited
+      remoteUri:
+        type: string
+        description: 'gs://{bucketName}/{objectName}'
+      isExecutionMode:
+        type: boolean
+        description: whether the notebook has execution mode enabled
+      storageLink:
+        $ref: '#/definitions/StorageLink'
+  SyncStatus:
+    type: string
+    enum:
+      - LIVE
+      - DESYNCHRONIZED
+      - REMOTE_NOT_FOUND
+  ErrorReport:
+    type: string
+  Localize:
+    description: ''
+    properties:
+      action:
+        type: string
+      entries:
+        type: array
+        items:
+          $ref: '#/definitions/Entry'
+  Entry:
+    properties:
+      sourceUri:
+        type: string
+      localDestinationPath:
+        type: string
+  SafeDelocalize:
+    description: ''
+    properties:
+      action:
+        type: string
+      localPath:
+        type: string
+  StorageLink: #TODO: fix this
+    description: ''
+    properties:
+      localPath:
+        type: string
+

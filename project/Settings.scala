@@ -104,6 +104,7 @@ object Settings {
   lazy val serverDockerSettings = commonDockerSettings ++ List(
     mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
     packageName in Docker := "broad-dsp-gcr-public/welder-server",
+    dockerEntrypoint := List("/opt/docker/bin/server", "-Dconfig.file=/etc/welder.conf"), //TODO: put /etc/welder.conf on the image
     dockerAlias := DockerAlias(
       Some("us.gcr.io"),
       None,
