@@ -6,12 +6,12 @@ import java.nio.file.Path
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import io.circe.{Decoder, Encoder}
-import org.http4s.{HttpRoutes, Uri}
-import org.http4s.dsl.Http4sDsl
-import org.http4s.circe.CirceEntityEncoder._
+import org.broadinstitute.dsp.workbench.welder.JsonCodec._
+import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
 import org.http4s.circe.CirceEntityDecoder._
-import StorageLinksService._
-import JsonCodec._
+import org.http4s.circe.CirceEntityEncoder._
+import org.http4s.dsl.Http4sDsl
+import org.http4s.{HttpRoutes, Uri}
 
 class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends Http4sDsl[IO] {
 
