@@ -17,11 +17,12 @@ produces:
 paths:
   '/objects/metadata':
     get:
-      summary: 
+      summary: ''
       responses:
         '200':
+          description: ''
           schema:
-            oneof:
+            oneOf:
               - $ref: '#/definitions/Metadata'
         '412':
           description: No storage link found for the requested file
@@ -31,25 +32,63 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects':
     post:
-      summary:
+      summary: ''
       parameters:
         - in: body
-          description:
+          description: ''
           name: body
           required: true
           schema:
             oneOf:
               - $ref: '#/definitions/Localize'
               - $ref: '#/definitions/SafeDelocalize'
-      response:
+      responses:
         '200':
-          description:
+          description: ''
         '412':
           description: File is out of sync, or no storage link found for the requested file
         '500':
           description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
+  '/storageLinks':
+    get:
+      summary: 'lists all of the configured storage links for the cluster'
+      responses:
+        '200':
+          description: ''
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/StorageLink'
+    post:
+      summary: 'creates the specified storage link configuration for the cluster'
+      parameters:
+        - in: body
+          description: ''
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/StorageLink'
+      responses:
+        '200':
+          description: 'storage link successfully created'
+          schema:
+            $ref: '#/definitions/StorageLink'
+    delete:
+      summary: 'deletes the specified storage link configuration for the cluster'
+      parameters:
+        - in: body
+          description: ''
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/StorageLink'
+      responses:
+        '200':
+          description: 'storage link successfully deleted'
+          schema:
+            $ref: '#/definitions/StorageLink'
 
 ##########################################################################################
 ## DEFINITIONS
@@ -113,9 +152,21 @@ definitions:
         type: string
       localPath:
         type: string
-  StorageLink: #TODO: fix this
+  StorageLink:
     description: ''
     properties:
-      localPath:
+      localBaseDirectory:
         type: string
-
+      cloudStorageDirectory:
+        type: string
+      pattern:
+        type: string
+      recursive:
+        type: boolean
+  StorageLinks:
+    description: ''
+    properties:
+      storageLinks:
+        type: array
+        items:
+          $ref: '#/definitions/StorageLink'
