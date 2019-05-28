@@ -20,4 +20,4 @@ object Config {
   val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 }
 
-final case class AppConfig(pathToGoogleStorageCredentialJson: String, pathToStorageLinks: Path)
+final case class AppConfig(pathToGoogleStorageCredentialJson: String, pathToStorageLinksJson: Path)

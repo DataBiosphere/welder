@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
-import org.broadinstitute.dsp.workbench.welder.server.StorageLink.storageLinkEncoder
+import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
@@ -25,7 +25,7 @@ import org.http4s.{HttpRoutes, Uri}
 
 import scala.concurrent.ExecutionContext
 
-class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, pathToStorageLinks: Path)(implicit cs: ContextShift[IO], logger: Logger[IO]) extends Http4sDsl[IO] {
+class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, pathToStorageLinksJson: Path)(implicit cs: ContextShift[IO], logger: Logger[IO]) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case req @ GET -> Root / "metadata" =>
       for {
@@ -56,7 +56,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
   def checkMetadata(req: GetMetadataRequest): IO[MetadataResponse] =
     for {
       traceId <- IO(TraceId(randomUUID()))
-      storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinks).compile.lastOrError
+      storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinksJson).compile.lastOrError
       storageLink = storageLinks.find(_.localBaseDirectory == req.localObjectPath) //TODO: handle recursive flag
       isLinked = storageLink.nonEmpty
       res <- storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
@@ -90,7 +90,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
   def safeDelocalize(req: SafeDelocalize): IO[Unit] = {
     for {
       traceId <- IO(TraceId(randomUUID()))
-      storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinks).compile.lastOrError
+      storageLinks <- readJsonFileToA[IO, List[StorageLink]](pathToStorageLinksJson).compile.lastOrError
       storageLink = storageLinks.find(_.localBaseDirectory == req.localObjectPath)
       _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) {
         sl =>
@@ -122,7 +122,7 @@ class ObjectService(googleStorageService: GoogleStorageService[IO], blockingEc: 
 }
 
 object ObjectService {
-  def apply(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, pathToStorageLinks: Path)(implicit cs: ContextShift[IO], logger: Logger[IO]): ObjectService = new ObjectService(googleStorageService, blockingEc, pathToStorageLinks)
+  def apply(googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, pathToStorageLinksJson: Path)(implicit cs: ContextShift[IO], logger: Logger[IO]): ObjectService = new ObjectService(googleStorageService, blockingEc, pathToStorageLinksJson)
 
   val gcpObjectType = "text/plain"
 

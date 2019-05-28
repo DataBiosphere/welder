@@ -13,10 +13,10 @@ import WelderApp._
 
 import scala.util.control.NoStackTrace
 
-class WelderApp(objectService: ObjectService)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
+class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
-    "/storageLinks" -> StorageLinksService.service,
+    "/storageLinks" -> storageLinksService.service,
     "/objects" -> objectService.service
   ).orNotFound
 
@@ -33,7 +33,7 @@ class WelderApp(objectService: ObjectService)(implicit cs: ContextShift[IO]) ext
 }
 
 object WelderApp {
-  def apply(syncService: ObjectService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService)
+  def apply(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService, storageLinksService)
 
   implicit val errorReportEncoder: Encoder[ErrorReport] = Encoder.forProduct1("errorMessage")(x => ErrorReport.unapply(x).get)
 }
