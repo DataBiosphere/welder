@@ -25,6 +25,19 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     assert(addResult equals linkToAdd)
   }
 
+  it should "not create duplicate storage links" in {
+    val storageLinks = Ref.of[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(storageLinks.unsafeRunSync())
+
+    val linkToAdd = StorageLink(Paths.get("/foo"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip", true)
+
+    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+
+    val listResult = storageLinksService.getStorageLinks.unsafeRunSync()
+
+    assert(listResult.storageLinks equals Set(linkToAdd))
+  }
 
   it should "list storage links" in {
     val storageLinks = Ref.of[IO, Map[Path, StorageLink]](Map.empty)
