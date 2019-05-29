@@ -161,8 +161,6 @@ definitions:
         type: string
       pattern:
         type: string
-      recursive:
-        type: boolean
   StorageLinks:
     description: ''
     properties:
