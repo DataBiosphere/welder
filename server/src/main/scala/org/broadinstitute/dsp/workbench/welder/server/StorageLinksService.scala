@@ -44,19 +44,21 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
   }
 }
 
-final case class StorageLink(localBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String)
+final case class StorageLink(localBaseDirectory: Path, localSafeModeBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
   def apply(storageLinks: Ref[IO, Map[Path, StorageLink]]): StorageLinksService = new StorageLinksService(storageLinks)
 
-  implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct3(
+  implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(
     "localBaseDirectory",
+    "localSafeModeBaseDirectory",
     "cloudStorageDirectory",
     "pattern")(storageLink => StorageLink.unapply(storageLink).get)
 
-  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.forProduct3(
+  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.forProduct4(
     "localBaseDirectory",
+    "localSafeModeBaseDirectory",
     "cloudStorageDirectory",
     "pattern")(StorageLink.apply)
 

@@ -7,7 +7,8 @@ import cats.effect.IO
 import cats.effect.concurrent.Ref
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.http4s.Uri
+import org.broadinstitute.dsp.workbench.welder.BuildInfo
+import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.{FlatSpec, Matchers}
 
 class StorageLinksServiceSpec extends FlatSpec with Matchers{

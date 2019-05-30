@@ -157,6 +157,8 @@ definitions:
     properties:
       localBaseDirectory:
         type: string
+      localSafeModeBaseDirectory:
+        type: string
       cloudStorageDirectory:
         type: string
       pattern:
