@@ -26,8 +26,8 @@ object Main extends IOApp {
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
       storageLinks <- readJsonFileToA[IO, StorageLinks](appConfig.pathToStorageLinksJson).map(sl => sl.storageLinks.map(s => s.localBaseDirectory -> s).toMap).handleErrorWith { error =>
-        Stream.eval(Logger[IO].error(error)(s"Failed to load storage links: ${error.getMessage}"))
-        Stream.resource[IO, Map[Path, StorageLink]](Resource.pure(Map[Path, StorageLink]()))
+        Stream.eval(Logger[IO].error(error)(s"Failed to load storage links: ${error.getMessage}")) >>
+          Stream.resource[IO, Map[Path, StorageLink]](Resource.pure(Map[Path, StorageLink]()))
       }
       storageLinksCache <- Stream.resource[IO, Ref[IO, Map[Path, StorageLink]]](Resource.make(Ref.of[IO, Map[Path, StorageLink]](storageLinks))(
         ref => Stream.eval(ref.get).flatMap(x => Stream.emits(StorageLinks(x.values.toSet).asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
