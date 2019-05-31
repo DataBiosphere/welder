@@ -24,7 +24,7 @@ import scala.concurrent.ExecutionContext.global
 
 class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
-  val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+  val storageLinksCache = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
   val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map.empty)
   val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes)
   val objectService = ObjectService(objectServiceConfig, FakeGoogleStorageInterpreter, global, storageLinksCache, metaCache)

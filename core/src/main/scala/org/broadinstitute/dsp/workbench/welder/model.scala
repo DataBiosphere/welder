@@ -11,6 +11,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsp.workbench.welder.LocalBasePath.{LocalBaseDirectoryPath, LocalSafeBaseDirectoryPath}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.http4s.Uri
 
@@ -52,15 +53,23 @@ object SourceUri {
   }
 }
 
+sealed abstract class LocalBasePath {
+  def path: Path
+}
+object LocalBasePath {
+  final case class LocalBaseDirectoryPath(path: Path) extends LocalBasePath
+  final case class LocalSafeBaseDirectoryPath(path: Path) extends LocalBasePath
+}
+
 final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: BlobPath)
 
-final case class StorageLink(localBaseDirectory: Path, localSafeModeBaseDirectory: Path, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
+final case class StorageLink(localBaseDirectory: LocalBasePath, localSafeModeBaseDirectory: LocalBasePath, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
 
 final case class GcsMetadata(lastLockedBy: Option[WorkbenchEmail], ExpiresAt: Option[Instant], crc32c: Crc32, generation: Long)
 
 object JsonCodec {
-  implicit val localObjectPathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
-  implicit val localObjectPathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
+  implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
+  implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
@@ -82,11 +91,19 @@ object JsonCodec {
       res.leftMap(_.getMessage)
     } else parseGsPath(s)
   }
-  implicit val storageLinkEncoder: Encoder[StorageLink] =
-    Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(storageLink => StorageLink.unapply(storageLink).get)
+  implicit val localBasePathEncoder: Encoder[LocalBasePath] = pathEncoder.contramap(_.path)
 
-  implicit val storageLinkDecoder: Decoder[StorageLink] =
-    Decoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(StorageLink.apply)
+  implicit val storageLinkEncoder: Encoder[StorageLink] =  Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(storageLink => StorageLink.unapply(storageLink).get)
+
+  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.instance {
+    x =>
+      for {
+        baseDir <- x.downField("localBaseDirectory").as[Path]
+        safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
+        cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
+        pattern <- x.downField("pattern").as[String]
+      } yield StorageLink(LocalBaseDirectoryPath(baseDir), LocalSafeBaseDirectoryPath(safeBaseDir), cloudStorageDir, pattern)
+  }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)
 }

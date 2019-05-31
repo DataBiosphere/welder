@@ -32,7 +32,7 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
     }
   }
 
-  "getSubPath" should "get relative path after base directory" in {
+  "getFullBlobName" should "get object name in gcs" in {
     val localPath = Paths.get("workspaces/ws1/sub/notebook1.ipynb")
     getLocalBaseDirectory(localPath) shouldBe(Right(Paths.get("workspaces/ws1")))
     getFullBlobName(localPath, BlobPath("notebooks")) shouldBe(Right(GcsBlobName("notebooks/sub/notebook1.ipynb")))

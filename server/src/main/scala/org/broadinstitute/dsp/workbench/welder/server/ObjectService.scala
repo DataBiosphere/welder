@@ -18,6 +18,7 @@ import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageServ
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
+import org.broadinstitute.dsp.workbench.welder.LocalBasePath.{LocalBaseDirectoryPath, LocalSafeBaseDirectoryPath}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
@@ -25,8 +26,8 @@ import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
 class ObjectService(
@@ -104,18 +105,23 @@ class ObjectService(
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- storageLinksCache.get
       baseDirectory <- IO.fromEither(getLocalBaseDirectory(req.localObjectPath).leftMap(s => BadRequestException(s)))
-      storageLink = storageLinks.get(baseDirectory) //TODO: update how we find the storage link once storagelinks is udpated with safe dir
+      storageLink = storageLinks.find(x => x._1.path == baseDirectory)
       res <- retrieveMetadata(storageLink, traceId, req.localObjectPath)
     } yield res
 
-  private def retrieveMetadata(storageLink: Option[StorageLink], traceId: TraceId, localPath: java.nio.file.Path): IO[MetadataResponse] =
-    storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}"))) { sl =>
+  private def retrieveMetadata(storageLink: Option[(LocalBasePath, StorageLink)], traceId: TraceId, localPath: java.nio.file.Path): IO[MetadataResponse] =
+    storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}"))) { pair =>
+      val isSafeMode = pair._1 match {
+        case LocalBaseDirectoryPath(_) => false
+        case LocalSafeBaseDirectoryPath(_) => true
+      }
+      val sl = pair._2
       for {
         fullBlobName <- IO.fromEither(getFullBlobName(localPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
         metadata <- retrieveGcsMetadata(sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
         result <- metadata match {
           case None =>
-            IO(MetadataResponse.RemoteNotFound(true, sl)) //TODO: fix isExecutionMode once safe dir is added in storageLinks PR
+            IO(MetadataResponse.RemoteNotFound(isSafeMode, sl))
           case Some(GcsMetadata(lastLockedBy, expiresAt, crc32c, generation)) =>
             val localAbsolutePath = config.workingDirectory.resolve(localPath)
             for {
@@ -129,7 +135,7 @@ class ObjectService(
                 else
                   IO.pure(lastLockedBy)
               }
-            } yield MetadataResponse.EditMode(syncStatus, lastLock, true, generation, sl) //TODO: fix isExecutionMode
+            } yield MetadataResponse.EditMode(syncStatus, lastLock, isSafeMode, generation, sl)
         }
       } yield result
     }
@@ -139,8 +145,9 @@ class ObjectService(
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- storageLinksCache.get
       baseDirectory <- IO.fromEither(getLocalBaseDirectory(req.localObjectPath).leftMap(s => BadRequestException(s)))
-      storageLink = storageLinks.get(baseDirectory) //TODO: We need to look up safe mode dir as well once safeModeDir is added to storageLink
-      _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) { sl =>
+      storageLink = storageLinks.find(x => x._1.path == baseDirectory) //TODO: We need to look up safe mode dir as well once safeModeDir is added to storageLink
+      _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) { pair =>
+        val sl = pair._2
         for {
           previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
           fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))

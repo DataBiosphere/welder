@@ -4,7 +4,7 @@ Welder is a lightweight webservice intended to be run on Dataproc Clusters and G
 
 # Try it out
 
-* export OWNER_EMAIL="youremail@gmail.com"
+* export OWNER_EMAIL="fake@gmail.com"
 
 * Start welder-api-server `sbt server/run` (You need proper configration file)
 * Run automation tests against the running server `sbt automation/test`

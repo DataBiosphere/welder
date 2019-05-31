@@ -21,6 +21,9 @@ object Config {
   implicit val pathConfigReader: ConfigReader[Path] = ConfigReader.fromString(
     s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err))
   )
+  implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.fromString(
+    s => Right(WorkbenchEmail(s))
+  )
 
   val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 
@@ -31,6 +34,7 @@ object Config {
 
 final case class AppConfig(
                            pathToStorageLinksJson: Path,
+                           currentUser: WorkbenchEmail,
                            workingDirectory: Path, //root directory where all local files will be mounted
                            lockExpiration: FiniteDuration
                           )
