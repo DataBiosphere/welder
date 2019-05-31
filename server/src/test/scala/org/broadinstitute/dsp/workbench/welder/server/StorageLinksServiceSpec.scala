@@ -1,25 +1,26 @@
-package org.broadinstitute.dsp.workbench.welder.server
+package org.broadinstitute.dsp.workbench.welder
+package server
 
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.http4s.Uri
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.scalatest.{FlatSpec, Matchers}
 
 class StorageLinksServiceSpec extends FlatSpec with Matchers{
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
+  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar/baz.zip"))
 
   //TODO: remove boilerplate at the top of each test
   "StorageLinksService" should "create a storage link" in {
     val storageLinks = Ref.of[IO, Map[Path, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks.unsafeRunSync())
 
-    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip")
+    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), cloudStorageDirectory, ".zip")
 
     val addResult = storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
     assert(addResult equals linkToAdd)
@@ -29,7 +30,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     val storageLinks = Ref.of[IO, Map[Path, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks.unsafeRunSync())
 
-    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip")
+    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), cloudStorageDirectory, ".zip")
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
@@ -46,7 +47,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip")
+    val linkToAdd = StorageLink(Paths.get("/foo"), Paths.get("/bar"), cloudStorageDirectory, ".zip")
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
@@ -61,7 +62,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAddAndRemove = StorageLink(Paths.get("/foo"), Paths.get("/bar"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip")
+    val linkToAddAndRemove = StorageLink(Paths.get("/foo"), Paths.get("/bar"), cloudStorageDirectory, ".zip")
 
     storageLinksService.createStorageLink(linkToAddAndRemove).unsafeRunSync()
 
@@ -81,7 +82,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToRemove = StorageLink(Paths.get("/foo"), Paths.get("/bar"), Uri.unsafeFromString("gs://foo/bar/baz.zip"), ".zip")
+    val linkToRemove = StorageLink(Paths.get("/foo"), Paths.get("/bar"), cloudStorageDirectory, ".zip")
 
     storageLinksService.deleteStorageLink(linkToRemove).unsafeRunSync()
 

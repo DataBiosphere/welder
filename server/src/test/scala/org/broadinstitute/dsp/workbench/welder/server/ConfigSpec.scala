@@ -9,7 +9,7 @@ import scala.concurrent.duration._
 class ConfigSpec extends FlatSpec with Matchers {
   "Config" should "read configuration correctly" in {
     val config = Config.appConfig
-    val expectedConfig = AppConfig(Paths.get("fakeStorageLinksPath"), Paths.get("/home/jupyter-user"), 20 minutes)
+    val expectedConfig = AppConfig(Paths.get("storage_links.json"), Paths.get("/home/jupyter-user"), 20 minutes)
     config shouldBe Right(expectedConfig)
   }
 }
