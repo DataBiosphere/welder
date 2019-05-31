@@ -26,14 +26,3 @@ Ensure git-secrets is run:
 cp -r hooks/ .git/hooks/
 chmod 755 .git/hooks/apply-git-secrets.sh
 ```
-
-# API
-
-In lieu of Swagger documentation, the available endpoints will be documented below.
-
-|Verb|Route|Payload|Response|Description|
-|---|---|---|---|---|
-|POST|/storageLinks|TBD|204 No Content|Creates a new storage link configuration|
-|GET|/storageLinks|N/A|` [ { storageLink 1 }, … ]`|Lists all present storage link configurations|
-|POST|/objects/metadata|   |   |Retrieves the metadata of the given file|
-|POST|/objects|   |   |Depending on the action, either localizes or delocalizes the given file|

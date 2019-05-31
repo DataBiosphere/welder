@@ -30,6 +30,7 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
       } yield resp
   }
 
+  //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] = {
     storageLinks.modify(links => (links + (storageLink.localBaseDirectory -> storageLink), links)).map(_ => storageLink)
   }
@@ -43,7 +44,7 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
   }
 }
 
-final case class StorageLink(localBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String, recursive: Boolean)
+final case class StorageLink(localBaseDirectory: Path, localSafeModeBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
@@ -51,15 +52,15 @@ object StorageLinksService {
 
   implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(
     "localBaseDirectory",
+    "localSafeModeBaseDirectory",
     "cloudStorageDirectory",
-    "pattern",
-    "recursive")(storageLink => StorageLink.unapply(storageLink).get)
+    "pattern")(storageLink => StorageLink.unapply(storageLink).get)
 
   implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.forProduct4(
     "localBaseDirectory",
+    "localSafeModeBaseDirectory",
     "cloudStorageDirectory",
-    "pattern",
-    "recursive")(StorageLink.apply)
+    "pattern")(StorageLink.apply)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"
