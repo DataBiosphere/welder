@@ -1,0 +1,47 @@
+@startuml
+participant TerraUI
+box "Leo VM"
+    participant JupyterExtension
+    participant JupyterAutoSaveExtension
+    participant Welder
+end box
+participant GCS
+
+TerraUI -> GCS: isLocked?
+alt No Lock or locked by current user
+    GCS -> TerraUI:
+    note left: Enable EDIT button
+else LockBy someone else
+    GCS -> TerraUI:
+    note left: Disable EDIT mode button
+end
+TerraUI -> Welder: POST /storageLinks
+note left: update storagelink for a given notebook both SAFE mode and EDIT mode
+TerraUI -> Welder: localize
+note left: localize file to corresponding location
+
+JupyterExtension -> Welder ++ #F8C471: /checkMeta (syncMode)
+alt 200 SyncMode.EDIT
+    Welder -> JupyterExtension
+    JupyterExtension -> Welder: /acquireLock
+    loop
+        JupyterExtension -> Welder ++ #F4D03F: /checkMeta
+        alt SyncStatus.LIVE
+            Welder -> JupyterExtension: file is live
+        else SyncStatus.REMOTE_NOT_FOUND
+            Welder -> JupyterExtension: remote file deleted
+            note left: Do we assume user will just want to /safeDelocalize?
+        else SyncStatus.DESYNCHRONIZED
+            return Welder -> JupyterExtension: file is out of sync
+            note left: If file is out of sync, prompt user to choose 1. make a new copy 2. go to safe mode
+        end
+    end
+    loop
+        JupyterAutoSaveExtension -> Welder: /safeDelocalize
+    end
+else 200 SyncStatus.SAFE
+    Welder -> JupyterExtension
+else 412 StorageLink not found
+    return Welder -> JupyterExtension: storagelink not found for this file
+end
+@enduml
