@@ -31,3 +31,8 @@ chmod 755 .git/hooks/apply-git-secrets.sh
 
 # UI workflow
 ![UI workflow](UI_Interaction.png)
+
+# How to modify the workflow image?
+* Enable [IntelliJ plugin](https://plugins.jetbrains.com/plugin/7017-plantuml-integration)
+* modify [UI_Interaction.puml](server/src/main/resources/UI_Interaction.puml)
+* Save rendered image as `UI_Interaction.png`

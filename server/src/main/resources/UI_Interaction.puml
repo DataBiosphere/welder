@@ -36,19 +36,19 @@ alt 200 SyncMode.EDIT
                 note left: Do we assume user will just want to /safeDelocalize?
             else SyncStatus.DESYNCHRONIZED
                 return file is out of sync
-                note left: prompt user to choose 1. make a new copy 2. go to safe mode
+                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
             end
         end
     else lockedBy someone else
         Welder -> JupyterExtension: Locked by someone else
-        note left: prompt user to choose 1. make a new copy 2. go to safe mode
+        note left: prompt user to choose 1. make a new copy  2. go to safe mode with current file 3. go to SAFE mode with latest remote file
     end
     loop how often?
         JupyterAutoSaveExtension -> Welder: /safeDelocalize
     end
 else 200 SyncStatus.SAFE
-    Welder -> JupyterExtension: SAFE
+    Welder -> JupyterExtension: SAFE mode
 else 412 StorageLink not found
-    return storagelink not found for this file
+    return storagelink not found for this file. UI should do /postStorageLink
 end
 @enduml
