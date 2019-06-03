@@ -15,6 +15,7 @@ import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
 import org.http4s.server.blaze.BlazeServerBuilder
+import scala.concurrent.duration._
 
 import scala.concurrent.ExecutionContext
 
@@ -36,6 +37,7 @@ object Main extends IOApp {
           .drain
       ))
       metadataCache <- Stream.eval(Ref.of[IO, Map[Path, GcsMetadata]](Map.empty))
+      _ <- Stream.eval(timer.sleep(2 seconds)) // sleep 2 seconds to wait for google application default credential becomes available
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault(blockingEc))
       storageLinksService = StorageLinksService(storageLinksCache)
       objectServiceConfig = ObjectServiceConfig(appConfig.workingDirectory, environmentVariables.currentUser, appConfig.lockExpiration)
