@@ -7,41 +7,48 @@ box "Leo VM"
 end box
 participant GCS
 
-TerraUI -> GCS: isLocked?
+TerraUI -> GCS ++: isLocked?
 alt No Lock or locked by current user
     GCS -> TerraUI:
     note left: Enable EDIT button
 else LockBy someone else
-    GCS -> TerraUI:
+    return
     note left: Disable EDIT mode button
 end
 TerraUI -> Welder: POST /storageLinks
-note left: update storagelink for a given notebook both SAFE mode and EDIT mode
+note left: update storagelink for a given notebook(both SAFE mode and EDIT mode)
 TerraUI -> Welder: localize
 note left: localize file to corresponding location
 
 JupyterExtension -> Welder ++ #F8C471: /checkMeta (syncMode)
 alt 200 SyncMode.EDIT
-    Welder -> JupyterExtension
+    Welder -> JupyterExtension: EDIT mode
     JupyterExtension -> Welder: /acquireLock
-    loop
-        JupyterExtension -> Welder ++ #F4D03F: /checkMeta
-        alt SyncStatus.LIVE
-            Welder -> JupyterExtension: file is live
-        else SyncStatus.REMOTE_NOT_FOUND
-            Welder -> JupyterExtension: remote file deleted
-            note left: Do we assume user will just want to /safeDelocalize?
-        else SyncStatus.DESYNCHRONIZED
-            return Welder -> JupyterExtension: file is out of sync
-            note left: If file is out of sync, prompt user to choose 1. make a new copy 2. go to safe mode
+
+    alt 200 successfully acquire Lock
+        Welder -> JupyterExtension: No Lock or locked by current user
+        loop every 30 seconds?
+            JupyterExtension -> Welder ++ #F4D03F: /checkMeta
+            alt SyncStatus.LIVE
+                Welder -> JupyterExtension: file is live
+            else SyncStatus.REMOTE_NOT_FOUND
+                Welder -> JupyterExtension: remote file deleted
+                note left: Do we assume user will just want to /safeDelocalize?
+            else SyncStatus.DESYNCHRONIZED
+                return file is out of sync
+                note left: prompt user to choose 1. make a new copy 2. go to safe mode
+            end
         end
+    else lockedBy someone else
+        Welder -> JupyterExtension: Locked by someone else
+        note left: prompt user to choose 1. make a new copy 2. go to safe mode
     end
-    loop
+    loop how often?
         JupyterAutoSaveExtension -> Welder: /safeDelocalize
     end
 else 200 SyncStatus.SAFE
-    Welder -> JupyterExtension
+    Welder -> JupyterExtension: SAFE
 else 412 StorageLink not found
-    return Welder -> JupyterExtension: storagelink not found for this file
+    return storagelink not found for this file
 end
 @enduml

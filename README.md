@@ -28,3 +28,6 @@ Ensure git-secrets is run:
 cp -r hooks/ .git/hooks/
 chmod 755 .git/hooks/apply-git-secrets.sh
 ```
+
+# UI workflow
+![UI workflow](UI_Interaction.png)
