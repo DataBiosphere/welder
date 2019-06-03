@@ -113,12 +113,5 @@ object Settings {
     )
   )
 
-  lazy val newrelicSettings = List(
-    newrelicVersion := "5.0.0",
-    newrelicLicenseKey := Some("fakeone"),
-    newrelicAppName := "welder - local - dev",
-    newrelicIncludeApi := true
-  )
-
-  lazy val serverSettings = commonSettings ++ serverDockerSettings ++ newrelicSettings
+  lazy val serverSettings = commonSettings ++ serverDockerSettings
 }

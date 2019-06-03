@@ -5,7 +5,6 @@ object Dependencies {
   val http4sVersion = "0.20.0"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.7"
-  val newRelicVersion = "5.0.0"
   val workbenchGoogle2V = "0.3-e7d949f"
 
   val common = List(
@@ -22,7 +21,6 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
-    "com.newrelic.agent.java" % "newrelic-api" % newRelicVersion,
     "org.scalacheck" %% "scalacheck" % "1.14.0" % "test",
     "ca.mrvisser" %% "sealerate" % "0.0.5"
   )

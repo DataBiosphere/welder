@@ -22,7 +22,13 @@ object SyncStatus {
     override def toString: String = "LIVE"
   }
   // crc32c mismatch
-  final case object Desynchronized extends SyncStatus {
+  final case object RemoteChanged extends SyncStatus {
+    override def toString: String = "REMOTE_CHANGE"
+  }
+  final case object LocalChanged extends SyncStatus {
+    override def toString: String = "LOCAL_CHANGE"
+  }
+  final case object OutOfSync extends SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
   }
   // deleted in gcs. (object exists in storagelinks config file but not in in gcs)

@@ -127,7 +127,15 @@ class ObjectService(
             for {
               fileBody <- io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array]
               calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
-              syncStatus = if (calculatedCrc32c == crc32c) SyncStatus.Live else SyncStatus.Desynchronized
+              syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live) else {
+                for {
+                  cachedGeneration <- metadataCache.get.map(_.get(localPath))
+                  status <- cachedGeneration match {
+                    case Some(cachedGen) => if(cachedGen.generation == generation) IO.pure(SyncStatus.LocalChanged) else IO.pure(SyncStatus.RemoteChanged)
+                    case None => IO.pure(SyncStatus.OutOfSync)
+                  }
+                } yield status
+              }
               currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
               lastLock <- expiresAt.flatTraverse[IO, WorkbenchEmail] { ea =>
                 if (currentTime > ea.toEpochMilli)
@@ -154,8 +162,8 @@ class ObjectService(
           latestMetadata <- retrieveGcsMetadata(sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
           gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
           _ <- (previousMeta, latestMetadata) match {
-            case (Some(prev), Some(now)) =>
-              if(prev.crc32c == now.crc32c)
+            case (Some(prev), Some(remote)) =>
+              if(prev.generation == remote.generation) //Remote hasn't changed
                 delocalize(req.localObjectPath, gsPath, traceId, prev.generation)
               else
                 IO.raiseError(FileOutOfSyncException("file is updated in google storage by someone else"))

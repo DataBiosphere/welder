@@ -1,8 +1,8 @@
 @startuml
 participant TerraUI
 box "Leo VM"
-    participant JupyterExtension
-    participant JupyterAutoSaveExtension
+    participant JupyterUIExtension
+    participant JupyterServerExtension
     participant Welder
 end box
 participant GCS
@@ -20,35 +20,35 @@ note left: update storagelink for a given notebook(both SAFE mode and EDIT mode)
 TerraUI -> Welder: localize
 note left: localize file to corresponding location
 
-JupyterExtension -> Welder ++ #F8C471: /checkMeta (syncMode)
+JupyterUIExtension -> Welder ++ #F8C471: /checkMeta (syncMode)
 alt 200 SyncMode.EDIT
-    Welder -> JupyterExtension: EDIT mode
-    JupyterExtension -> Welder: /acquireLock
+    Welder -> JupyterUIExtension: EDIT mode
+    JupyterUIExtension -> Welder: /acquireLock
 
     alt 200 successfully acquire Lock
-        Welder -> JupyterExtension: No Lock or locked by current user
+        Welder -> JupyterUIExtension: No Lock or locked by current user
         loop every 30 seconds?
-            JupyterExtension -> Welder ++ #F4D03F: /checkMeta
+            JupyterUIExtension -> Welder ++ #F4D03F: /checkMeta
             alt SyncStatus.LIVE
-                Welder -> JupyterExtension: file is live
+                Welder -> JupyterUIExtension: file is live
             else SyncStatus.REMOTE_NOT_FOUND
-                Welder -> JupyterExtension: remote file deleted
-                note left: Do we assume user will just want to /safeDelocalize?
+                Welder -> JupyterUIExtension: remote file deleted or never existed
+                note left: Prompt user whether they want to save the file
             else SyncStatus.DESYNCHRONIZED
                 return file is out of sync
                 note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
             end
         end
     else lockedBy someone else
-        Welder -> JupyterExtension: Locked by someone else
+        Welder -> JupyterUIExtension: Locked by someone else
         note left: prompt user to choose 1. make a new copy  2. go to safe mode with current file 3. go to SAFE mode with latest remote file
     end
-    loop how often?
-        JupyterAutoSaveExtension -> Welder: /safeDelocalize
+    group autosave (jupyter built-in feature), whenever a file gets created/deleted/moved/saved via the Jupyter API
+        JupyterServerExtension -> Welder: /safeDelocalize
     end
-else 200 SyncStatus.SAFE
-    Welder -> JupyterExtension: SAFE mode
+else 200 SyncMode.SAFE
+    Welder -> JupyterUIExtension: SAFE mode
 else 412 StorageLink not found
-    return storagelink not found for this file. UI should do /postStorageLink
+    return storagelink not found for this file.
 end
 @enduml
