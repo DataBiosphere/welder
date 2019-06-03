@@ -63,6 +63,11 @@ package object welder {
       .flatMap(bytes => Stream.emits(bytes).covary[F])
   }
 
+  def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
+    val fullBlobName = getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
+    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
+  }
+
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
   type MetadataCache = Ref[IO, Map[Path, GcsMetadata]]
 

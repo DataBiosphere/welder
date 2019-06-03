@@ -35,7 +35,7 @@ class ObjectService(
     config: ObjectServiceConfig,
     googleStorageService: GoogleStorageService[IO],
     blockingEc: ExecutionContext,
-    storageLinksCache: StorageLinksCache,
+    storageLinksDao: StorageLinksDao,
     metadataCache: MetadataCache
 )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO])
     extends Http4sDsl[IO] {
@@ -113,7 +113,7 @@ class ObjectService(
    */
   def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] = {
     for {
-      context <- findStorageLink(req.localObjectPath)
+      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
       res <- if(context.isSafeMode)
         Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
       else {
@@ -153,7 +153,7 @@ class ObjectService(
 
   def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] = {
     for {
-      context <- findStorageLink(req.localObjectPath)
+      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
       _ <- if(context.isSafeMode)
         Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode")))
       else for {
@@ -168,7 +168,8 @@ class ObjectService(
 
   def delete(req: Delete): Kleisli[IO, TraceId, Unit] = {
     for {
-      context <- findStorageLink(req.localObjectPath)
+      traceId <- Kleisli.ask[IO, TraceId]
+      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
       _ <- if(context.isSafeMode)
           Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode")))
         else {
@@ -176,7 +177,7 @@ class ObjectService(
           for {
            previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
            _ <- previousMeta match {
-             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(context.traceId)).void)
+             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void)
              case None => Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found")))
            }
           } yield ()
@@ -196,11 +197,6 @@ class ObjectService(
       .through(io.file.writeAll(localAbsolutePath, blockingEc))
   }
 
-  private def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
-    val fullBlobName = getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
-    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
-  }
-
   private def delocalize(localObjectPath: RelativePath, commonContext: CommonContext, generation: Long): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     val gsPath = getGsPath(localObjectPath, commonContext)
@@ -215,19 +211,6 @@ class ObjectService(
         }
     }
   }
-
-  private def findStorageLink[A](localPath: RelativePath): Kleisli[IO, TraceId, CommonContext] = for {
-    traceId <- Kleisli.ask[IO, TraceId]
-    storageLinks <- Kleisli.liftF(storageLinksCache.get)
-    baseDirectories <- Kleisli.liftF(IO.pure(getPosssibleBaseDirectory(localPath.asPath)))
-    context = baseDirectories.collectFirst {
-      case x if (storageLinks.get(x).isDefined) =>
-        val sl = storageLinks.get(x).get
-        val isSafeMode = sl.localSafeModeBaseDirectory.path == x
-        CommonContext(isSafeMode, x, sl, traceId)
-    }
-    res <- context.fold[Kleisli[IO, TraceId, CommonContext]](Kleisli.liftF(IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}"))))(Kleisli.pure)
-  } yield res
 }
 
 object ObjectService {
@@ -357,7 +340,5 @@ final case class Entry(sourceUri: SourceUri, localObjectPath: RelativePath)
 final case class LocalizeRequest(entries: List[Entry])
 
 final case class ObjectServiceConfig(workingDirectory: Path, ownerEmail: WorkbenchEmail, lockExpiration: FiniteDuration)
-
-final case class CommonContext(isSafeMode: Boolean, basePath: Path, storageLink: StorageLink, traceId: TraceId)
 
 final case class GsPathAndMetadata(gsPath: GsPath, metadata: GcsMetadata)
