@@ -145,7 +145,7 @@ class ObjectService(
       traceId <- IO(TraceId(randomUUID()))
       storageLinks <- storageLinksCache.get
       baseDirectory <- IO.fromEither(getLocalBaseDirectory(req.localObjectPath).leftMap(s => BadRequestException(s)))
-      storageLink = storageLinks.find(x => x._1.path == baseDirectory) //TODO: We need to look up safe mode dir as well once safeModeDir is added to storageLink
+      storageLink = storageLinks.find(x => x._1.path == baseDirectory)
       _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) { pair =>
         val sl = pair._2
         for {
