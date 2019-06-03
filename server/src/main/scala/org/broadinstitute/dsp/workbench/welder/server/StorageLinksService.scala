@@ -1,19 +1,17 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Path
-
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import io.circe.{Decoder, Encoder}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
+import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpRoutes, Uri}
 
-class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends Http4sDsl[IO] {
+class StorageLinksService(storageLinks: Ref[IO, Map[LocalBasePath, StorageLink]]) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
@@ -21,22 +19,32 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
     case req @ DELETE -> Root =>
       for {
         storageLink <- req.as[StorageLink]
-        resp <- Ok(deleteStorageLink(storageLink))
+        _ <- deleteStorageLink(storageLink)
+        resp <- Ok(())
       } yield resp
     case req @ POST -> Root =>
       for {
         storageLink <- req.as[StorageLink]
-        resp <- Ok(createStorageLink(storageLink))
+        res <- createStorageLink(storageLink)
+        resp <- Ok(res)
       } yield resp
   }
 
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] = {
-    storageLinks.modify(links => (links + (storageLink.localBaseDirectory -> storageLink), links)).map(_ => storageLink)
+    storageLinks.modify {
+      links =>
+        val toAdd = List(storageLink.localBaseDirectory -> storageLink, storageLink.localSafeModeBaseDirectory -> storageLink).toMap
+        (links ++ toAdd, storageLink)
+    }
   }
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] = {
-    storageLinks.modify(links => (links - storageLink.localBaseDirectory, links)).map(_ => ())
+    storageLinks.modify {
+      links =>
+        val toDelete = List(storageLink.localBaseDirectory, storageLink.localSafeModeBaseDirectory)
+        (links -- toDelete, ())
+    }
   }
 
   def getStorageLinks: IO[StorageLinks] = {
@@ -44,23 +52,10 @@ class StorageLinksService(storageLinks: Ref[IO, Map[Path, StorageLink]]) extends
   }
 }
 
-final case class StorageLink(localBaseDirectory: Path, localSafeModeBaseDirectory: Path, cloudStorageDirectory: Uri, pattern: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
-  def apply(storageLinks: Ref[IO, Map[Path, StorageLink]]): StorageLinksService = new StorageLinksService(storageLinks)
-
-  implicit val storageLinkEncoder: Encoder[StorageLink] = Encoder.forProduct4(
-    "localBaseDirectory",
-    "localSafeModeBaseDirectory",
-    "cloudStorageDirectory",
-    "pattern")(storageLink => StorageLink.unapply(storageLink).get)
-
-  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.forProduct4(
-    "localBaseDirectory",
-    "localSafeModeBaseDirectory",
-    "cloudStorageDirectory",
-    "pattern")(StorageLink.apply)
+  def apply(storageLinks: StorageLinksCache): StorageLinksService = new StorageLinksService(storageLinks)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"

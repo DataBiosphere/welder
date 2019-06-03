@@ -1,31 +1,40 @@
 package org.broadinstitute.dsp.workbench.welder
 
+import java.nio.file.Paths
+
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.Generators.{arbGcsBlobName, arbGcsBucketName}
+import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
+import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
-  "parseGsDirectory" should "be able to parse gs path correctly" in {
+  "parseGsPath" should "be able to parse gs path correctly" in {
     forAll {
-      (bucketName: GcsBucketName, objectName: GcsBlobName) =>
-        val gsPath = s"gs://${bucketName.value}/a/${objectName.value}"
-        parseGsDirectory(gsPath) shouldBe(Right(BucketNameAndObjectName(bucketName, objectName.copy(s"a/${objectName.value}"))))
+      (bucketName: GcsBucketName) =>
+        val gsPath = s"gs://${bucketName.value}/notebooks/sub/1.ipynb"
+        parseGsPath(gsPath) shouldBe(Right(GsPath(bucketName, GcsBlobName("notebooks/sub/1.ipynb"))))
     }
   }
 
-  "parseGsDirectory" should "fail to parse gs path when input is invalid" in {
+  it should "fail to parse gs path when input is invalid" in {
     forAll {
       (bucketName: GcsBucketName) =>
         val gsPath = s"gs://${bucketName.value}"
-        parseGsDirectory(gsPath) shouldBe(Left("objectName can't be empty"))
+        parseGsPath(gsPath) shouldBe(Left("objectName can't be empty"))
 
         val gsPath2 = s"gs:///"
-        parseGsDirectory(gsPath2) shouldBe(Left("failed to parse bucket name"))
+        parseGsPath(gsPath2) shouldBe(Left("failed to parse bucket name"))
 
         val gsPath3 = s"invalidgs://"
-        parseGsDirectory(gsPath3) shouldBe(Left("gs directory has to be prefixed with gs://"))
+        parseGsPath(gsPath3) shouldBe(Left("gs directory has to be prefixed with gs://"))
     }
+  }
+
+  "getFullBlobName" should "get object name in gcs" in {
+    val localPath = Paths.get("workspaces/ws1/sub/notebook1.ipynb")
+    getLocalBaseDirectory(localPath) shouldBe(Right(Paths.get("workspaces/ws1")))
+    getFullBlobName(localPath, BlobPath("notebooks")) shouldBe(Right(GcsBlobName("notebooks/sub/notebook1.ipynb")))
   }
 }

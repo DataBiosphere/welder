@@ -1,3 +1,4 @@
+.DS_Store
 *.class
 *.log
 .idea/
@@ -7,3 +8,4 @@ target/
 project/.bloop/
 nginx*
 *application.conf
+storage_links.json
