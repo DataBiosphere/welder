@@ -28,9 +28,9 @@ object Main extends IOApp {
       environmentVariables <- Stream.eval(Config.readEnvironmentVariables)
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
       storageLinks <- readJsonFileToA[IO, StorageLinks](appConfig.pathToStorageLinksJson).map(sl => sl.storageLinks.map(s => s.localBaseDirectory -> s).toMap).handleErrorWith { error =>
-        Stream.eval(Logger[IO].warn(s"No existing storage links found")) >> Stream.emit(Map.empty[LocalBasePath, StorageLink]).covary[IO]
+        Stream.eval(Logger[IO].warn(s"No existing storage links found")) >> Stream.emit(Map.empty[LocalDirectory, StorageLink]).covary[IO]
       }
-      storageLinksCache <- Stream.resource[IO, StorageLinksCache](Resource.make(Ref.of[IO, Map[LocalBasePath, StorageLink]](storageLinks))(
+      storageLinksCache <- Stream.resource[IO, StorageLinksCache](Resource.make(Ref.of[IO, Map[LocalDirectory, StorageLink]](storageLinks))(
         ref => Stream.eval(ref.get).flatMap(x => Stream.emits(StorageLinks(x.values.toSet).asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
           .through(fs2.io.file.writeAll(appConfig.pathToStorageLinksJson, blockingEc))
           .compile

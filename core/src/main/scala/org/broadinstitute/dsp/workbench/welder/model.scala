@@ -11,7 +11,7 @@ import cats.effect.IO
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.LocalBasePath.{LocalBaseDirectoryPath, LocalSafeBaseDirectoryPath}
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.http4s.Uri
 
@@ -23,10 +23,10 @@ object SyncStatus {
   }
   // crc32c mismatch
   final case object RemoteChanged extends SyncStatus {
-    override def toString: String = "REMOTE_CHANGE"
+    override def toString: String = "REMOTE_CHANGED"
   }
   final case object LocalChanged extends SyncStatus {
-    override def toString: String = "LOCAL_CHANGE"
+    override def toString: String = "LOCAL_CHANGED"
   }
   final case object OutOfSync extends SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
@@ -59,17 +59,17 @@ object SourceUri {
   }
 }
 
-sealed abstract class LocalBasePath {
+sealed abstract class LocalDirectory {
   def path: Path
 }
-object LocalBasePath {
-  final case class LocalBaseDirectoryPath(path: Path) extends LocalBasePath
-  final case class LocalSafeBaseDirectoryPath(path: Path) extends LocalBasePath
+object LocalDirectory {
+  final case class LocalBaseDirectory(path: Path) extends LocalDirectory
+  final case class LocalSafeBaseDirectory(path: Path) extends LocalDirectory
 }
 
 final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: BlobPath)
 
-final case class StorageLink(localBaseDirectory: LocalBasePath, localSafeModeBaseDirectory: LocalBasePath, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
+final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
 
 final case class GcsMetadata(lastLockedBy: Option[WorkbenchEmail], ExpiresAt: Option[Instant], crc32c: Crc32, generation: Long)
 
@@ -86,7 +86,7 @@ object JsonCodec {
   implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
   implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
   implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap(s => parseGsPath(s).map(x => CloudStorageDirectory(x.bucketName, BlobPath(x.blobName.value))))
-  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap(_.toString)
+  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap(x => s"gs://${x.bucketName.value}/${x.blobPath.asString}")
   implicit val sourceUriDecoder: Decoder[SourceUri] = Decoder.decodeString.emap { s =>
     if (s.startsWith("data:application/json;base64,")) {
       val res = for {
@@ -97,7 +97,7 @@ object JsonCodec {
       res.leftMap(_.getMessage)
     } else parseGsPath(s)
   }
-  implicit val localBasePathEncoder: Encoder[LocalBasePath] = pathEncoder.contramap(_.path)
+  implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path)
 
   implicit val storageLinkEncoder: Encoder[StorageLink] =  Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(storageLink => StorageLink.unapply(storageLink).get)
 
@@ -108,7 +108,7 @@ object JsonCodec {
         safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
         cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
         pattern <- x.downField("pattern").as[String]
-      } yield StorageLink(LocalBaseDirectoryPath(baseDir), LocalSafeBaseDirectoryPath(safeBaseDir), cloudStorageDir, pattern)
+      } yield StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(safeBaseDir), cloudStorageDir, pattern)
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)

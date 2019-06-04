@@ -11,7 +11,7 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 
-class StorageLinksService(storageLinks: Ref[IO, Map[LocalBasePath, StorageLink]]) extends Http4sDsl[IO] {
+class StorageLinksService(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]]) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>

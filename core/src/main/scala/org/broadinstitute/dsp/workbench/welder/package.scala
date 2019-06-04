@@ -3,6 +3,7 @@ package org.broadinstitute.dsp.workbench
 import java.nio.file.Path
 import java.util.Base64
 
+import cats.Eq
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, IO, Sync}
 import cats.implicits._
@@ -57,8 +58,10 @@ package object welder {
       .flatMap(bytes => Stream.emits(bytes).covary[F])
   }
 
-  type StorageLinksCache = Ref[IO, Map[LocalBasePath, StorageLink]]
+  type StorageLinksCache = Ref[IO, Map[LocalDirectory, StorageLink]]
   type MetadataCache = Ref[IO, Map[Path, GcsMetadata]]
 
   val gcpObjectType = "text/plain"
+
+  implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
 }
