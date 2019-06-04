@@ -35,7 +35,13 @@ alt 200 SyncMode.EDIT
                 Welder -> JupyterUIExtension: remote file deleted or never existed
                 note left: Prompt user whether they want to save the file
             else SyncStatus.DESYNCHRONIZED
-                return file is out of sync
+                Welder -> JupyterUIExtension: file is out of sync and we don't know exactly this is due to local change or remote change
+                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
+            else SyncStatus.LOCAL_CHANGED
+                Welder -> JupyterUIExtension: local notebook changes not saved to GCS
+                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
+            else SyncStatus.REMOTE_CHANGED
+               return: remote copy in GCS has changed
                 note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
             end
         end
