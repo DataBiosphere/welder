@@ -71,12 +71,13 @@ final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Blob
 
 final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
 
-final case class GcsMetadata(lastLockedBy: Option[WorkbenchEmail], ExpiresAt: Option[Instant], crc32c: Crc32, generation: Long)
+final case class GcsMetadata(localPath: Path, lastLockedBy: Option[WorkbenchEmail], lockExpiresAt: Option[Instant], crc32c: Crc32, generation: Long)
 
 object JsonCodec {
   implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
   implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
+  implicit val workbenchEmailDecoder: Decoder[WorkbenchEmail] = Decoder.decodeString.map(WorkbenchEmail)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
   implicit val instanceEncoder: Encoder[Instant] = Encoder.encodeLong.contramap(_.toEpochMilli)
@@ -112,4 +113,20 @@ object JsonCodec {
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)
+  implicit val crc32cEncoder: Encoder[Crc32] = Encoder.encodeString.contramap(_.asString)
+  implicit val crc32cDecoder: Decoder[Crc32] = Decoder.decodeString.map(Crc32)
+  implicit val gcsMetadataEncoder: Encoder[GcsMetadata] = Encoder.forProduct5(
+    "localPath",
+    "lastLockedBy",
+    "lockExpiresAt",
+    "crc32c",
+    "generation"
+  )(x => GcsMetadata.unapply(x).get)
+  implicit val gcsMetadataDecoder: Decoder[GcsMetadata] = Decoder.forProduct5(
+    "localPath",
+    "lastLockedBy",
+    "lockExpiresAt",
+    "crc32c",
+    "generation"
+  )(GcsMetadata.apply)
 }

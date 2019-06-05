@@ -68,7 +68,7 @@ class ObjectService(
               _ <- googleStorageService.getObject(bucketName, blobName, None) //get file from google.
                       .through(io.file.writeAll(entry.localObjectPath, blockingEc)) //write file to local disk
               // update metadata cache
-              meta <- Stream.eval(retrieveGcsMetadata(bucketName, blobName, traceId))
+              meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
                       Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath -> m), ())))
@@ -82,7 +82,7 @@ class ObjectService(
     res.compile.drain
   }
 
-  private def retrieveGcsMetadata(bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
+  private def retrieveGcsMetadata(localPath: java.nio.file.Path, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
     meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
     res <- meta match {
       case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
@@ -95,7 +95,7 @@ class ObjectService(
                 instant = ea.map(Instant.ofEpochMilli)
               } yield instant
           }
-        } yield Some(GcsMetadata(lastLockedBy, expiresAt, crc32c, generation))
+        } yield Some(GcsMetadata(localPath, lastLockedBy, expiresAt, crc32c, generation))
       case _ => IO.pure(None)
     }
   } yield res
@@ -112,11 +112,11 @@ class ObjectService(
         else {
           for {
             fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-            metadata <- retrieveGcsMetadata(sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
+            metadata <- retrieveGcsMetadata(req.localObjectPath, sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
             result <- metadata match {
               case None =>
                 IO(MetadataResponse.RemoteNotFound(isSafeMode, sl))
-              case Some(GcsMetadata(lastLockedBy, expiresAt, crc32c, generation)) =>
+              case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
                 val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
                 for {
                   fileBody <- io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array]
