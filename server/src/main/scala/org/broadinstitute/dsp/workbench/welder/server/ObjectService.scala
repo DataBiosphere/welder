@@ -115,7 +115,7 @@ class ObjectService(
             metadata <- retrieveGcsMetadata(req.localObjectPath, sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
             result <- metadata match {
               case None =>
-                IO(MetadataResponse.RemoteNotFound(isSafeMode, sl))
+                IO(MetadataResponse.RemoteNotFound(sl))
               case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
                 val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
                 for {
@@ -294,7 +294,7 @@ object MetadataResponse {
     def syncMode: SyncMode = SyncMode.Edit
   }
 
-  final case class RemoteNotFound(isExecutionMode: Boolean, storageLink: StorageLink) extends MetadataResponse {
+  final case class RemoteNotFound(storageLink: StorageLink) extends MetadataResponse {
     def syncMode: SyncMode = SyncMode.Edit
     def syncStatus: SyncStatus = SyncStatus.RemoteNotFound
   }
