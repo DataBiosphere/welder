@@ -39,7 +39,7 @@ class ObjectService(
 )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO])
     extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
-    case req @ GET -> Root / "metadata" =>
+    case req @ POST -> Root / "metadata" =>
       for {
         metadataReq <- req.as[GetMetadataRequest]
         res <- checkMetadata(metadataReq)

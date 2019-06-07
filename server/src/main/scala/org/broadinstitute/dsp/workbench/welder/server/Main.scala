@@ -13,8 +13,8 @@ import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
+import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.http4s.server.blaze.BlazeServerBuilder
-import JsonCodec._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
