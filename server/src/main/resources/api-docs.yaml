@@ -155,12 +155,16 @@ definitions:
       - REMOTE_CHANGED
       - LOCAL_CHANGED
   ErrorReport:
-    type: string
+    properties:
+      message:
+        type: string
+      errorCode:
+        type: Int
   Localize:
     description: ''
     properties:
       action:
-        type: string
+        default: "localize"
       entries:
         type: array
         items:
@@ -174,8 +178,7 @@ definitions:
   SafeDelocalize:
     description: ''
     properties:
-      action:
-        type: string
+      default: "safeDelocalize"
       localPath:
         type: string
   StorageLink:

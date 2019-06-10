@@ -11,6 +11,7 @@ import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.Identity
 import com.google.cloud.storage.{Acl, BlobId, BucketInfo}
 import io.circe.{Json, parser}
@@ -427,7 +428,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
-  "/safeDelocalize" should "do not delocalize a SAFE mode file" in {
+  it should "do not delocalize a SAFE mode file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
@@ -460,6 +461,38 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         res.unsafeRunSync()
     }
   }
+
+  it should "throw GenerationMismatch exception if remote file has changed" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localBaseDirectory -> storageLink))
+        val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+
+        val objectService = ObjectService(objectServiceConfig, GoogleStorageServiceFailToStoreObject, global, storageLinksCache, metaCache)
+        val requestBody = s"""
+                             |{
+                             |  "action": "safeDelocalize",
+                             |  "localPath": "$localPath"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        // Create the local base directory
+        val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          resp <- objectService.service.run(request).value.attempt
+          _ <- IO((new File(localPath.toString)).delete())
+        } yield {
+          resp shouldBe Left(GenerationMismatch(s"Remote version has changed for /tmp/${localPath}. Generation mismatch"))
+        }
+        res.unsafeRunSync()
+    }
+  }
 }
 
 class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends GoogleStorageService[IO]{
@@ -477,4 +510,21 @@ class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends Go
 
 object FakeGoogleStorageService {
   def apply(metadata: GetMetadataResponse): FakeGoogleStorageService = new FakeGoogleStorageService(metadata)
+}
+
+object GoogleStorageServiceFailToStoreObject extends GoogleStorageService[IO]{
+  override def listObjectsWithPrefix(bucketName: GcsBucketName, objectNamePrefix: String, maxPageSize: Long, traceId: Option[TraceId]): fs2.Stream[IO, GcsObjectName] = ???
+  override def storeObject(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte], objectType: String, metadata: Map[String, String], generation: Option[Long], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = {
+    val errors = new GoogleJsonError()
+    errors.setCode(412)
+    Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))
+  }
+  override def setBucketLifecycle(bucketName: GcsBucketName, lifecycleRules: List[BucketInfo.LifecycleRule], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
+  override def unsafeGetObject(bucketName: GcsBucketName, blobName: GcsBlobName, traceId: Option[TraceId]): IO[Option[String]] = ???
+  override def getObject(bucketName: GcsBucketName, blobName: GcsBlobName, traceId: Option[TraceId]): fs2.Stream[IO, Byte] = ???
+  override def downloadObject(blobId: BlobId, path: Path, traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
+  override def getObjectMetadata(bucketName: GcsBucketName, blobName: GcsBlobName, traceId: Option[TraceId]): fs2.Stream[IO, GetMetadataResponse] = ???
+  override def removeObject(bucketName: GcsBucketName, objectName: GcsBlobName, traceId: Option[TraceId]): IO[RemoveObjectResult] = ???
+  override def createBucket(googleProject: GoogleProject, bucketName: GcsBucketName, acl: Option[NonEmptyList[Acl]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
+  override def setIamPolicy(bucketName: GcsBucketName, roles: Map[StorageRole, NonEmptyList[Identity]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
 }

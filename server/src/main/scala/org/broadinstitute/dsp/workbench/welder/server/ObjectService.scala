@@ -174,6 +174,10 @@ class ObjectService(
           .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(traceId))
           .compile
           .drain
+          .adaptError {
+            case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+              GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
+          }
     }
 
   private def findStorageLink(localPath: java.nio.file.Path): IO[Option[(Boolean, StorageLink)]] = for {

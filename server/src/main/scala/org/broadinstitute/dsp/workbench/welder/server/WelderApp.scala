@@ -24,7 +24,8 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
     response.handleErrorWith{
       case BadRequestException(message) => BadRequest(ErrorReport(message))
       case NotFoundException(message) => NotFound(ErrorReport(message))
-      case x @ (_: FileOutOfSyncException | _: StorageLinkNotFoundException) => PreconditionFailed(ErrorReport(x.getMessage))
+      case GenerationMismatch(x) => PreconditionFailed(ErrorReport(x, Some(0)))
+      case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
       case e => InternalServerError(ErrorReport(e.getMessage))
     }
   }
@@ -44,8 +45,8 @@ sealed abstract class WelderException extends NoStackTrace {
 }
 final case class InternalException(message: String) extends WelderException
 final case class BadRequestException(message: String) extends WelderException
-final case class FileOutOfSyncException(message: String) extends WelderException
+final case class GenerationMismatch(message: String) extends WelderException
 final case class StorageLinkNotFoundException(message: String) extends WelderException
 final case class NotFoundException(message: String) extends WelderException
 
-final case class ErrorReport(message: String)
+final case class ErrorReport(message: String, errorCode: Option[Int] = None)
