@@ -152,7 +152,7 @@ class ObjectService(
         val isSafeMode = pair._1
         val sl = pair._2
         if(isSafeMode)
-            IO.unit
+          IO.unit
         else {
           for {
             previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
@@ -169,7 +169,7 @@ class ObjectService(
     } yield ()
 
   private def delocalize(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
-    io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>println("body: "+body)
+    io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
           .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(traceId))
           .compile
