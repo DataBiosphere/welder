@@ -451,11 +451,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         }
         val res = for {
           _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
-          resp <- objectService.service.run(request).value
+          resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))).compile.toList
         } yield {
-          resp.get.status shouldBe Status.Ok
+          resp shouldBe Left(SafeDelocalizeSafeModeFile(s"${localPath} can't be delocalized since it's in safe mode"))
           remoteFile.isEmpty shouldBe(true)
         }
         res.unsafeRunSync()

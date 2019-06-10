@@ -152,7 +152,7 @@ class ObjectService(
         val isSafeMode = pair._1
         val sl = pair._2
         if(isSafeMode)
-          IO.unit
+          IO.raiseError(SafeDelocalizeSafeModeFile(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
         else {
           for {
             previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))

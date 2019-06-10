@@ -50,7 +50,9 @@ paths:
         '200':
           description: ''
         '412':
-          description: File is out of sync, or no storage link found for the requested file
+          description: File generation mismatch(errorCode 0), no storage link found for the requested file (errorCode 1) and trying to delocalize safe mode file (errorCode 2).
+          schema:
+            $ref: '#/definitions/ErrorReport'
         '500':
           description: Internal Server Error
           schema:
@@ -156,7 +158,7 @@ definitions:
       - LOCAL_CHANGED
   ErrorReport:
     properties:
-      message:
+      errorMessage:
         type: string
       errorCode:
         type: Int
