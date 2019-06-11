@@ -506,6 +506,7 @@ class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends Go
   override def removeObject(bucketName: GcsBucketName, objectName: GcsBlobName, traceId: Option[TraceId]): IO[RemoveObjectResult] = ???
   override def createBucket(googleProject: GoogleProject, bucketName: GcsBucketName, acl: Option[NonEmptyList[Acl]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
   override def setIamPolicy(bucketName: GcsBucketName, roles: Map[StorageRole, NonEmptyList[Identity]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
+  override def setBucketPolicyOnly(bucketName: GcsBucketName, bucketPolicyOnlyEnabled: Boolean, traceId: Option[TraceId]): Stream[IO, Unit] = ???
 }
 
 object FakeGoogleStorageService {
@@ -527,4 +528,5 @@ object GoogleStorageServiceFailToStoreObject extends GoogleStorageService[IO]{
   override def removeObject(bucketName: GcsBucketName, objectName: GcsBlobName, traceId: Option[TraceId]): IO[RemoveObjectResult] = ???
   override def createBucket(googleProject: GoogleProject, bucketName: GcsBucketName, acl: Option[NonEmptyList[Acl]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
   override def setIamPolicy(bucketName: GcsBucketName, roles: Map[StorageRole, NonEmptyList[Identity]], traceId: Option[TraceId]): fs2.Stream[IO, Unit] = ???
+  override def setBucketPolicyOnly(bucketName: GcsBucketName, bucketPolicyOnlyEnabled: Boolean, traceId: Option[TraceId]): Stream[IO, Unit] = ???
 }
