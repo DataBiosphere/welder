@@ -36,20 +36,20 @@ alt 200 SyncMode.EDIT
                 note left: Prompt user whether they want to save the file
             else SyncStatus.DESYNCHRONIZED
                 Welder -> JupyterUIExtension: file is out of sync and we don't know exactly this is due to local change or remote change
-                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
+                note left: prompt user to input (https://projects.invisionapp.com/share/RTQ5TOUH8FB#/screens/367473450)
             else SyncStatus.LOCAL_CHANGED
                 Welder -> JupyterUIExtension: local notebook changes not saved to GCS
-                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
+                note left: prompt user to input (https://projects.invisionapp.com/share/RTQ5TOUH8FB#/screens/367473450)
             else SyncStatus.REMOTE_CHANGED
                return: remote copy in GCS has changed
-                note left: prompt user to choose 1. make a new copy 2. go to SAFE mode with current file 3. go to SAFE mode with latest remote file
+                note left: prompt user to input (https://projects.invisionapp.com/share/RTQ5TOUH8FB#/screens/367473450)
             end
         end
     else lockedBy someone else
         Welder -> JupyterUIExtension: Locked by someone else
         note left: prompt user to choose 1. make a new copy  2. go to safe mode with current file 3. go to SAFE mode with latest remote file
     end
-    group autosave (jupyter built-in feature), whenever a file gets created/deleted/moved/saved via the Jupyter API
+    group FileContentsManager.save() hook (whenever a file gets created/deleted/moved/saved via the Jupyter API)
         JupyterServerExtension -> Welder: /safeDelocalize
     end
 else 200 SyncMode.SAFE
