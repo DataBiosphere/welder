@@ -4,7 +4,6 @@ package server
 import java.nio.file.Path
 import java.nio.file.Paths
 
-import cats.effect.IO
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.http4s.Uri
@@ -26,14 +25,11 @@ object Config {
   )
 
   val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
-
-  def readEnvironmentVariables: IO[EnvironmentVariables] = {
-    IO(System.getenv("OWNER_EMAIL")).map(s => EnvironmentVariables(WorkbenchEmail(s)))
-  }
 }
 
 final case class AppConfig(
                            pathToStorageLinksJson: Path,
+                           pathToGcsMetadataJson: Path,
                            currentUser: WorkbenchEmail,
                            workingDirectory: Path, //root directory where all local files will be mounted
                            lockExpiration: FiniteDuration

@@ -8,19 +8,19 @@ import cats.effect.concurrent.Ref
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.LocalBasePath.{LocalBaseDirectoryPath, LocalSafeBaseDirectoryPath}
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.scalatest.{FlatSpec, Matchers}
 
 class StorageLinksServiceSpec extends FlatSpec with Matchers{
 
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar/baz.zip"))
-  val baseDir = LocalBaseDirectoryPath(Paths.get("/foo"))
-  val baseSafeDir = LocalSafeBaseDirectoryPath(Paths.get("/bar"))
+  val baseDir = LocalBaseDirectory(Paths.get("/foo"))
+  val baseSafeDir = LocalSafeBaseDirectory(Paths.get("/bar"))
 
   //TODO: remove boilerplate at the top of each test
   "StorageLinksService" should "create a storage link" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
+    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
@@ -30,7 +30,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "not create duplicate storage links" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
+    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
@@ -44,7 +44,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "list storage links" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
+    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
@@ -59,7 +59,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "delete a storage link" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
+    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
@@ -79,7 +79,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "gracefully handle deleting a storage link that doesn't exist" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalBasePath, StorageLink]](Map.empty)
+    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(storageLinks)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()

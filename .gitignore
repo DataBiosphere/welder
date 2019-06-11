@@ -9,3 +9,4 @@ project/.bloop/
 nginx*
 *application.conf
 storage_links.json
+gcs_metadata.json

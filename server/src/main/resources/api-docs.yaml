@@ -16,7 +16,7 @@ produces:
 ##########################################################################################
 paths:
   '/objects/metadata':
-    get:
+    post:
       summary: ''
       responses:
         '200':
@@ -25,6 +25,11 @@ paths:
             oneof:
               - $ref: '#/definitions/MetadataEditMode'
               - $ref: '#/definitions/MetadataSafeMode'
+              - $ref: '#/definitions/RemoteNotFound'
+        '412':
+          description: 'storagelink is not found for the file'
+          schema:
+            $ref: '#/definitions/ErrorReport'
         '500':
           description: Internal Server Error
           schema:
@@ -45,7 +50,9 @@ paths:
         '200':
           description: ''
         '412':
-          description: File is out of sync, or no storage link found for the requested file
+          description: File generation mismatch(errorCode 0), no storage link found for the requested file (errorCode 1) and trying to delocalize safe mode file (errorCode 2).
+          schema:
+            $ref: '#/definitions/412ErrorReport'
         '500':
           description: Internal Server Error
           schema:
@@ -99,7 +106,6 @@ definitions:
       - syncMode
       - syncStatus
       - remoteUri
-      - isExecutionMode
       - storageLinks
     properties:
       syncMode:
@@ -115,9 +121,19 @@ definitions:
       remoteUri:
         type: string
         description: 'gs://{bucketName}/{objectName}'
-      isExecutionMode:
-        type: boolean
-        description: whether the notebook has execution mode enabled
+      storageLink:
+        $ref: '#/definitions/StorageLink'
+  RemoteNotFound:
+    description: ''
+    required:
+      - syncMode
+      - syncStatus
+      - storageLinks
+    properties:
+      syncMode:
+        type: '#/definitions/SyncMode'
+      syncStatus:
+        $ref: '#/definitions/SyncStatus'
       storageLink:
         $ref: '#/definitions/StorageLink'
   MetadataSafeMode:
@@ -138,13 +154,29 @@ definitions:
       - LIVE
       - DESYNCHRONIZED
       - REMOTE_NOT_FOUND
+      - REMOTE_CHANGED
+      - LOCAL_CHANGED
   ErrorReport:
-    type: string
+    properties:
+      errorMessage:
+        type: string
+      errorCode:
+        type: Int
+  412ErrorReport:
+    properties:
+      errorMessage:
+        type: string
+      errorCode:
+        type: Int
+        enum:
+          - 0
+          - 1
+          - 2
   Localize:
     description: ''
     properties:
       action:
-        type: string
+        default: "localize"
       entries:
         type: array
         items:
@@ -158,8 +190,7 @@ definitions:
   SafeDelocalize:
     description: ''
     properties:
-      action:
-        type: string
+      default: "safeDelocalize"
       localPath:
         type: string
   StorageLink:

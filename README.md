@@ -5,6 +5,7 @@ Welder is a lightweight webservice intended to be run on Dataproc Clusters and G
 # Try it out
 
 * export OWNER_EMAIL="fake@gmail.com"
+* Run `gcloud auth application-default login`
 
 * Start welder-api-server `sbt server/run` (You need proper configration file)
 * Run automation tests against the running server `sbt automation/test`
@@ -28,3 +29,11 @@ Ensure git-secrets is run:
 cp -r hooks/ .git/hooks/
 chmod 755 .git/hooks/apply-git-secrets.sh
 ```
+
+# UI workflow
+![UI workflow](UI_Interaction.png)
+
+# How to modify the workflow image?
+* Enable [IntelliJ plugin](https://plugins.jetbrains.com/plugin/7017-plantuml-integration)
+* modify [UI_Interaction.puml](server/src/main/resources/UI_Interaction.puml)
+* Save rendered image as `UI_Interaction.png`

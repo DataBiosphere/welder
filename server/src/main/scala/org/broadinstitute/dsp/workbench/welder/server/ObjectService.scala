@@ -18,7 +18,7 @@ import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageServ
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.LocalBasePath.{LocalBaseDirectoryPath, LocalSafeBaseDirectoryPath}
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
@@ -39,7 +39,7 @@ class ObjectService(
 )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO])
     extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
-    case req @ GET -> Root / "metadata" =>
+    case req @ POST -> Root / "metadata" =>
       for {
         metadataReq <- req.as[GetMetadataRequest]
         res <- checkMetadata(metadataReq)
@@ -68,7 +68,7 @@ class ObjectService(
               _ <- googleStorageService.getObject(bucketName, blobName, None) //get file from google.
                       .through(io.file.writeAll(entry.localObjectPath, blockingEc)) //write file to local disk
               // update metadata cache
-              meta <- Stream.eval(retrieveGcsMetadata(bucketName, blobName, traceId))
+              meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
                       Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath -> m), ())))
@@ -82,20 +82,20 @@ class ObjectService(
     res.compile.drain
   }
 
-  private def retrieveGcsMetadata(bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
+  private def retrieveGcsMetadata(localPath: java.nio.file.Path, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
     meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
     res <- meta match {
       case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
         for {
           lastLockedBy <- IO.pure(userDefinedMetadata.get("lastLockedBy").map(WorkbenchEmail))
-          expiresAt <- userDefinedMetadata.get("expiresAt").flatTraverse {
+          expiresAt <- userDefinedMetadata.get("lockExpiresAt").flatTraverse {
             expiresAtString =>
               for {
                 ea <- Either.catchNonFatal(expiresAtString.toLong).fold[IO[Option[Long]]](_ => logger.warn(s"Failed to convert $expiresAtString to epoch millis") *> IO.pure(None), l => IO.pure(Some(l)))
                 instant = ea.map(Instant.ofEpochMilli)
               } yield instant
           }
-        } yield Some(GcsMetadata(lastLockedBy, expiresAt, crc32c, generation))
+        } yield Some(GcsMetadata(localPath, lastLockedBy, expiresAt, crc32c, generation))
       case _ => IO.pure(None)
     }
   } yield res
@@ -103,82 +103,95 @@ class ObjectService(
   def checkMetadata(req: GetMetadataRequest): IO[MetadataResponse] =
     for {
       traceId <- IO(TraceId(randomUUID()))
-      storageLinks <- storageLinksCache.get
-      baseDirectory <- IO.fromEither(getLocalBaseDirectory(req.localObjectPath).leftMap(s => BadRequestException(s)))
-      storageLink = storageLinks.find(x => x._1.path == baseDirectory)
-      res <- retrieveMetadata(storageLink, traceId, req.localObjectPath)
-    } yield res
-
-  private def retrieveMetadata(storageLink: Option[(LocalBasePath, StorageLink)], traceId: TraceId, localPath: java.nio.file.Path): IO[MetadataResponse] =
-    storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}"))) { pair =>
-      val isSafeMode = pair._1 match {
-        case LocalBaseDirectoryPath(_) => false
-        case LocalSafeBaseDirectoryPath(_) => true
-      }
-      val sl = pair._2
-      for {
-        fullBlobName <- IO.fromEither(getFullBlobName(localPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-        metadata <- retrieveGcsMetadata(sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
-        result <- metadata match {
-          case None =>
-            IO(MetadataResponse.RemoteNotFound(isSafeMode, sl))
-          case Some(GcsMetadata(lastLockedBy, expiresAt, crc32c, generation)) =>
-            val localAbsolutePath = config.workingDirectory.resolve(localPath)
-            for {
-              fileBody <- io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array]
-              calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
-              syncStatus = if (calculatedCrc32c == crc32c) SyncStatus.Live else SyncStatus.Desynchronized
-              currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-              lastLock <- expiresAt.flatTraverse[IO, WorkbenchEmail] { ea =>
-                if (currentTime > ea.toEpochMilli)
-                  IO.pure(none[WorkbenchEmail])
-                else
-                  IO.pure(lastLockedBy)
-              }
-            } yield MetadataResponse.EditMode(syncStatus, lastLock, isSafeMode, generation, sl)
+      storageLink <- findStorageLink(req.localObjectPath)
+      res <- storageLink.fold[IO[MetadataResponse]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) { pair =>
+        val isSafeMode = pair._1
+        val sl = pair._2
+        if(isSafeMode)
+          IO.pure(MetadataResponse.SafeMode(sl))
+        else {
+          for {
+            fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
+            metadata <- retrieveGcsMetadata(req.localObjectPath, sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
+            result <- metadata match {
+              case None =>
+                IO(MetadataResponse.RemoteNotFound(sl))
+              case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
+                val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
+                for {
+                  fileBody <- io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array]
+                  calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
+                  syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live) else {
+                    for {
+                      cachedGeneration <- metadataCache.get.map(_.get(req.localObjectPath))
+                      status <- cachedGeneration match {
+                        case Some(cachedGen) => if(cachedGen.generation == generation) IO.pure(SyncStatus.LocalChanged) else IO.pure(SyncStatus.RemoteChanged)
+                        case None => IO.pure(SyncStatus.OutOfSync)
+                      }
+                    } yield status
+                  }
+                  currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+                  lastLock <- expiresAt.flatTraverse[IO, WorkbenchEmail] { ea =>
+                    if (currentTime > ea.toEpochMilli)
+                      IO.pure(none[WorkbenchEmail])
+                    else
+                      IO.pure(lastLockedBy)
+                  }
+                } yield MetadataResponse.EditMode(syncStatus, lastLock, generation, sl)
+            }
+          } yield result
         }
-      } yield result
-    }
+      }
+    } yield res
 
   def safeDelocalize(req: SafeDelocalize): IO[Unit] =
     for {
       traceId <- IO(TraceId(randomUUID()))
-      storageLinks <- storageLinksCache.get
-      baseDirectory <- IO.fromEither(getLocalBaseDirectory(req.localObjectPath).leftMap(s => BadRequestException(s)))
-      storageLink = storageLinks.find(x => x._1.path == baseDirectory)
+      storageLink <- findStorageLink(req.localObjectPath)
       _ <- storageLink.fold[IO[Unit]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))) { pair =>
+        val isSafeMode = pair._1
         val sl = pair._2
-        for {
-          previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
-          fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-          latestMetadata <- retrieveGcsMetadata(sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
-          gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
-          _ <- (previousMeta, latestMetadata) match {
-            case (Some(prev), Some(now)) =>
-              if(prev.crc32c == now.crc32c)
-                delocalize(req.localObjectPath, gsPath, traceId, prev.generation)
-              else
-                IO.raiseError(FileOutOfSyncException("file is updated in google storage by someone else"))
-            case (_, None) => // if file is deleted in remote, we'll just delocalize the file
-              delocalize(req.localObjectPath, gsPath, traceId, 0L)
-            case (None, Some(now)) =>
-              IO.raiseError(new Exception("Can't determine if the file user started off of is up-to-date"))
-          }
-        } yield ()
+        if(isSafeMode)
+          IO.raiseError(SafeDelocalizeSafeModeFile(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
+        else {
+          for {
+            previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
+            fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
+            gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
+            localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
+            _ <- previousMeta match {
+              case Some(m) => delocalize(localAbsolutePath, gsPath, traceId, m.generation)
+              case None => delocalize(localAbsolutePath, gsPath, traceId, 0L)
+            }
+          } yield ()
+        }
       }
     } yield ()
 
-  private def delocalize(localObjectPath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
-    io.file.readAll[IO](localObjectPath, blockingEc, 4096).compile.to[Array].flatMap { body =>
-      for {
-         current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-         metadata = Map("lastLockedBy" -> config.ownerEmail, "expiresAt" -> (current + config.lockExpiration.toMillis).toString)
-         _ <- googleStorageService
+  private def delocalize(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
+    io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
+      googleStorageService
           .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(traceId))
           .compile
           .drain
-      } yield ()
+          .adaptError {
+            case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+              GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
+          }
     }
+
+  private def findStorageLink(localPath: java.nio.file.Path): IO[Option[(Boolean, StorageLink)]] = for {
+    storageLinks <- storageLinksCache.get
+    baseDirectory <- IO.fromEither(getLocalBaseDirectory(localPath).leftMap(s => BadRequestException(s)))
+  } yield {
+    storageLinks.find(x => x._1.path == baseDirectory).map {
+      pair =>
+        pair._1 match {
+          case LocalBaseDirectory(_) => (false, pair._2)
+          case LocalSafeBaseDirectory(_) => (true, pair._2)
+        }
+    }
+  }
 }
 
 object ObjectService {
@@ -221,24 +234,27 @@ object ObjectService {
 
   implicit val getMetadataDecoder: Decoder[GetMetadataRequest] = Decoder.forProduct1("localPath")(GetMetadataRequest.apply)
 
-  implicit val metadataResponseEditModeEncoder: Encoder[MetadataResponse.EditMode] = Encoder.forProduct5(
+  implicit val metadataResponseEditModeEncoder: Encoder[MetadataResponse.EditMode] = Encoder.forProduct4(
     "syncMode",
     "syncStatus",
     "lastLockedBy",
-    "isExecutionMode",
     "storageLink"
-  )(x => (x.syncMode, x.syncStatus, x.lastLockedBy, x.isExecutionMode, x.storageLinks))
+  )(x => (x.syncMode, x.syncStatus, x.lastLockedBy, x.storageLink))
 
-  implicit val metadataResponseRemoteNotFoundEncoder: Encoder[MetadataResponse.RemoteNotFound] = Encoder.forProduct4(
+  implicit val metadataResponseRemoteNotFoundEncoder: Encoder[MetadataResponse.RemoteNotFound] = Encoder.forProduct3(
     "syncMode",
     "syncStatus",
-    "isExecutionMode",
     "storageLink"
-  )(x => (x.syncMode, x.syncStatus, x.isExecutionMode, x.storageLinks))
+  )(x => (x.syncMode, x.syncStatus, x.storageLink))
+
+  implicit val metadataResponseSafeModeEncoder: Encoder[MetadataResponse.SafeMode] = Encoder.forProduct2(
+    "syncMode",
+    "storageLink"
+  )(x => (x.syncMode, x.storageLink))
 
   implicit val metadataResponseEncoder: Encoder[MetadataResponse] = Encoder.instance { x =>
     x match {
-      case MetadataResponse.SafeMode => Map("syncMode" -> SyncMode.Safe.toString).asJson
+      case x: MetadataResponse.SafeMode => x.asJson
       case x: MetadataResponse.EditMode => x.asJson
       case x: MetadataResponse.RemoteNotFound => x.asJson
     }
@@ -273,16 +289,16 @@ sealed abstract class MetadataResponse extends Product with Serializable {
   def syncMode: SyncMode
 }
 object MetadataResponse {
-  case object SafeMode extends MetadataResponse {
+  case class SafeMode(storageLink: StorageLink) extends MetadataResponse {
     def syncMode: SyncMode = SyncMode.Safe
   }
 
-  final case class EditMode(syncStatus: SyncStatus, lastLockedBy: Option[WorkbenchEmail], isExecutionMode: Boolean, generation: Long, storageLinks: StorageLink)
+  final case class EditMode(syncStatus: SyncStatus, lastLockedBy: Option[WorkbenchEmail], generation: Long, storageLink: StorageLink)
       extends MetadataResponse {
     def syncMode: SyncMode = SyncMode.Edit
   }
 
-  final case class RemoteNotFound(isExecutionMode: Boolean, storageLinks: StorageLink) extends MetadataResponse {
+  final case class RemoteNotFound(storageLink: StorageLink) extends MetadataResponse {
     def syncMode: SyncMode = SyncMode.Edit
     def syncStatus: SyncStatus = SyncStatus.RemoteNotFound
   }

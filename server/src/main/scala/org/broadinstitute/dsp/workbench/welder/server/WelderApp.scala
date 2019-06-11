@@ -24,7 +24,9 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
     response.handleErrorWith{
       case BadRequestException(message) => BadRequest(ErrorReport(message))
       case NotFoundException(message) => NotFound(ErrorReport(message))
-      case x @ (_: FileOutOfSyncException | _: StorageLinkNotFoundException) => PreconditionFailed(ErrorReport(x.getMessage))
+      case GenerationMismatch(x) => PreconditionFailed(ErrorReport(x, Some(0)))
+      case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
+      case SafeDelocalizeSafeModeFile(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case e => InternalServerError(ErrorReport(e.getMessage))
     }
   }
@@ -35,7 +37,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
 object WelderApp {
   def apply(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService, storageLinksService)
 
-  implicit val errorReportEncoder: Encoder[ErrorReport] = Encoder.forProduct1("errorMessage")(x => ErrorReport.unapply(x).get)
+  implicit val errorReportEncoder: Encoder[ErrorReport] = Encoder.forProduct2("errorMessage", "errorCode")(x => ErrorReport.unapply(x).get)
 }
 
 sealed abstract class WelderException extends NoStackTrace {
@@ -44,8 +46,9 @@ sealed abstract class WelderException extends NoStackTrace {
 }
 final case class InternalException(message: String) extends WelderException
 final case class BadRequestException(message: String) extends WelderException
-final case class FileOutOfSyncException(message: String) extends WelderException
+final case class GenerationMismatch(message: String) extends WelderException
 final case class StorageLinkNotFoundException(message: String) extends WelderException
+final case class SafeDelocalizeSafeModeFile(message: String) extends WelderException
 final case class NotFoundException(message: String) extends WelderException
 
-final case class ErrorReport(message: String)
+final case class ErrorReport(message: String, errorCode: Option[Int] = None)
