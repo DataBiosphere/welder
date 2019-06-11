@@ -28,6 +28,6 @@ object Dependencies {
   val server = common ++ List(
     "org.http4s" %% "http4s-blaze-server" % http4sVersion,
     "io.grpc" % "grpc-core" % grpcCoreVersion,
-    "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test"
+    "com.google.cloud" % "google-cloud-nio" % "0.94.0-alpha" % "test"
   )
 }

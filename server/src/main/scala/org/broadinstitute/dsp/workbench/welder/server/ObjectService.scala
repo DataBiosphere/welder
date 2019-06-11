@@ -145,7 +145,7 @@ class ObjectService(
   def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] = {
     findStorageLink[Unit](
       req.localObjectPath,
-      _ => Kleisli.liftF(IO.raiseError(StorageLinkNotFoundException(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
+      _ => Kleisli.liftF(IO.raiseError(SafeDelocalizeSafeModeFile(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
       sl => Kleisli {
         traceId =>
           for {
@@ -166,18 +166,17 @@ class ObjectService(
     findStorageLink[Unit](
       req.localObjectPath,
       _ => Kleisli.liftF(IO.raiseError(DeleteSafeModeFile(s"${req.localObjectPath} can't be deleted since it's in safe mode"))),
-      sl => {
-        val r = for {
+      sl => Kleisli { traceId =>
+        for {
           previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
           fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
           gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
           localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
           _ <- previousMeta match {
-            case Some(m) => ??? //delete file from gcs
+            case Some(m) => googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
             case None => IO.raiseError(UnknownFileState(s"${req.localObjectPath} can't be safely deleted from GCS"))
           }
         } yield ()
-        Kleisli.liftF(r)
       }
     )
   }

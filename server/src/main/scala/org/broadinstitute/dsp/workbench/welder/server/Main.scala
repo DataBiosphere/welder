@@ -36,8 +36,10 @@ object Main extends IOApp {
       server <- BlazeServerBuilder[IO].bindHttp(8080, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
     } yield ()
 
-    app
-      .handleErrorWith(error => Stream.eval(Logger[IO].error(error)("Failed to start server")))
+    app.handleErrorWith {
+        error =>
+          Stream.eval(Logger[IO].error(error)("Failed to start server")) >> Stream.raiseError[IO](error)
+      }
       .evalMap(_ => IO.never)
       .compile
       .drain
