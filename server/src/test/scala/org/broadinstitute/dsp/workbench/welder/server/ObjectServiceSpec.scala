@@ -401,6 +401,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localBaseDirectory -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
+        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(Paths.get(localPath), None, None, Crc32("asdf"), 111L)))
 
         val objectService = ObjectService(objectServiceConfig, FakeGoogleStorageInterpreter, global, storageLinksCache, metaCache)
         val requestBody = s"""
@@ -422,6 +423,40 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))).compile.toList
         } yield {
           resp.get.status shouldBe Status.Ok
+          remoteFile contains theSameInstanceAs(bodyBytes)
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  it should "throw UnknownFileState" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localBaseDirectory -> storageLink))
+        val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+
+        val objectService = ObjectService(objectServiceConfig, FakeGoogleStorageInterpreter, global, storageLinksCache, metaCache)
+        val requestBody = s"""
+                             |{
+                             |  "action": "safeDelocalize",
+                             |  "localPath": "$localPath"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        // Create the local base directory
+        val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          resp <- objectService.service.run(request).value.attempt
+          _ <- IO((new File(localPath.toString)).delete())
+          remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))).compile.toList
+        } yield {
+          resp shouldBe Left(UnknownFileState(s"Local GCS metadata for ${localPath} not found"))
           remoteFile contains theSameInstanceAs(bodyBytes)
         }
         res.unsafeRunSync()
@@ -468,6 +503,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
         val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localBaseDirectory -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
+        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(Paths.get(localPath), None, None, Crc32("asdf"), 111L)))
         val bodyBytes = "this is great!".getBytes("UTF-8")
 
         val objectService = ObjectService(objectServiceConfig, GoogleStorageServiceFailToStoreObject, global, storageLinksCache, metaCache)

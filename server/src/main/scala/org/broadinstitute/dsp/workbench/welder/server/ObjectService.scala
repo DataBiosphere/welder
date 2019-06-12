@@ -147,18 +147,13 @@ class ObjectService(
     findStorageLink[Unit](
       req.localObjectPath,
       _ => Kleisli.liftF(IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
-      sl => Kleisli {
-        traceId =>
-          for {
-            previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
-            fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-            gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
-            localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
-            _ <- previousMeta match {
-              case Some(m) => delocalize(localAbsolutePath, gsPath, traceId, m.generation)
-              case None => delocalize(localAbsolutePath, gsPath, traceId, 0L) //TODO: shall we raise error instead?
-            }
-          } yield ()
+      sl => Kleisli { traceId =>
+        val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
+        syncRemote(
+          req.localObjectPath,
+          sl.cloudStorageDirectory,
+          (gsPath, metadata) => delocalize(localAbsolutePath, gsPath, traceId, metadata.generation)
+        )
       }
     )
   }
@@ -168,33 +163,29 @@ class ObjectService(
       req.localObjectPath,
       _ => Kleisli.liftF(IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode"))),
       sl => Kleisli { traceId =>
-        for {
-          previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
-          fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-          gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
-          _ <- previousMeta match {
-            case Some(m) => googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
-            case None => IO.raiseError(UnknownFileState(s"${req.localObjectPath} can't be safely deleted from GCS"))
-          }
-        } yield ()
+        syncRemote(
+          req.localObjectPath,
+          sl.cloudStorageDirectory,
+          (gsPath, metadata) =>
+            googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+        )
       }
     )
   }
 
-  private def compareWithPreviousMetadata(localPath: java.nio.file.Path,
-                                          cloudStorageDirectory: CloudStorageDirectory
-                                         ): Kleisli[IO, TraceId, Unit] = Kleisli{
-    traceId =>
+  private def syncRemote[A](localPath: java.nio.file.Path,
+                          cloudStorageDirectory: CloudStorageDirectory,
+                          whenMetadataFound: (GsPath, GcsMetadata) => IO[A]
+                         ): IO[A] =
       for {
         previousMeta <- metadataCache.get.map(_.get(localPath))
         fullBlobName <- IO.fromEither(getFullBlobName(localPath, cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
         gsPath = GsPath(cloudStorageDirectory.bucketName, fullBlobName)
-        _ <- previousMeta match {
-          case Some(m) => googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
-          case None => IO.raiseError(UnknownFileState(s"${localPath} can't be safely deleted from GCS"))
+        res <- previousMeta match {
+          case Some(m) => whenMetadataFound(gsPath, m)
+          case None => IO.raiseError(UnknownFileState(s"Local GCS metadata for ${localPath} not found"))
         }
-      } yield ()
-  }
+      } yield res
 
   private def delocalize(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
     io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
