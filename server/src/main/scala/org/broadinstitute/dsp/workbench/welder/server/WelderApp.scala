@@ -21,13 +21,13 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
   ).orNotFound
 
   val errorHandler: IO[Response[IO]] => IO[Response[IO]] = response => {
-    response.handleErrorWith{
+    response.handleErrorWith {
       case BadRequestException(message) => BadRequest(ErrorReport(message))
       case NotFoundException(message) => NotFound(ErrorReport(message))
       case GenerationMismatch(x) => PreconditionFailed(ErrorReport(x, Some(0)))
       case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
-      case SafeDelocalizeSafeModeFile(x) => PreconditionFailed(ErrorReport(x, Some(2)))
-      case DeleteSafeModeFile(x) => PreconditionFailed(ErrorReport(x, Some(3)))
+      case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
+      case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
       case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
       case e => InternalServerError(ErrorReport(e.getMessage))
     }
@@ -50,8 +50,8 @@ final case class InternalException(message: String) extends WelderException
 final case class BadRequestException(message: String) extends WelderException
 final case class GenerationMismatch(message: String) extends WelderException
 final case class StorageLinkNotFoundException(message: String) extends WelderException
-final case class SafeDelocalizeSafeModeFile(message: String) extends WelderException
-final case class DeleteSafeModeFile(message: String) extends WelderException
+final case class SafeDelocalizeSafeModeFileError(message: String) extends WelderException
+final case class DeleteSafeModeFileError(message: String) extends WelderException
 final case class UnknownFileState(message: String) extends WelderException
 final case class NotFoundException(message: String) extends WelderException
 

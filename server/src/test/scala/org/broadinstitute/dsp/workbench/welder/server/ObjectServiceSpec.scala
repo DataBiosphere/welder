@@ -455,7 +455,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))).compile.toList
         } yield {
-          resp shouldBe Left(SafeDelocalizeSafeModeFile(s"${localPath} can't be delocalized since it's in safe mode"))
+          resp shouldBe Left(SafeDelocalizeSafeModeFileError(s"${localPath} can't be delocalized since it's in safe mode"))
           remoteFile.isEmpty shouldBe(true)
         }
         res.unsafeRunSync()
@@ -489,6 +489,99 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
         } yield {
           resp shouldBe Left(GenerationMismatch(s"Remote version has changed for /tmp/${localPath}. Generation mismatch"))
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  "/delete" should "return StorageLinkNotFoundException" in {
+    forAll {
+      (localFileDestination: Path) =>
+        val requestBody = s"""
+                             |{
+                             |  "action": "delete",
+                             |  "localPath": "${localFileDestination.toString}"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+
+        val res = for {
+          resp <- objectService.service.run(request).value
+          body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
+        } yield {
+          resp.get.status shouldBe Status.Ok
+        }
+        res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
+    }
+  }
+
+  it should "return DeleteSafeModeFile" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localSafeDirectory -> storageLink))
+        val localPath = s"${localSafeDirectory.path.toString}/test.ipynb"
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+
+        val objectService = ObjectService(objectServiceConfig, FakeGoogleStorageInterpreter, global, storageLinksCache, metaCache)
+        val requestBody = s"""
+                             |{
+                             |  "action": "delete",
+                             |  "localPath": "$localPath"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        // Create the local base directory
+        val directory = new File(s"/tmp/${localSafeDirectory.path.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          resp <- objectService.service.run(request).value.attempt
+          _ <- IO((new File(localPath.toString)).delete())
+          remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))).compile.toList
+        } yield {
+          resp shouldBe Left(DeleteSafeModeFileError(s"${localPath} can't be deleted since it's in safe mode"))
+          remoteFile.isEmpty shouldBe(true)
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  it should "return Delete a file from GCS" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLinksCache = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map(localBaseDirectory -> storageLink))
+        val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(Paths.get(localPath), None, None, Crc32("asdf"), 111L)))
+
+        val objectService = ObjectService(objectServiceConfig, FakeGoogleStorageInterpreter, global, storageLinksCache, metaCache)
+        val requestBody = s"""
+                             |{
+                             |  "action": "delete",
+                             |  "localPath": "$localPath"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        // Create the local base directory
+        val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val fullBlobName = getFullBlobName(Paths.get(localPath), cloudStorageDirectory.blobPath).getOrElse(throw new Exception("fail to get full blob path"))
+        val res = for {
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- FakeGoogleStorageInterpreter.storeObject(cloudStorageDirectory.bucketName, fullBlobName, bodyBytes, "text/plain").compile.drain
+          fileExisted <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, fullBlobName).compile.toList
+          _ <- objectService.service.run(request).value.attempt
+          _ <- IO((new File(localPath.toString)).delete())
+          remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, fullBlobName).compile.toList
+        } yield {
+          fileExisted.nonEmpty shouldBe true
+          remoteFile.isEmpty shouldBe(true)
         }
         res.unsafeRunSync()
     }

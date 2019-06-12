@@ -54,6 +54,7 @@ class ObjectService(
         res <- localizeReq match {
           case x: Localize => localize(x)
           case x: SafeDelocalize => safeDelocalize(x).run(traceId)
+          case x: Delete => delete(x).run(traceId)
         }
         resp <- Ok(res)
       } yield resp
@@ -145,7 +146,7 @@ class ObjectService(
   def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] = {
     findStorageLink[Unit](
       req.localObjectPath,
-      _ => Kleisli.liftF(IO.raiseError(SafeDelocalizeSafeModeFile(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
+      _ => Kleisli.liftF(IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
       sl => Kleisli {
         traceId =>
           for {
@@ -162,16 +163,15 @@ class ObjectService(
     )
   }
 
-  def delete(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] = {
+  def delete(req: Delete): Kleisli[IO, TraceId, Unit] = {
     findStorageLink[Unit](
       req.localObjectPath,
-      _ => Kleisli.liftF(IO.raiseError(DeleteSafeModeFile(s"${req.localObjectPath} can't be deleted since it's in safe mode"))),
+      _ => Kleisli.liftF(IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode"))),
       sl => Kleisli { traceId =>
         for {
           previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
           fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
           gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
-          localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
           _ <- previousMeta match {
             case Some(m) => googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
             case None => IO.raiseError(UnknownFileState(s"${req.localObjectPath} can't be safely deleted from GCS"))
@@ -179,6 +179,21 @@ class ObjectService(
         } yield ()
       }
     )
+  }
+
+  private def compareWithPreviousMetadata(localPath: java.nio.file.Path,
+                                          cloudStorageDirectory: CloudStorageDirectory
+                                         ): Kleisli[IO, TraceId, Unit] = Kleisli{
+    traceId =>
+      for {
+        previousMeta <- metadataCache.get.map(_.get(localPath))
+        fullBlobName <- IO.fromEither(getFullBlobName(localPath, cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
+        gsPath = GsPath(cloudStorageDirectory.bucketName, fullBlobName)
+        _ <- previousMeta match {
+          case Some(m) => googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+          case None => IO.raiseError(UnknownFileState(s"${localPath} can't be safely deleted from GCS"))
+        }
+      } yield ()
   }
 
   private def delocalize(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
@@ -233,6 +248,10 @@ object ObjectService {
     SafeDelocalize.apply
   }
 
+  implicit val deleteDelocalizeDecoder: Decoder[Delete] = Decoder.forProduct1("localPath") {
+    Delete.apply
+  }
+
   implicit val postObjectRequestDecoder: Decoder[PostObjectRequest] = Decoder.instance { cursor =>
     for {
       action <- cursor.downField("action").as[Action]
@@ -241,6 +260,8 @@ object ObjectService {
           cursor.as[Localize]
         case Action.SafeDelocalize =>
           cursor.as[SafeDelocalize]
+        case Action.Delete =>
+          cursor.as[Delete]
       }
     } yield req
   }
@@ -283,6 +304,9 @@ object Action {
   final case object SafeDelocalize extends Action {
     override def toString: String = "safeDelocalize"
   }
+  final case object Delete extends Action {
+    override def toString: String = "delete"
+  }
 
   val stringToAction: Map[String, Action] = sealerate.values[Action].map(a => a.toString -> a).toMap
 }
@@ -295,6 +319,9 @@ object PostObjectRequest {
   }
   final case class SafeDelocalize(localObjectPath: Path) extends PostObjectRequest {
     override def action: Action = Action.SafeDelocalize
+  }
+  final case class Delete(localObjectPath: Path) extends PostObjectRequest {
+    override def action: Action = Action.Delete
   }
 }
 
