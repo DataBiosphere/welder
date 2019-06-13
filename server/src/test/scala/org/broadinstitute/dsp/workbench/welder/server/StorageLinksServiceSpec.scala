@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
@@ -11,8 +11,7 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.scalatest.{FlatSpec, Matchers}
 
-class StorageLinksServiceSpec extends FlatSpec with Matchers{
-
+class StorageLinksServiceSpec extends FlatSpec with Matchers {
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar/baz.zip"))
   val baseDir = LocalBaseDirectory(Paths.get("/foo"))
@@ -20,8 +19,8 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
 
   //TODO: remove boilerplate at the top of each test
   "StorageLinksService" should "create a storage link" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(storageLinks)
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
 
@@ -30,12 +29,11 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "not create duplicate storage links" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(storageLinks)
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
 
-    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
     val listResult = storageLinksService.getStorageLinks.unsafeRunSync()
@@ -44,8 +42,8 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "list storage links" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(storageLinks)
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
@@ -59,8 +57,8 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "delete a storage link" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(storageLinks)
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
@@ -79,8 +77,8 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
   }
 
   it should "gracefully handle deleting a storage link that doesn't exist" in {
-    val storageLinks = Ref.unsafe[IO, Map[LocalDirectory, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(storageLinks)
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
@@ -92,5 +90,4 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers{
     val finalListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(finalListResult.storageLinks.isEmpty)
   }
-
 }

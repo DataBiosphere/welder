@@ -19,7 +19,6 @@ import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageServ
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
@@ -107,14 +106,14 @@ class ObjectService(
   def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] = {
     findStorageLink(
       req.localObjectPath,
-      sl => Kleisli.liftF(IO.pure(MetadataResponse.SafeMode(sl))),
-      sl => Kleisli { traceId =>
+      pair => Kleisli.liftF(IO.pure(MetadataResponse.SafeMode(pair.storageLink))),
+      pair => Kleisli { traceId =>
+        val fullBlobName = getFullBlobName(pair.basePath, req.localObjectPath, pair.storageLink.cloudStorageDirectory.blobPath)
         for {
-          fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
-          metadata <- retrieveGcsMetadata(req.localObjectPath, sl.cloudStorageDirectory.bucketName, fullBlobName, traceId)
+          metadata <- retrieveGcsMetadata(req.localObjectPath, pair.storageLink.cloudStorageDirectory.bucketName, fullBlobName, traceId)
           result <- metadata match {
             case None =>
-              IO(MetadataResponse.RemoteNotFound(sl))
+              IO(MetadataResponse.RemoteNotFound(pair.storageLink))
             case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
               for {
@@ -136,7 +135,7 @@ class ObjectService(
                   else
                     IO.pure(lastLockedBy)
                 }
-              } yield MetadataResponse.EditMode(syncStatus, lastLock, generation, sl)
+              } yield MetadataResponse.EditMode(syncStatus, lastLock, generation, pair.storageLink)
           }
         } yield result
       }
@@ -147,11 +146,12 @@ class ObjectService(
     findStorageLink[Unit](
       req.localObjectPath,
       _ => Kleisli.liftF(IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode"))),
-      sl => Kleisli { traceId =>
+      pair => Kleisli { traceId =>
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
         syncRemote(
+          pair.basePath,
           req.localObjectPath,
-          sl.cloudStorageDirectory,
+          pair.storageLink.cloudStorageDirectory,
           (gsPath, metadata) => delocalize(localAbsolutePath, gsPath, traceId, metadata.generation)
         )
       }
@@ -162,10 +162,11 @@ class ObjectService(
     findStorageLink[Unit](
       req.localObjectPath,
       _ => Kleisli.liftF(IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode"))),
-      sl => Kleisli { traceId =>
+      pair => Kleisli { traceId =>
         syncRemote(
+          pair.basePath,
           req.localObjectPath,
-          sl.cloudStorageDirectory,
+          pair.storageLink.cloudStorageDirectory,
           (gsPath, metadata) =>
             googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
         )
@@ -173,13 +174,15 @@ class ObjectService(
     )
   }
 
-  private def syncRemote[A](localPath: java.nio.file.Path,
+  private def syncRemote[A](
+                          basePath: java.nio.file.Path,
+                          localPath: java.nio.file.Path,
                           cloudStorageDirectory: CloudStorageDirectory,
                           whenMetadataFound: (GsPath, GcsMetadata) => IO[A]
                          ): IO[A] =
       for {
         previousMeta <- metadataCache.get.map(_.get(localPath))
-        fullBlobName <- IO.fromEither(getFullBlobName(localPath, cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
+        fullBlobName = getFullBlobName(basePath, localPath, cloudStorageDirectory.blobPath)
         gsPath = GsPath(cloudStorageDirectory.bucketName, fullBlobName)
         res <- previousMeta match {
           case Some(m) => whenMetadataFound(gsPath, m)
@@ -199,17 +202,19 @@ class ObjectService(
           }
     }
 
-  private def findStorageLink[A](localPath: java.nio.file.Path, safeModeResponse: StorageLink => Kleisli[IO, TraceId, A], editModeResponse: StorageLink => Kleisli[IO, TraceId, A]): Kleisli[IO, TraceId, A] = for {
+  private def findStorageLink[A](localPath: java.nio.file.Path, safeModeResponse: BasePathAndStorageLink => Kleisli[IO, TraceId, A], editModeResponse: BasePathAndStorageLink => Kleisli[IO, TraceId, A]): Kleisli[IO, TraceId, A] = for {
     storageLinks <- Kleisli.liftF(storageLinksCache.get)
-    baseDirectory <- Kleisli.liftF(IO.fromEither(getLocalBaseDirectory(localPath).leftMap(s => BadRequestException(s))))
-    storagelink = storageLinks.find(x => x._1.path == baseDirectory)
-    res <- storagelink.fold[Kleisli[IO, TraceId, A]](Kleisli.liftF(IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}")))){
-      pair =>
-        pair._1 match {
-          case LocalBaseDirectory(_) => editModeResponse(pair._2)
-          case LocalSafeBaseDirectory(_) => safeModeResponse(pair._2)
-        }
+    baseDirectories <- Kleisli.liftF(IO.pure(getAllPosssibleBaseDirectory(localPath)))
+    basePath = baseDirectories.collectFirst {
+      case x if (storageLinks.get(x).isDefined) =>
+        val sl = storageLinks.get(x).get
+        val basePathAndStorageLink = BasePathAndStorageLink(x, sl)
+        if (sl.localSafeModeBaseDirectory.path == x)
+          safeModeResponse(basePathAndStorageLink)
+        else
+          editModeResponse(basePathAndStorageLink)
     }
+    res <- basePath.fold[Kleisli[IO, TraceId, A]](Kleisli.liftF(IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}"))))(identity)
   } yield res
 }
 
@@ -340,3 +345,5 @@ final case class Entry(sourceUri: SourceUri, localObjectPath: Path)
 final case class LocalizeRequest(entries: List[Entry])
 
 final case class ObjectServiceConfig(workingDirectory: Path, ownerEmail: WorkbenchEmail, lockExpiration: FiniteDuration)
+
+final case class BasePathAndStorageLink(basePath: Path, storageLink: StorageLink)

@@ -39,18 +39,17 @@ package object welder {
   } yield GsPath(GcsBucketName(bucketName), GcsBlobName(objectName))
 
   // base directory example: “workspaces/ws1”
-  def getLocalBaseDirectory(localPath: Path): Either[String, Path] = {
-    for {
-      prefix <- Either.catchNonFatal(localPath.getName(0)).leftMap(_ => s"no valid prefix found for $localPath")
-      workspaceName <- Either.catchNonFatal(localPath.getName(1)).leftMap(_ => s"no workspace name found for $localPath")
-    } yield localPath.subpath(0, 2)
+  def getAllPosssibleBaseDirectory(localPath: Path): List[Path] = {
+    ((localPath.getNameCount - 1).to(1, -1)).map(
+      x => localPath.subpath(0, x)
+    ).toList
   }
 
-  def getFullBlobName(localPath: Path, blobPath: BlobPath): Either[String, GcsBlobName] =
-    for {
-      prefix <- getLocalBaseDirectory(localPath)
-      subPath = prefix.relativize(localPath)
-    } yield GcsBlobName(blobPath.asString + "/" + subPath.toString)
+  def getFullBlobName(basePath: Path, localPath: Path, blobPath: BlobPath): GcsBlobName = {
+    println(s"basePath $basePath; $localPath")
+      val subPath = basePath.relativize(localPath)
+      GcsBlobName(blobPath.asString + "/" + subPath.toString)
+    }
 
   val base64Decoder = Base64.getDecoder()
   def base64DecoderPipe[F[_]: Sync]: Pipe[F, String, Byte] = in => {
@@ -58,7 +57,7 @@ package object welder {
       .flatMap(bytes => Stream.emits(bytes).covary[F])
   }
 
-  type StorageLinksCache = Ref[IO, Map[LocalDirectory, StorageLink]]
+  type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
   type MetadataCache = Ref[IO, Map[Path, GcsMetadata]]
 
   val gcpObjectType = "text/plain"
