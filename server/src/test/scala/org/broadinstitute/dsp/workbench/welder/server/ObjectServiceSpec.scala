@@ -64,7 +64,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           .toList
         _ <- IO((new File(localFileDestination.toString)).delete())
       } yield {
-        resp.get.status shouldBe (Status.Ok)
+        resp.get.status shouldBe (Status.NoContent)
         localFileBody should contain theSameElementsAs (body)
       }
 
@@ -97,7 +97,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       localFileBody <- io.file.readAll[IO](localFileDestination, global, 4096).through(fs2.text.utf8Decode).compile.foldMonoid
       _ <- IO((new File(localFileDestination.toString)).delete())
     } yield {
-      resp.get.status shouldBe (Status.Ok)
+      resp.get.status shouldBe (Status.NoContent)
       localFileBody shouldBe(expectedBody)
     }
 
@@ -116,10 +116,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
 
         val res = for {
           resp <- objectService.service.run(request).value
-          body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
-        } yield {
-          resp.get.status shouldBe Status.Ok
-        }
+        } yield ()
         res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
     }
   }
@@ -422,7 +419,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
         } yield {
-          resp.get.status shouldBe Status.Ok
+          resp.get.status shouldBe Status.NoContent
           remoteFile contains theSameInstanceAs(bodyBytes)
         }
         res.unsafeRunSync()

@@ -28,7 +28,7 @@ object SyncStatus {
   final case object LocalChanged extends SyncStatus {
     override def toString: String = "LOCAL_CHANGED"
   }
-  final case object OutOfSync extends SyncStatus {
+  final case object Desynchronized extends SyncStatus {
     override def toString: String = "DESYNCHRONIZED"
   }
   // deleted in gcs. (object exists in storagelinks config file but not in in gcs)

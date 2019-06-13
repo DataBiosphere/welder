@@ -38,15 +38,13 @@ package object welder {
       .ensure("objectName can't be empty")(s => s.nonEmpty)
   } yield GsPath(GcsBucketName(bucketName), GcsBlobName(objectName))
 
-  // base directory example: “workspaces/ws1”
-  def getAllPosssibleBaseDirectory(localPath: Path): List[Path] = {
+  def getPosssibleBaseDirectory(localPath: Path): List[Path] = {
     ((localPath.getNameCount - 1).to(1, -1)).map(
       x => localPath.subpath(0, x)
     ).toList
   }
 
   def getFullBlobName(basePath: Path, localPath: Path, blobPath: BlobPath): GcsBlobName = {
-    println(s"basePath $basePath; $localPath")
       val subPath = basePath.relativize(localPath)
       GcsBlobName(blobPath.asString + "/" + subPath.toString)
     }

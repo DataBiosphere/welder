@@ -39,7 +39,7 @@ object Crc32c {
   private val BYTE_MASK = 0xff
 
   def calculateCrc32ForFile(path: java.nio.file.Path)(implicit cs: ContextShift[IO]): IO[Crc32] = {
-    fs2.io.file.readAll[cats.effect.IO](path, global, 4098).compile.to[Array].map(bytes => calculateCrc32c(bytes))
+    fs2.io.file.readAll[cats.effect.IO](path, global, 4096).compile.to[Array].map(bytes => calculateCrc32c(bytes))
   }
 
   def calculateCrc32c(bytes: Array[Byte]): Crc32 = {

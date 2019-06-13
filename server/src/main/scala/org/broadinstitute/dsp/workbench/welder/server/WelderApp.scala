@@ -29,7 +29,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
       case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
       case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
-      case e => InternalServerError(ErrorReport(e.getMessage))
+      case e => InternalServerError(ErrorReport(e.getLocalizedMessage))
     }
   }
 

@@ -1,6 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.io.File
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID.randomUUID
@@ -51,26 +52,30 @@ class ObjectService(
         traceId <- IO(TraceId(randomUUID()))
         localizeReq <- req.as[PostObjectRequest]
         res <- localizeReq match {
-          case x: Localize => localize(x)
-          case x: SafeDelocalize => safeDelocalize(x).run(traceId)
-          case x: Delete => delete(x).run(traceId)
+          case x: Localize => localize(x) >> NoContent()
+          case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
+          case x: Delete => delete(x).run(traceId) >> NoContent()
         }
-        resp <- Ok(res)
-      } yield resp
+      } yield res
   }
 
   def localize(req: Localize): IO[Unit] = {
     val res = Stream
       .emits(req.entries)
       .map { entry =>
+        val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath)
         entry.sourceUri match {
-          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](entry.localObjectPath, blockingEc))
+          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case GsPath(bucketName, blobName) =>
             for {
               traceId <- Stream.emit(TraceId(randomUUID())).covary[IO]
-              _ <- googleStorageService.getObject(bucketName, blobName, None) //get file from google.
-                      .through(io.file.writeAll(entry.localObjectPath, blockingEc)) //write file to local disk
-              // update metadata cache
+              _ <- gcsToLocalFile(localAbsolutePath, bucketName, blobName).handleErrorWith {
+                case e: java.nio.file.NoSuchFileException =>
+                  val directory = new File(localAbsolutePath.getParent.toString)
+                  if (!directory.exists) {
+                    Stream.eval(IO(directory.mkdirs)) >> gcsToLocalFile(localAbsolutePath, bucketName, blobName)
+                  }  else Stream.raiseError[IO](e)
+              } //write file to local disk
               meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
@@ -124,7 +129,7 @@ class ObjectService(
                     cachedGeneration <- metadataCache.get.map(_.get(req.localObjectPath))
                     status <- cachedGeneration match {
                       case Some(cachedGen) => if(cachedGen.generation == generation) IO.pure(SyncStatus.LocalChanged) else IO.pure(SyncStatus.RemoteChanged)
-                      case None => IO.pure(SyncStatus.OutOfSync)
+                      case None => IO.pure(SyncStatus.Desynchronized)
                     }
                   } yield status
                 }
@@ -174,6 +179,11 @@ class ObjectService(
     )
   }
 
+  private def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gcsBucketName: GcsBucketName, gcsBlobName: GcsBlobName): Stream[IO, Unit] = {
+    googleStorageService.getObject(gcsBucketName, gcsBlobName, None) //get file from google.
+      .through(io.file.writeAll(localAbsolutePath, blockingEc))
+  }
+
   private def syncRemote[A](
                           basePath: java.nio.file.Path,
                           localPath: java.nio.file.Path,
@@ -204,7 +214,7 @@ class ObjectService(
 
   private def findStorageLink[A](localPath: java.nio.file.Path, safeModeResponse: BasePathAndStorageLink => Kleisli[IO, TraceId, A], editModeResponse: BasePathAndStorageLink => Kleisli[IO, TraceId, A]): Kleisli[IO, TraceId, A] = for {
     storageLinks <- Kleisli.liftF(storageLinksCache.get)
-    baseDirectories <- Kleisli.liftF(IO.pure(getAllPosssibleBaseDirectory(localPath)))
+    baseDirectories <- Kleisli.liftF(IO.pure(getPosssibleBaseDirectory(localPath)))
     basePath = baseDirectories.collectFirst {
       case x if (storageLinks.get(x).isDefined) =>
         val sl = storageLinks.get(x).get
