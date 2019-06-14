@@ -5,7 +5,7 @@ object Dependencies {
   val http4sVersion = "0.20.0"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.7"
-  val workbenchGoogle2V = "0.3-e7d949f"
+  val workbenchGoogle2V = "0.5-8908cf1"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",

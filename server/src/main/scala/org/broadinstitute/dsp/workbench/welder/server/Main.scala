@@ -7,6 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ExitCode, IO, IOApp, Resource}
 import cats.implicits._
 import fs2.Stream
+import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.syntax._
@@ -24,12 +25,13 @@ object Main extends IOApp {
     implicit val unsafeLogger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
+      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
+      implicit0(it: Linebacker[IO])  = Linebacker.fromExecutionContext[IO](blockingEc)
       appConfig <- Stream.fromEither[IO](Config.appConfig)
-      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255)) //TODO: use cached thread pool with some back pressure
       storageLinksCache <- cachedResource[LocalDirectory, StorageLink](appConfig.pathToStorageLinksJson, blockingEc, storageLink => List(storageLink.localBaseDirectory -> storageLink, storageLink.localSafeModeBaseDirectory -> storageLink))
       metadataCache <- cachedResource[Path, GcsMetadata](appConfig.pathToGcsMetadataJson, blockingEc, metadata => List(metadata.localPath -> metadata))
       _ <- Stream.eval(timer.sleep(2 seconds)) // sleep 2 seconds to wait for google application default credential becomes available
-      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault(blockingEc))
+      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
       storageLinksService = StorageLinksService(storageLinksCache)
       objectServiceConfig = ObjectServiceConfig(appConfig.workingDirectory, appConfig.currentUser, appConfig.lockExpiration)
       objectService = ObjectService(objectServiceConfig, googleStorageService, blockingEc, storageLinksCache, metadataCache)

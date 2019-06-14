@@ -13,6 +13,7 @@ import _root_.io.circe.syntax._
 import ca.mrvisser.sealerate
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -43,6 +44,12 @@ class ObjectService(
       for {
         metadataReq <- req.as[GetMetadataRequest]
         res <- checkMetadata(metadataReq)
+        resp <- Ok(res)
+      } yield resp
+    case req @ POST -> Root / "acquireLock" =>
+      for {
+        request <- req.as[AcquireLockRequest]
+        res <- acquireLock(request)
         resp <- Ok(res)
       } yield resp
     case req @ POST -> Root =>
@@ -168,6 +175,33 @@ class ObjectService(
       }
     } yield ()
 
+  def acquireLock(req: AcquireLockRequest): IO[Unit] = {
+    findStorageLink(req.localObjectPath).flatMap {
+      case Some(x) => {
+        val sl = x._2
+        val metadata = Map("lastLockedBy" -> "currentUser@gmail.com", "lockExpirationDate" -> timer.clock.realTime(TimeUnit.MILLISECONDS).unsafeRunSync().toString) //todo, add 20 minutes to expiration date (read via config)
+
+        for {
+          traceId <- IO(TraceId(randomUUID()))
+          fullBlobName <- IO.fromEither(getFullBlobName(req.localObjectPath, sl.cloudStorageDirectory.blobPath).leftMap(s => BadRequestException(s)))
+          gsPath = GsPath(sl.cloudStorageDirectory.bucketName, fullBlobName)
+          foo <- googleStorageService.setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId)).compile.drain.recoverWith {
+            case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == 403 =>
+              googleStorageService.setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId)).compile.drain //todo
+
+          }
+        } yield ()
+
+
+//        for {
+//          x <- googleStorageService.storeObject()
+//
+//        } yield null
+      }
+      case None => IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${req.localObjectPath}"))
+    }
+  }
+
   private def delocalize(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId, generation: Long): IO[Unit] =
     io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
@@ -259,6 +293,10 @@ object ObjectService {
       case x: MetadataResponse.RemoteNotFound => x.asJson
     }
   }
+
+  implicit val acquireLockRequestDecoder: Decoder[AcquireLockRequest] = Decoder.forProduct1("localPath")(AcquireLockRequest.apply)
+
+//  implicit val acquireLockResponseEncoder: Encoder[AcquireLockResponse] = Encoder.forProduct1("result")(x => AcquireLockResponse.unapply(x).get)
 }
 
 final case class GetMetadataRequest(localObjectPath: Path)
@@ -284,6 +322,20 @@ object PostObjectRequest {
     override def action: Action = Action.SafeDelocalize
   }
 }
+
+final case class AcquireLockRequest(localObjectPath: Path)
+
+//sealed abstract class AcquireLockResponse {
+//  def result: String
+//}
+//object AcquireLockResponse {
+//  final case object FileNotFoundInStorageLink extends AcquireLockResponse {
+//    def result: String = "FileNotFoundInStorageLink"
+//  }
+//  final case object Success extends AcquireLockResponse {
+//    def result: String = "success"
+//  }
+//}
 
 sealed abstract class MetadataResponse extends Product with Serializable {
   def syncMode: SyncMode
