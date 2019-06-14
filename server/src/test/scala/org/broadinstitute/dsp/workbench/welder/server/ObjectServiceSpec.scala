@@ -55,11 +55,12 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
 
+      val localAbsoluteFilePath = Paths.get(s"/tmp/${localFileDestination}")
       val res = for {
         _ <- FakeGoogleStorageInterpreter.removeObject(bucketName, blobName)
         _ <- FakeGoogleStorageInterpreter.storeObject(bucketName, blobName, body, "text/plain", Map.empty, None, None).compile.drain
         resp <- objectService.service.run(request).value
-        localFileBody <- io.file.readAll[IO](localFileDestination, global, 4096)
+        localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, global, 4096)
           .compile
           .toList
         _ <- IO((new File(localFileDestination.toString)).delete())
@@ -91,11 +92,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
 
     val expectedBody = """{"destination": "gs://bucket/notebooks", "pattern": "\.ipynb$"}""".stripMargin
-
+    val localAbsoluteFilePath = Paths.get(s"/tmp/${localFileDestination}")
     val res = for {
       resp <- objectService.service.run(request).value
-      localFileBody <- io.file.readAll[IO](localFileDestination, global, 4096).through(fs2.text.utf8Decode).compile.foldMonoid
-      _ <- IO((new File(localFileDestination.toString)).delete())
+      localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, global, 4096).through(fs2.text.utf8Decode).compile.foldMonoid
+      _ <- IO((new File(localAbsoluteFilePath.toString)).delete())
     } yield {
       resp.get.status shouldBe (Status.NoContent)
       localFileBody shouldBe(expectedBody)
@@ -426,7 +427,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
-  it should "throw UnknownFileState" in {
+  it should "delocalize file when it doesn't exist in metadata cache" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
@@ -449,11 +450,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         }
         val res = for {
           _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
-          resp <- objectService.service.run(request).value.attempt
+          resp <- objectService.service.run(request).value
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getObject(cloudStorageDirectory.bucketName, getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
         } yield {
-          resp shouldBe Left(UnknownFileState(s"Local GCS metadata for ${localPath} not found"))
+          resp.get.status shouldBe Status.NoContent
           remoteFile contains theSameInstanceAs(bodyBytes)
         }
         res.unsafeRunSync()

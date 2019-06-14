@@ -64,18 +64,13 @@ class ObjectService(
       .emits(req.entries)
       .map { entry =>
         val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath)
-        entry.sourceUri match {
+
+        val localizeFile = entry.sourceUri match {
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case GsPath(bucketName, blobName) =>
             for {
               traceId <- Stream.emit(TraceId(randomUUID())).covary[IO]
-              _ <- gcsToLocalFile(localAbsolutePath, bucketName, blobName).handleErrorWith {
-                case e: java.nio.file.NoSuchFileException =>
-                  val directory = new File(localAbsolutePath.getParent.toString)
-                  if (!directory.exists) {
-                    Stream.eval(IO(directory.mkdirs)) >> gcsToLocalFile(localAbsolutePath, bucketName, blobName)
-                  }  else Stream.raiseError[IO](e)
-              } //write file to local disk
+              _ <- gcsToLocalFile(localAbsolutePath, bucketName, blobName)
               meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
@@ -84,6 +79,8 @@ class ObjectService(
                   }
             } yield ()
         }
+
+        Stream.eval(mkdirIfNotExist(localAbsolutePath.getParent)) >> localizeFile
       }
       .parJoin(10)
 
@@ -157,7 +154,8 @@ class ObjectService(
           pair.basePath,
           req.localObjectPath,
           pair.storageLink.cloudStorageDirectory,
-          (gsPath, metadata) => delocalize(localAbsolutePath, gsPath, traceId, metadata.generation)
+          (gsPath, metadata) => delocalize(localAbsolutePath, gsPath, traceId, metadata.generation), //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
+          gsPath => delocalize(localAbsolutePath, gsPath, traceId, 0L)
         )
       }
     )
@@ -173,10 +171,18 @@ class ObjectService(
           req.localObjectPath,
           pair.storageLink.cloudStorageDirectory,
           (gsPath, metadata) =>
-            googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+            googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void, //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+          _ => IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found"))
         )
       }
     )
+  }
+
+  private def mkdirIfNotExist(path: java.nio.file.Path): IO[Unit] = {println(s"path: $path")
+    val directory = new File(path.toString)
+    if (!directory.exists) {
+      IO(directory.mkdirs).void
+    }  else IO.unit
   }
 
   private def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gcsBucketName: GcsBucketName, gcsBlobName: GcsBlobName): Stream[IO, Unit] = {
@@ -188,7 +194,8 @@ class ObjectService(
                           basePath: java.nio.file.Path,
                           localPath: java.nio.file.Path,
                           cloudStorageDirectory: CloudStorageDirectory,
-                          whenMetadataFound: (GsPath, GcsMetadata) => IO[A]
+                          whenMetadataFound: (GsPath, GcsMetadata) => IO[A],
+                          whenMetadataNotFound: (GsPath) => IO[A]
                          ): IO[A] =
       for {
         previousMeta <- metadataCache.get.map(_.get(localPath))
@@ -196,7 +203,7 @@ class ObjectService(
         gsPath = GsPath(cloudStorageDirectory.bucketName, fullBlobName)
         res <- previousMeta match {
           case Some(m) => whenMetadataFound(gsPath, m)
-          case None => IO.raiseError(UnknownFileState(s"Local GCS metadata for ${localPath} not found"))
+          case None => whenMetadataNotFound(gsPath) //
         }
       } yield res
 
