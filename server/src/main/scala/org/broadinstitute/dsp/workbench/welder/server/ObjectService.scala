@@ -46,7 +46,7 @@ class ObjectService(
         res <- checkMetadata(metadataReq)
         resp <- Ok(res)
       } yield resp
-    case req @ POST -> Root / "acquireLock" =>
+    case req @ PUT -> Root / "acquireLock" =>
       for {
         request <- req.as[AcquireLockRequest]
         res <- acquireLock(request)
