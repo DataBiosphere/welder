@@ -27,20 +27,28 @@ package object welder {
   }
 
   val gsDirectoryReg = "gs:\\/\\/.*".r
-  def parseGsPath(str: String): Either[String, GsPath] = for {
-    _ <- gsDirectoryReg.findPrefixOf(str).toRight("gs directory has to be prefixed with gs://")
+
+  def validateGsPrefix(str: String): Either[String, Unit] = gsDirectoryReg.findPrefixOf(str).void.toRight("gs directory has to be prefixed with gs://")
+
+  def parseBucketName(str: String): Either[String, GcsBucketName] = for {
+    _ <- validateGsPrefix(str)
     parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
     bucketName <- Either.catchNonFatal(parsed(2))
       .leftMap(_ => s"failed to parse bucket name")
       .ensure("bucketName can't be empty")(s => s.nonEmpty)
-    objectName <- Either.catchNonFatal(parsed.drop(3).mkString("/"))
+  } yield GcsBucketName(bucketName)
+
+  def parseGsPath(str: String): Either[String, GsPath] = for {
+    bucketName <- parseBucketName(str)
+    length = s"gs://${bucketName.value}/".length
+    objectName <- Either.catchNonFatal(str.drop(length))
       .leftMap(_ => s"failed to parse object name")
       .ensure("objectName can't be empty")(s => s.nonEmpty)
-  } yield GsPath(GcsBucketName(bucketName), GcsBlobName(objectName))
+  } yield GsPath(bucketName, GcsBlobName(objectName))
 
   def getPosssibleBaseDirectory(localPath: Path): List[Path] = {
     ((localPath.getNameCount - 1).to(1, -1)).map(
-      x => localPath.subpath(0, x)
+      index => localPath.subpath(0, index)
     ).toList
   }
 

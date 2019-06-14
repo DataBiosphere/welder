@@ -105,6 +105,13 @@ class ObjectService(
     }
   } yield res
 
+  /**
+    * In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
+    * For instance, in this method, we're abstracting away the need to pass around `traceId` explicitly.
+    * For more information about Kleisli, check out https://typelevel.org/cats/datatypes/kleisli.html.
+    * Even though you don't see many Kleisli used explicitly in welder, it's actually used extensively, because it's a fundamental data type
+    * used by http4s, the web library welder depends on.
+   */
   def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] = {
     findStorageLink(
       req.localObjectPath,

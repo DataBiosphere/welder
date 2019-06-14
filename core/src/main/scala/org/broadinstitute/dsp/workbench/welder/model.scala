@@ -86,8 +86,23 @@ object JsonCodec {
   implicit val gcsBlobNameEncoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
   implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
   implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
-  implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap(s => parseGsPath(s).map(x => CloudStorageDirectory(x.bucketName, BlobPath(x.blobName.value))))
-  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap(x => s"gs://${x.bucketName.value}/${x.blobPath.asString}")
+  implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap{
+    s =>
+      parseBucketName(s) match {
+        case Left(error) => Left(error)
+        case Right(bucket) =>
+          val length = s"gs://${bucket.value}/".length
+          val blobPath = BlobPath(s.drop(length))
+          Right(CloudStorageDirectory(bucket, blobPath))
+      }
+  }
+  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap{
+    x =>
+      if(x.blobPath.asString.nonEmpty)
+        s"gs://${x.bucketName.value}/${x.blobPath.asString}"
+      else
+        s"gs://${x.bucketName.value}"
+  }
   implicit val sourceUriDecoder: Decoder[SourceUri] = Decoder.decodeString.emap { s =>
     if (s.startsWith("data:application/json;base64,")) {
       val res = for {
