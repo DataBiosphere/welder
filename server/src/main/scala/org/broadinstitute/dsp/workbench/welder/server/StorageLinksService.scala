@@ -14,7 +14,10 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
-      Ok(getStorageLinks)
+      for {
+        res <- getStorageLinks
+        resp <- Ok(res)
+      } yield resp
     case req @ DELETE -> Root =>
       for {
         storageLink <- req.as[StorageLink]
@@ -46,7 +49,7 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
     }
   }
 
-  def getStorageLinks: IO[StorageLinks] = {
+  val getStorageLinks: IO[StorageLinks] = {
     storageLinks.get.map(links => StorageLinks(links.values.toSet))
   }
 }
