@@ -126,8 +126,7 @@ class ObjectService(
             case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
               val res = for {
-                fileBody <- io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array]
-                calculatedCrc32c = Crc32c.calculateCrc32c(fileBody)
+                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
                 syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live) else {
                   for {
                     cachedGeneration <- metadataCache.get.map(_.get(req.localObjectPath))
