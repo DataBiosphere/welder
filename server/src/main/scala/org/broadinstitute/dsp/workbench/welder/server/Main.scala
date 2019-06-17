@@ -33,7 +33,7 @@ object Main extends IOApp {
       storageLinksService = StorageLinksService(storageLinksCache)
       objectServiceConfig = ObjectServiceConfig(appConfig.workingDirectory, appConfig.currentUser, appConfig.lockExpiration)
       objectService = ObjectService(objectServiceConfig, googleStorageService, blockingEc, storageLinksCache, metadataCache)
-      server <- BlazeServerBuilder[IO].bindHttp(8080, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
+      server <- BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
     } yield ()
 
     app.handleErrorWith {

@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 class ConfigSpec extends FlatSpec with Matchers {
   "Config" should "read configuration correctly" in {
     val config = Config.appConfig
-    val expectedConfig = AppConfig(Paths.get("/work/storage_links.json"), Paths.get("/work/gcs_metadata.json"), WorkbenchEmail("fake@gmail.com"), Paths.get("/tmp"), 20 minutes)
+    val expectedConfig = AppConfig(8080, Paths.get("/work/storage_links.json"), Paths.get("/work/gcs_metadata.json"), WorkbenchEmail("fake@gmail.com"), Paths.get("/tmp"), 20 minutes)
     config shouldBe Right(expectedConfig)
   }
 }

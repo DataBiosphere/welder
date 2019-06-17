@@ -3,13 +3,13 @@ package server
 
 import cats.effect._
 import io.circe.Encoder
-import org.http4s.{HttpApp, Response}
+import org.broadinstitute.dsp.workbench.welder.server.WelderApp._
+import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.http4s.server.middleware.Logger
 import org.http4s.syntax.kleisli._
-import org.http4s.circe.CirceEntityEncoder._
-import WelderApp._
+import org.http4s.{HttpApp, Response}
 
 import scala.util.control.NoStackTrace
 
@@ -23,13 +23,14 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
   val errorHandler: IO[Response[IO]] => IO[Response[IO]] = response => {
     response.handleErrorWith {
       case BadRequestException(message) => BadRequest(ErrorReport(message))
+      case e: org.http4s.InvalidMessageBodyFailure => BadRequest(ErrorReport(e.getCause().toString))
       case NotFoundException(message) => NotFound(ErrorReport(message))
       case GenerationMismatch(x) => PreconditionFailed(ErrorReport(x, Some(0)))
       case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
       case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
       case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
-      case e => InternalServerError(ErrorReport(e.getLocalizedMessage))
+      case e => InternalServerError(ErrorReport(e.getCause().toString))
     }
   }
 
