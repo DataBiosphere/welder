@@ -15,6 +15,7 @@ import ca.mrvisser.sealerate
 import cats.data.Kleisli
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -45,6 +46,13 @@ class ObjectService(
         traceId <- IO(TraceId(randomUUID()))
         metadataReq <- req.as[GetMetadataRequest]
         res <- checkMetadata(metadataReq).run(traceId)
+        resp <- Ok(res)
+      } yield resp
+    case req @ PUT -> Root / "acquireLock" =>
+      for {
+        traceId <- IO(TraceId(randomUUID()))
+        request <- req.as[AcquireLockRequest]
+        res <- acquireLock(request).run(traceId)
         resp <- Ok(res)
       } yield resp
     case req @ POST -> Root =>
@@ -159,8 +167,8 @@ class ObjectService(
       else for {
         previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath)))
         _ <- previousMeta match {
-          case Some(m) => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context, m.generation)) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
-          case None => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context,0L))
+          case Some(m) => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context, Option(m.generation))) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
+          case None => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context, Option(0L)))
         }
       } yield ()
     } yield ()
@@ -201,12 +209,12 @@ class ObjectService(
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
   }
 
-  private def delocalize(localObjectPath: java.nio.file.Path, commonContext: CommonContext, generation: Long): IO[Unit] = {
+  private def delocalize(localObjectPath: java.nio.file.Path, commonContext: CommonContext, generation: Option[Long]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath)
     val gsPath = getGsPath(localObjectPath, commonContext)
     io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
-        .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(commonContext.traceId))
+        .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, generation, Some(commonContext.traceId))
         .compile
         .drain
         .adaptError {
@@ -214,6 +222,20 @@ class ObjectService(
             GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
         }
     }
+  }
+
+  def acquireLock(req: AcquireLockRequest): Kleisli[IO, TraceId, Unit] = {
+    val metadata = Map(
+      "lastLockedBy" -> "currentUser@gmail.com", //TODO: read from config/env
+      "lockExpirationDate" -> timer.clock.realTime(TimeUnit.MILLISECONDS).unsafeRunSync().toString) //todo, add 20 minutes to expiration date (read via config)
+
+    for {
+      context <- findStorageLink(req.localObjectPath)
+      gsPath = getGsPath(req.localObjectPath, context)
+      _ <- googleStorageService.setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(context.traceId)).compile.drain.recover {
+        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == 403 => delocalize(req.localObjectPath, context, None)
+      }
+    } yield ()
   }
 
   private def findStorageLink[A](localPath: java.nio.file.Path): Kleisli[IO, TraceId, CommonContext] = for {
@@ -273,6 +295,8 @@ object ObjectService {
       }
     } yield req
   }
+
+  implicit val acquireLockRequestDecoder: Decoder[AcquireLockRequest] = Decoder.forProduct1("localPath")(AcquireLockRequest.apply)
 
   implicit val getMetadataDecoder: Decoder[GetMetadataRequest] = Decoder.forProduct1("localPath")(GetMetadataRequest.apply)
 
@@ -351,6 +375,8 @@ object MetadataResponse {
     def syncStatus: SyncStatus = SyncStatus.RemoteNotFound
   }
 }
+
+final case class AcquireLockRequest(localObjectPath: Path)
 
 final case class Entry(sourceUri: SourceUri, localObjectPath: Path)
 
