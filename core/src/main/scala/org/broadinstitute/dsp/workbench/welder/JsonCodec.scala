@@ -18,6 +18,10 @@ import org.http4s.Uri
 object JsonCodec {
   implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
   implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
+  implicit val relativePathDecoder: Decoder[RelativePath] = pathDecoder.emap {
+    path => if(path.isAbsolute) Left("Path should be relative") else Right(RelativePath(path))
+  }
+  implicit val relativePathEncoder: Encoder[RelativePath] = pathEncoder.contramap(_.asPath)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val workbenchEmailDecoder: Decoder[WorkbenchEmail] = Decoder.decodeString.map(WorkbenchEmail)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
