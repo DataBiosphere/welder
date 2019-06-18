@@ -28,6 +28,7 @@ object Config {
 }
 
 final case class AppConfig(
+                           serverPort: Int,
                            pathToStorageLinksJson: Path,
                            pathToGcsMetadataJson: Path,
                            currentUser: WorkbenchEmail,

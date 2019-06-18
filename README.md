@@ -6,9 +6,7 @@ Welder is a lightweight webservice intended to be run on Dataproc Clusters and G
 
 * export OWNER_EMAIL="fake@gmail.com"
 * Run `gcloud auth application-default login`
-
 * Start welder-api-server `sbt server/run`
-* Run automation tests against the running server `sbt automation/test`
 
 # Publish container image to Google container registry
 * Set up auth for publishing docker image to GCR

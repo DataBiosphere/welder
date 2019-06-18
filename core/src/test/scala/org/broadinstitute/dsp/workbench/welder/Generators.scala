@@ -16,7 +16,7 @@ object Generators {
     objectName <- google2.Generators.genGcsBlobName
   } yield Uri.unsafeFromString(s"gs://$bucketName/a/$objectName")
 
-  val genFilePath = Gen.uuid.map(uuid => Paths.get(s"/tmp/${uuid}"))
+  val genFilePath = Gen.uuid.map(uuid => Paths.get(s"dir/${uuid}"))
   val genLocalBaseDirectory = for {
     workspaceName <- Gen.uuid
   } yield LocalBaseDirectory(Paths.get(s"workspaces/$workspaceName"))

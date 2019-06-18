@@ -50,7 +50,6 @@ paths:
         '200':
           description: ''
         '412':
-          description: File generation mismatch(errorCode 0), no storage link found for the requested file (errorCode 1) and trying to delocalize safe mode file (errorCode 2).
           schema:
             $ref: '#/definitions/412ErrorReport'
         '500':
@@ -168,10 +167,12 @@ definitions:
         type: string
       errorCode:
         type: Int
+        description: File generation mismatch(0), no storage link found for the requested file (1), trying to delocalize safe mode file (2), trying to delete safe mode file (3)
         enum:
           - 0
           - 1
           - 2
+          - 3
   Localize:
     description: ''
     properties:

@@ -1,11 +1,11 @@
 import sbt._
 
 object Dependencies {
-  val circeVersion = "0.10.0"
-  val http4sVersion = "0.20.0"
+  val circeVersion = "0.11.0"
+  val http4sVersion = "0.20.3"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.7"
-  val workbenchGoogle2V = "0.3-e7d949f"
+  val workbenchGoogle2V = "0.5-47baf94"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",
@@ -28,6 +28,6 @@ object Dependencies {
   val server = common ++ List(
     "org.http4s" %% "http4s-blaze-server" % http4sVersion,
     "io.grpc" % "grpc-core" % grpcCoreVersion,
-    "com.google.cloud" % "google-cloud-nio" % "0.71.0-alpha" % "test"
+    "com.google.cloud" % "google-cloud-nio" % "0.94.0-alpha" % "test"
   )
 }
