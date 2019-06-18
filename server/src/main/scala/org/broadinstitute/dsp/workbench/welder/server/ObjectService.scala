@@ -63,17 +63,17 @@ class ObjectService(
     val res = Stream
       .emits(req.entries)
       .map { entry =>
-        val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath)
+        val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath.asPath)
 
         val localizeFile = entry.sourceUri match {
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case GsPath(bucketName, blobName) =>
             for {
               _ <- gcsToLocalFile(localAbsolutePath, bucketName, blobName)
-              meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
+              meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath.asPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
-                      Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath -> m), ())))
+                      Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath.asPath -> m), ())))
                     case _ => Stream.eval(IO.unit)
                   }
             } yield ()
@@ -117,19 +117,19 @@ class ObjectService(
       res <- if(context.isSafeMode)
         Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
       else {
-        val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath, context.storageLink.cloudStorageDirectory.blobPath)
+        val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         for {
-          metadata <- Kleisli.liftF[IO, TraceId, Option[GcsMetadata]](retrieveGcsMetadata(req.localObjectPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, context.traceId))
+          metadata <- Kleisli.liftF[IO, TraceId, Option[GcsMetadata]](retrieveGcsMetadata(req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, context.traceId))
           result <- metadata match {
             case None =>
               Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.RemoteNotFound(context.storageLink))
             case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
-              val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath)
+              val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               val res = for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
                 syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live) else {
                   for {
-                    cachedGeneration <- metadataCache.get.map(_.get(req.localObjectPath))
+                    cachedGeneration <- metadataCache.get.map(_.get(req.localObjectPath.asPath))
                     status <- cachedGeneration match {
                       case Some(cachedGen) => if(cachedGen.generation == generation) IO.pure(SyncStatus.LocalChanged) else IO.pure(SyncStatus.RemoteChanged)
                       case None => IO.pure(SyncStatus.Desynchronized)
@@ -157,7 +157,7 @@ class ObjectService(
       _ <- if(context.isSafeMode)
         Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode")))
       else for {
-        previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath)))
+        previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
         _ <- previousMeta match {
           case Some(m) => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context, m.generation)) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
           case None => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context,0L))
@@ -174,9 +174,9 @@ class ObjectService(
         else {
           val gsPath = getGsPath(req.localObjectPath, context)
           for {
-           previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath)))
+           previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
            _ <- previousMeta match {
-             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(context.traceId)).void) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(context.traceId)).void)
              case None => Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found")))
            }
           } yield ()
@@ -196,13 +196,13 @@ class ObjectService(
       .through(io.file.writeAll(localAbsolutePath, blockingEc))
   }
 
-  private def getGsPath(localObjectPath: java.nio.file.Path, basePathAndStorageLink: CommonContext): GsPath = {
-    val fullBlobName = getFullBlobName(basePathAndStorageLink.basePath, localObjectPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
+  private def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
+    val fullBlobName = getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
   }
 
-  private def delocalize(localObjectPath: java.nio.file.Path, commonContext: CommonContext, generation: Long): IO[Unit] = {
-    val localAbsolutePath = config.workingDirectory.resolve(localObjectPath)
+  private def delocalize(localObjectPath: RelativePath, commonContext: CommonContext, generation: Long): IO[Unit] = {
+    val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     val gsPath = getGsPath(localObjectPath, commonContext)
     io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
@@ -216,10 +216,10 @@ class ObjectService(
     }
   }
 
-  private def findStorageLink[A](localPath: java.nio.file.Path): Kleisli[IO, TraceId, CommonContext] = for {
+  private def findStorageLink[A](localPath: RelativePath): Kleisli[IO, TraceId, CommonContext] = for {
     traceId <- Kleisli.ask[IO, TraceId]
     storageLinks <- Kleisli.liftF(storageLinksCache.get)
-    baseDirectories <- Kleisli.liftF(IO.pure(getPosssibleBaseDirectory(localPath)))
+    baseDirectories <- Kleisli.liftF(IO.pure(getPosssibleBaseDirectory(localPath.asPath)))
     context = baseDirectories.collectFirst {
       case x if (storageLinks.get(x).isDefined) =>
         val sl = storageLinks.get(x).get
@@ -244,7 +244,7 @@ object ObjectService {
   implicit val entryDecoder: Decoder[Entry] = Decoder.instance { cursor =>
     for {
       bucketAndObject <- cursor.downField("sourceUri").as[SourceUri]
-      localObjectPath <- cursor.downField("localDestinationPath").as[Path]
+      localObjectPath <- cursor.downField("localDestinationPath").as[RelativePath]
     } yield Entry(bucketAndObject, localObjectPath)
   }
 
@@ -303,7 +303,7 @@ object ObjectService {
   }
 }
 
-final case class GetMetadataRequest(localObjectPath: Path)
+final case class GetMetadataRequest(localObjectPath: RelativePath)
 sealed abstract class Action
 object Action {
   final case object Localize extends Action {
@@ -325,10 +325,10 @@ object PostObjectRequest {
   final case class Localize(entries: List[Entry]) extends PostObjectRequest {
     override def action: Action = Action.Localize
   }
-  final case class SafeDelocalize(localObjectPath: Path) extends PostObjectRequest {
+  final case class SafeDelocalize(localObjectPath: RelativePath) extends PostObjectRequest {
     override def action: Action = Action.SafeDelocalize
   }
-  final case class Delete(localObjectPath: Path) extends PostObjectRequest {
+  final case class Delete(localObjectPath: RelativePath) extends PostObjectRequest {
     override def action: Action = Action.Delete
   }
 }
@@ -352,7 +352,7 @@ object MetadataResponse {
   }
 }
 
-final case class Entry(sourceUri: SourceUri, localObjectPath: Path)
+final case class Entry(sourceUri: SourceUri, localObjectPath: RelativePath)
 
 final case class LocalizeRequest(entries: List[Entry])
 

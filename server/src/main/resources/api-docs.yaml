@@ -47,7 +47,7 @@ paths:
               - $ref: '#/definitions/Localize'
               - $ref: '#/definitions/SafeDelocalize'
       responses:
-        '200':
+        '204':
           description: ''
         '412':
           schema:
@@ -90,7 +90,7 @@ paths:
           schema:
             $ref: '#/definitions/StorageLink'
       responses:
-        '200':
+        '204':
           description: 'storage link successfully deleted'
           schema:
             $ref: '#/definitions/StorageLink'

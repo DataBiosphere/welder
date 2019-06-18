@@ -4,7 +4,7 @@ object Dependencies {
   val circeVersion = "0.11.0"
   val http4sVersion = "0.20.3"
   val grpcCoreVersion = "1.17.1"
-  val scalaTestVersion = "3.0.7"
+  val scalaTestVersion = "3.0.8"
   val workbenchGoogle2V = "0.5-47baf94"
 
   val common = List(
