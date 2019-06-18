@@ -176,7 +176,7 @@ class ObjectService(
           for {
            previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath)))
            _ <- previousMeta match {
-             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(context.traceId)).void) //delete file from gcs with generation once https://github.com/broadinstitute/workbench-libs/pull/242 is approved
+             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(context.traceId)).void)
              case None => Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found")))
            }
           } yield ()
