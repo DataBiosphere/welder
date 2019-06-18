@@ -209,12 +209,12 @@ class ObjectService(
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
   }
 
-  private def delocalize(localObjectPath: java.nio.file.Path, commonContext: CommonContext, generation: Option[Long]): IO[Unit] = {
+  private def delocalize(localObjectPath: java.nio.file.Path, commonContext: CommonContext, generation: Option[Long], metadata: Map[String, String] = Map.empty): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath)
     val gsPath = getGsPath(localObjectPath, commonContext)
     io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
-        .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, generation, Some(commonContext.traceId))
+        .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, metadata, generation, Some(commonContext.traceId))
         .compile
         .drain
         .adaptError {
@@ -224,6 +224,16 @@ class ObjectService(
     }
   }
 
+  //Workspace buckets prior to Jun 2019 use legacy ACLs. Unfortunately, legacy ACLs do not contain the storage.objects.update permission,
+  //which is required to update object metadata in GCS. The acquireLock code below contains the following workaround:
+  // 1. Attempt to update the GCS object metadata directly.
+  //    a. If this succeeds, great!
+  //    b. If this fails, proceed to step 2
+  // 2. Overwrite the object completely with the metadata. This results in extra network traffic, but by doing so the user will gain ownership of
+  //    the object in GCS, which will grant them the storage.objects.update permission, which will allow Step 1 to succeed for all subsequent calls.
+  // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
+  //       bucket policy only enabled, which will allow step 1 to succeed.
+  //
   def acquireLock(req: AcquireLockRequest): Kleisli[IO, TraceId, Unit] = {
     val metadata = Map(
       "lastLockedBy" -> "currentUser@gmail.com", //TODO: read from config/env
@@ -233,7 +243,7 @@ class ObjectService(
       context <- findStorageLink(req.localObjectPath)
       gsPath = getGsPath(req.localObjectPath, context)
       _ <- googleStorageService.setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(context.traceId)).compile.drain.recover {
-        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == 403 => delocalize(req.localObjectPath, context, None)
+        case gjre: GoogleJsonResponseException if gjre.getDetails.getCode == 403 => delocalize(req.localObjectPath, context, None, metadata)
       }
     } yield ()
   }
