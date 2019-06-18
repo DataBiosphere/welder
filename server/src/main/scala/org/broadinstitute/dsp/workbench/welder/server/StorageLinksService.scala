@@ -2,7 +2,6 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import io.circe.{Decoder, Encoder}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
@@ -11,11 +10,14 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 
-class StorageLinksService(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]]) extends Http4sDsl[IO] {
+class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
-      Ok(getStorageLinks)
+      for {
+        res <- getStorageLinks
+        resp <- Ok(res)
+      } yield resp
     case req @ DELETE -> Root =>
       for {
         storageLink <- req.as[StorageLink]
@@ -34,7 +36,7 @@ class StorageLinksService(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] = {
     storageLinks.modify {
       links =>
-        val toAdd = List(storageLink.localBaseDirectory -> storageLink, storageLink.localSafeModeBaseDirectory -> storageLink).toMap
+        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
         (links ++ toAdd, storageLink)
     }
   }
@@ -42,12 +44,12 @@ class StorageLinksService(storageLinks: Ref[IO, Map[LocalDirectory, StorageLink]
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] = {
     storageLinks.modify {
       links =>
-        val toDelete = List(storageLink.localBaseDirectory, storageLink.localSafeModeBaseDirectory)
+        val toDelete = List(storageLink.localBaseDirectory.path, storageLink.localSafeModeBaseDirectory.path)
         (links -- toDelete, ())
     }
   }
 
-  def getStorageLinks: IO[StorageLinks] = {
+  val getStorageLinks: IO[StorageLinks] = {
     storageLinks.get.map(links => StorageLinks(links.values.toSet))
   }
 }

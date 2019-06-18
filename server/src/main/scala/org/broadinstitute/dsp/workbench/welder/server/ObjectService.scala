@@ -221,7 +221,7 @@ class ObjectService(
       storageLinks <- storageLinksCache.get
       baseDirectory <- IO.fromEither(getLocalBaseDirectory(localPath).leftMap(s => BadRequestException(s)))
     } yield {
-      storageLinks.find(x => x._1.path == baseDirectory).map {
+      storageLinks.find(x => x._1 == baseDirectory).map {
         pair =>
           pair._1 match {
             case LocalBaseDirectory(_) => (false, pair._2)

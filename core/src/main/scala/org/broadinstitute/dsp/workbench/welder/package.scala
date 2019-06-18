@@ -58,7 +58,7 @@ package object welder {
       .flatMap(bytes => Stream.emits(bytes).covary[F])
   }
 
-  type StorageLinksCache = Ref[IO, Map[LocalDirectory, StorageLink]]
+  type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
   type MetadataCache = Ref[IO, Map[Path, GcsMetadata]]
 
   val gcpObjectType = "text/plain"
