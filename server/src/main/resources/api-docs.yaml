@@ -15,6 +15,22 @@ produces:
 ## PATHS
 ##########################################################################################
 paths:
+  'lock':
+    post:
+      summary: ''
+      responses:
+        '200':
+          description: ''
+          schema:
+            $ref: '#/definitions/AcquireLockResponse'
+        '412':
+          description: 'storagelink is not found for the file'
+          schema:
+            $ref: '#/definitions/ErrorReport'
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
   '/objects/metadata':
     post:
       summary: ''
@@ -212,3 +228,11 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/StorageLink'
+  AcquireLockResponse:
+    description: ''
+      properties:
+        result:
+          type: string
+          enum:
+            - "LOCKED_BY_OTHER"
+            - "SUCCESS"

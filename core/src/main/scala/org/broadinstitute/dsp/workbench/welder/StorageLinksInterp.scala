@@ -1,10 +1,8 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Path
-
 import cats.effect.IO
 
-class StorageLinksDao(storageLinksCache: StorageLinksCache) {
+class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLinksAlg {
   def findStorageLink[A](localPath: RelativePath): IO[CommonContext] = for {
     storageLinks <- storageLinksCache.get
     baseDirectories = getPosssibleBaseDirectory(localPath.asPath)
@@ -17,5 +15,3 @@ class StorageLinksDao(storageLinksCache: StorageLinksCache) {
     res <- context.fold[IO[CommonContext]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}")))(IO.pure)
   } yield res
 }
-
-final case class CommonContext(isSafeMode: Boolean, basePath: Path, storageLink: StorageLink)

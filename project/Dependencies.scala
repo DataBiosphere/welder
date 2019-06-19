@@ -5,7 +5,8 @@ object Dependencies {
   val http4sVersion = "0.20.3"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.8"
-  val workbenchGoogle2V = "0.5-8908cf1"
+  val workbenchGoogle2V = "0.6-b853e47-SNAP"
+//  val workbenchGoogle2V = "0.5-8908cf1"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",
@@ -22,12 +23,13 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "org.scalacheck" %% "scalacheck" % "1.14.0" % "test",
-    "ca.mrvisser" %% "sealerate" % "0.0.5"
+    "ca.mrvisser" %% "sealerate" % "0.0.5",
+    "io.chrisdavenport" %% "linebacker" % "0.2.1",
+    "com.google.cloud" % "google-cloud-nio" % "0.94.0-alpha" % "test"
   )
 
   val server = common ++ List(
     "org.http4s" %% "http4s-blaze-server" % http4sVersion,
-    "io.grpc" % "grpc-core" % grpcCoreVersion,
-    "com.google.cloud" % "google-cloud-nio" % "0.94.0-alpha" % "test"
+    "io.grpc" % "grpc-core" % grpcCoreVersion
   )
 }

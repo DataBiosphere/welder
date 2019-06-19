@@ -24,15 +24,16 @@ object Main extends IOApp {
     implicit val unsafeLogger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
-      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.fixedThreadPool(255))
-      implicit0(it: Linebacker[IO])  = Linebacker.fromExecutionContext[IO](blockingEc)
+      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
+      implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[Path, StorageLink](appConfig.pathToStorageLinksJson, blockingEc, storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink))
-      metadataCache <- cachedResource[Path, GcsMetadata](appConfig.pathToGcsMetadataJson, blockingEc, metadata => List(metadata.localPath -> metadata))
+      metadataCache <- cachedResource[Path, GcsMetadata](appConfig.pathToGcsMetadataJson, blockingEc, metadata => List(metadata.localPath.asPath -> metadata))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
       storageLinksService = StorageLinksService(storageLinksCache)
-      objectServiceConfig = ObjectServiceConfig(appConfig.workingDirectory, appConfig.currentUser, appConfig.lockExpiration)
-      objectService = ObjectService(objectServiceConfig, googleStorageService, blockingEc, storageLinksCache, metadataCache)
+      googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
+      storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+      objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCache)
       server <- BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
     } yield ()
 

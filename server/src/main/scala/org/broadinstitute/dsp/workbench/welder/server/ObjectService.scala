@@ -3,21 +3,16 @@ package server
 
 import java.io.File
 import java.nio.file.Path
-import java.time.Instant
 import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
-import _root_.io.chrisdavenport.log4cats.Logger
-import _root_.io.circe.{Decoder, Encoder}
 import _root_.io.circe.syntax._
+import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
-import org.broadinstitute.dsde.workbench.google2
-import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
@@ -28,16 +23,16 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 class ObjectService(
-    config: ObjectServiceConfig,
-    googleStorageService: GoogleStorageService[IO],
-    blockingEc: ExecutionContext,
-    storageLinksDao: StorageLinksDao,
-    metadataCache: MetadataCache
-)(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO])
+                     config: ObjectServiceConfig,
+                     googleStorageAlg: GoogleStorageAlg,
+                     blockingEc: ExecutionContext,
+                     storageLinksAlg: StorageLinksAlg,
+                     metadataCache: MetadataCache
+)(implicit cs: ContextShift[IO], timer: Timer[IO])
     extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case req @ POST -> Root / "metadata" =>
@@ -45,6 +40,13 @@ class ObjectService(
         traceId <- IO(TraceId(randomUUID()))
         metadataReq <- req.as[GetMetadataRequest]
         res <- checkMetadata(metadataReq).run(traceId)
+        resp <- Ok(res)
+      } yield resp
+    case req @ POST -> Root / "lock" =>
+      for {
+        traceId <- IO(TraceId(randomUUID()))
+        request <- req.as[AcquireLockRequest]
+        res <- acquireLock(request, traceId)
         resp <- Ok(res)
       } yield resp
     case req @ POST -> Root =>
@@ -69,8 +71,8 @@ class ObjectService(
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case GsPath(bucketName, blobName) =>
             for {
-              _ <- gcsToLocalFile(localAbsolutePath, bucketName, blobName)
-              meta <- Stream.eval(retrieveGcsMetadata(entry.localObjectPath.asPath, bucketName, blobName, traceId))
+              _ <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, bucketName, blobName)
+              meta <- Stream.eval(googleStorageAlg.retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
                       Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath.asPath -> m), ())))
@@ -86,23 +88,35 @@ class ObjectService(
     res.compile.drain
   }
 
-  private def retrieveGcsMetadata(localPath: java.nio.file.Path, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
-    meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
-    res <- meta match {
-      case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
-        for {
-          lastLockedBy <- IO.pure(userDefinedMetadata.get("lastLockedBy").map(WorkbenchEmail))
-          expiresAt <- userDefinedMetadata.get("lockExpiresAt").flatTraverse {
-            expiresAtString =>
-              for {
-                ea <- Either.catchNonFatal(expiresAtString.toLong).fold[IO[Option[Long]]](_ => logger.warn(s"Failed to convert $expiresAtString to epoch millis") *> IO.pure(None), l => IO.pure(Some(l)))
-                instant = ea.map(Instant.ofEpochMilli)
-              } yield instant
-          }
-        } yield Some(GcsMetadata(localPath, lastLockedBy, expiresAt, crc32c, generation))
-      case _ => IO.pure(None)
-    }
-  } yield res
+  //Workspace buckets prior to Jun 2019 use legacy ACLs. Unfortunately, legacy ACLs do not contain the storage.objects.update permission,
+  //which is required to update object metadata in GCS. The acquireLock code below contains the following workaround:
+  // 1. Attempt to update the GCS object metadata directly.
+  //    a. If this succeeds, great!
+  //    b. If this fails, proceed to step 2
+  // 2. Overwrite the object completely with the metadata. This results in extra network traffic, but by doing so the user will gain ownership of
+  //    the object in GCS, which will grant them the storage.objects.update permission, which will allow Step 1 to succeed for all subsequent calls.
+  // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
+  //       bucket policy only enabled, which will allow step 1 to succeed.
+  //
+  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[AcquireLockResponse] = {
+    for {
+      context <- storageLinksAlg.findStorageLink(req.localObjectPath)
+      current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+      metadata = Map(GoogleStorageAlg.LAST_LOCKED_BY -> config.ownerEmail.value,
+        GoogleStorageAlg.LOCK_EXPIRES_AT -> (current + config.lockExpiration.toMillis).toString)
+      gsPath = getGsPath(req.localObjectPath, context)
+      meta <- googleStorageAlg.retrieveGcsMetadata(req.localObjectPath, gsPath.bucketName, gsPath.blobName, traceId)
+      res <- meta match {
+        case Some(m) =>
+          if(m.lastLockedBy.isDefined && m.lastLockedBy.get == config.ownerEmail)
+            googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+          else
+            IO.pure(AcquireLockResponse.LockedByOther)
+        case None =>
+          googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+      }
+    } yield res
+  }
 
   /**
     * In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
@@ -113,17 +127,18 @@ class ObjectService(
    */
   def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] = {
     for {
-      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
+      traceId <- Kleisli.ask[IO, TraceId]
+      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
       res <- if(context.isSafeMode)
         Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         for {
-          metadata <- Kleisli.liftF[IO, TraceId, Option[GcsMetadata]](retrieveGcsMetadata(req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, context.traceId))
+          metadata <- Kleisli.liftF[IO, TraceId, Option[GcsMetadata]](googleStorageAlg.retrieveGcsMetadata(req.localObjectPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, traceId))
           result <- metadata match {
             case None =>
               Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.RemoteNotFound(context.storageLink))
-            case Some(GcsMetadata(_, lastLockedBy, expiresAt, crc32c, generation)) =>
+            case Some(GcsMetadata(_, lastLockedBy, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               val res = for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
@@ -136,14 +151,7 @@ class ObjectService(
                     }
                   } yield status
                 }
-                currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-                lastLock <- expiresAt.flatTraverse[IO, WorkbenchEmail] { ea =>
-                  if (currentTime > ea.toEpochMilli)
-                    IO.pure(none[WorkbenchEmail])
-                  else
-                    IO.pure(lastLockedBy)
-                }
-              } yield MetadataResponse.EditMode(syncStatus, lastLock, generation, context.storageLink)
+              } yield MetadataResponse.EditMode(syncStatus, lastLockedBy, generation, context.storageLink)
               Kleisli.liftF[IO, TraceId, MetadataResponse](res)
           }
         } yield result
@@ -153,14 +161,16 @@ class ObjectService(
 
   def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] = {
     for {
-      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
+      traceId <- Kleisli.ask[IO, TraceId]
+      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
       _ <- if(context.isSafeMode)
         Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode")))
       else for {
         previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
+        gsPath = getGsPath(req.localObjectPath, context)
         _ <- previousMeta match {
-          case Some(m) => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context, m.generation)) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
-          case None => Kleisli.liftF[IO, TraceId, Unit](delocalize(req.localObjectPath, context,0L))
+          case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId)) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
+          case None => Kleisli.liftF[IO, TraceId, Unit](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
         }
       } yield ()
     } yield ()
@@ -169,7 +179,7 @@ class ObjectService(
   def delete(req: Delete): Kleisli[IO, TraceId, Unit] = {
     for {
       traceId <- Kleisli.ask[IO, TraceId]
-      context <- Kleisli.liftF(storageLinksDao.findStorageLink(req.localObjectPath))
+      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
       _ <- if(context.isSafeMode)
           Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode")))
         else {
@@ -177,7 +187,7 @@ class ObjectService(
           for {
            previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
            _ <- previousMeta match {
-             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, Some(traceId)).void)
+             case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageAlg.removeObject(gsPath, traceId, Some(m.generation)).compile.drain.void)
              case None => Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found")))
            }
           } yield ()
@@ -191,34 +201,19 @@ class ObjectService(
       IO(directory.mkdirs).void
     } else IO.unit
   }
-
-  private def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gcsBucketName: GcsBucketName, gcsBlobName: GcsBlobName): Stream[IO, Unit] = {
-    googleStorageService.getObject(gcsBucketName, gcsBlobName, None) //get file from google.
-      .through(io.file.writeAll(localAbsolutePath, blockingEc))
-  }
-
-  private def delocalize(localObjectPath: RelativePath, commonContext: CommonContext, generation: Long): IO[Unit] = {
-    val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    val gsPath = getGsPath(localObjectPath, commonContext)
-    io.file.readAll[IO](localAbsolutePath, blockingEc, 4096).compile.to[Array].flatMap { body =>
-      googleStorageService
-        .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(commonContext.traceId))
-        .compile
-        .drain
-        .adaptError {
-          case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
-        }
-    }
-  }
 }
 
 object ObjectService {
-  def apply(config: ObjectServiceConfig, googleStorageService: GoogleStorageService[IO], blockingEc: ExecutionContext, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
+  def apply(
+             config: ObjectServiceConfig,
+             googleStorageAlg: GoogleStorageAlg,
+             blockingEc: ExecutionContext,
+             storageLinksAlg: StorageLinksAlg,
+             metadataCache: MetadataCache
+           )(
       implicit cs: ContextShift[IO],
-      logger: Logger[IO],
       timer: Timer[IO]
-  ): ObjectService = new ObjectService(config, googleStorageService, blockingEc, storageLinksCache, metadataCache)
+  ): ObjectService = new ObjectService(config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCache)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
     Action.stringToAction.get(str).toRight("invalid action")
@@ -284,6 +279,9 @@ object ObjectService {
       case x: MetadataResponse.RemoteNotFound => x.asJson
     }
   }
+  implicit val acquireLockRequestDecoder: Decoder[AcquireLockRequest] = Decoder.forProduct1("localPath")(AcquireLockRequest.apply)
+
+  implicit val acquireLockResponseEncoder: Encoder[AcquireLockResponse] = Encoder.forProduct1("result")(x => x.result)
 }
 
 final case class GetMetadataRequest(localObjectPath: RelativePath)
@@ -339,6 +337,22 @@ final case class Entry(sourceUri: SourceUri, localObjectPath: RelativePath)
 
 final case class LocalizeRequest(entries: List[Entry])
 
-final case class ObjectServiceConfig(workingDirectory: Path, ownerEmail: WorkbenchEmail, lockExpiration: FiniteDuration)
+final case class ObjectServiceConfig(workingDirectory: Path, //root directory where all local files will be mounted
+                                     ownerEmail: WorkbenchEmail,
+                                     lockExpiration: FiniteDuration)
 
 final case class GsPathAndMetadata(gsPath: GsPath, metadata: GcsMetadata)
+
+final case class AcquireLockRequest(localObjectPath: RelativePath)
+
+sealed abstract class AcquireLockResponse {
+  def result: String
+}
+object AcquireLockResponse {
+  final case object LockedByOther extends AcquireLockResponse {
+    def result: String = "LOCKED_BY_OTHER"
+  }
+  final case object Success extends AcquireLockResponse {
+    def result: String = "SUCCESS"
+  }
+}

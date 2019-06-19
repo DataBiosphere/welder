@@ -76,17 +76,15 @@ object JsonCodec {
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)
   implicit val crc32cEncoder: Encoder[Crc32] = Encoder.encodeString.contramap(_.asString)
   implicit val crc32cDecoder: Decoder[Crc32] = Decoder.decodeString.map(Crc32)
-  implicit val gcsMetadataEncoder: Encoder[GcsMetadata] = Encoder.forProduct5(
+  implicit val gcsMetadataEncoder: Encoder[GcsMetadata] = Encoder.forProduct4(
     "localPath",
     "lastLockedBy",
-    "lockExpiresAt",
     "crc32c",
     "generation"
   )(x => GcsMetadata.unapply(x).get)
-  implicit val gcsMetadataDecoder: Decoder[GcsMetadata] = Decoder.forProduct5(
+  implicit val gcsMetadataDecoder: Decoder[GcsMetadata] = Decoder.forProduct4(
     "localPath",
     "lastLockedBy",
-    "lockExpiresAt",
     "crc32c",
     "generation"
   )(GcsMetadata.apply)

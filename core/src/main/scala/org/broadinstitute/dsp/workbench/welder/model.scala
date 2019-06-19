@@ -1,7 +1,6 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
-import java.time.Instant
 
 import ca.mrvisser.sealerate
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
@@ -64,7 +63,7 @@ final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Blob
 
 final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
 
-final case class GcsMetadata(localPath: Path, lastLockedBy: Option[WorkbenchEmail], lockExpiresAt: Option[Instant], crc32c: Crc32, generation: Long)
+final case class GcsMetadata(localPath: RelativePath, lastLockedBy: Option[WorkbenchEmail], crc32c: Crc32, generation: Long)
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

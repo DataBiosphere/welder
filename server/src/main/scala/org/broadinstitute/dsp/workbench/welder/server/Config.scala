@@ -11,8 +11,6 @@ import pureconfig.ConfigReader
 import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
 
-import scala.concurrent.duration.FiniteDuration
-
 object Config {
   implicit val uriConfigReader: ConfigReader[Uri] = ConfigReader.fromString(
     s => Uri.fromString(s).leftMap(err => ExceptionThrown(err))
@@ -31,9 +29,7 @@ final case class AppConfig(
                            serverPort: Int,
                            pathToStorageLinksJson: Path,
                            pathToGcsMetadataJson: Path,
-                           currentUser: WorkbenchEmail,
-                           workingDirectory: Path, //root directory where all local files will be mounted
-                           lockExpiration: FiniteDuration
+                           objectService: ObjectServiceConfig
                           )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
