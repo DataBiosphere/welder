@@ -5,7 +5,7 @@ object Dependencies {
   val http4sVersion = "0.20.3"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.8"
-  val workbenchGoogle2V = "0.6-996dd5b-SNAP"
+  val workbenchGoogle2V = "0.6-996dd5b-SNAP" //This is not ideal, but we'll update this once https://github.com/broadinstitute/workbench-libs/pull/244 is merged
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",
