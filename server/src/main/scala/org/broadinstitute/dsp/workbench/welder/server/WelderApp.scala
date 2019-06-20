@@ -17,7 +17,7 @@ class WelderApp(objectService: ObjectService,
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
     "/storageLinks" -> storageLinksService.service,
-    "/objects" -> objectService.service,
+    "/objects" -> objectService.service
   ).orNotFound
 
   val errorHandler: IO[Response[IO]] => IO[Response[IO]] = response => {
@@ -30,7 +30,9 @@ class WelderApp(objectService: ObjectService,
       case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
       case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
-      case e => InternalServerError(ErrorReport(e.getCause().toString))
+      case e =>
+        val errorMessage = if(e.getCause != null) e.getCause.toString else e.toString
+        InternalServerError(ErrorReport(errorMessage))
     }
   }
 
