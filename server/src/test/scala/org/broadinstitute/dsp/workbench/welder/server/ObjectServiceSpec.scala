@@ -25,7 +25,7 @@ import scala.concurrent.duration._
 
 class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
-  val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map.empty)
+  val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map.empty)
   val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes)
   val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
   val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
@@ -214,7 +214,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
         val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
-        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
+        val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map(Paths.get(localPath) -> AdaptedGcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
         val bodyBytes = "this is great! Okay".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 111L) //This crc32c is from gsutil
         val storageService = FakeGoogleStorageService(metadataResp)
@@ -252,7 +252,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
         val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
-        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 0L)))
+        val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map(Paths.get(localPath) -> AdaptedGcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 0L)))
         val bodyBytes = "this is great! Okay".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 1L) //This crc32c is from gsutil
         val storageService = FakeGoogleStorageService(metadataResp)
@@ -405,7 +405,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
+        val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map(Paths.get(localPath) -> AdaptedGcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
         val objectService = ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metaCache)
         val requestBody = s"""
@@ -507,7 +507,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
         val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
-        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
+        val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map(Paths.get(localPath) -> AdaptedGcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
@@ -597,7 +597,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val metaCache = Ref.unsafe[IO, Map[Path, GcsMetadata]](Map(Paths.get(localPath) -> GcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
+        val metaCache = Ref.unsafe[IO, Map[Path, AdaptedGcsMetadata]](Map(Paths.get(localPath) -> AdaptedGcsMetadata(RelativePath(Paths.get(localPath)), None, Crc32("asdf"), 111L)))
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
         val objectService = ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metaCache)
         val requestBody = s"""

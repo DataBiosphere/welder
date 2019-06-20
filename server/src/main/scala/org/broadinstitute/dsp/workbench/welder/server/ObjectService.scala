@@ -72,7 +72,7 @@ class ObjectService(
           case GsPath(bucketName, blobName) =>
             for {
               _ <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, bucketName, blobName)
-              meta <- Stream.eval(googleStorageAlg.retrieveGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
+              meta <- Stream.eval(googleStorageAlg.retrieveAdaptedGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
               _ <- meta match {
                     case Some(m) =>
                       Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath.asPath -> m), ())))
@@ -105,7 +105,7 @@ class ObjectService(
       metadata = Map(GoogleStorageAlg.LAST_LOCKED_BY -> config.ownerEmail.value,
         GoogleStorageAlg.LOCK_EXPIRES_AT -> (current + config.lockExpiration.toMillis).toString)
       gsPath = getGsPath(req.localObjectPath, context)
-      meta <- googleStorageAlg.retrieveGcsMetadata(req.localObjectPath, gsPath.bucketName, gsPath.blobName, traceId)
+      meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath.bucketName, gsPath.blobName, traceId)
       res <- meta match {
         case Some(m) =>
           if(m.lastLockedBy.isDefined && m.lastLockedBy.get == config.ownerEmail)
@@ -134,11 +134,11 @@ class ObjectService(
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         for {
-          metadata <- Kleisli.liftF[IO, TraceId, Option[GcsMetadata]](googleStorageAlg.retrieveGcsMetadata(req.localObjectPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, traceId))
+          metadata <- Kleisli.liftF[IO, TraceId, Option[AdaptedGcsMetadata]](googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, traceId))
           result <- metadata match {
             case None =>
               Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.RemoteNotFound(context.storageLink))
-            case Some(GcsMetadata(_, lastLockedBy, crc32c, generation)) =>
+            case Some(AdaptedGcsMetadata(_, lastLockedBy, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               val res = for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
@@ -341,7 +341,7 @@ final case class ObjectServiceConfig(workingDirectory: Path, //root directory wh
                                      ownerEmail: WorkbenchEmail,
                                      lockExpiration: FiniteDuration)
 
-final case class GsPathAndMetadata(gsPath: GsPath, metadata: GcsMetadata)
+final case class GsPathAndMetadata(gsPath: GsPath, metadata: AdaptedGcsMetadata)
 
 final case class AcquireLockRequest(localObjectPath: RelativePath)
 

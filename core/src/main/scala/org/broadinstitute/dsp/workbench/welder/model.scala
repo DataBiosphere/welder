@@ -63,7 +63,8 @@ final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Blob
 
 final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: String)
 
-final case class GcsMetadata(localPath: RelativePath, lastLockedBy: Option[WorkbenchEmail], crc32c: Crc32, generation: Long)
+// This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
+final case class AdaptedGcsMetadata(localPath: RelativePath, lastLockedBy: Option[WorkbenchEmail], crc32c: Crc32, generation: Long)
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

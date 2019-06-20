@@ -11,7 +11,7 @@ import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 trait GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit]
-  def retrieveGcsMetadata(localPath: RelativePath, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]]
+  def retrieveAdaptedGcsMetadata(localPath: RelativePath, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gcsBucketName: GcsBucketName, gcsBlobName: GcsBlobName): Stream[IO, Unit]
   def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit]

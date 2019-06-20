@@ -26,7 +26,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
       } yield ()
   }
 
-  def retrieveGcsMetadata(localPath: RelativePath, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[GcsMetadata]] = for {
+  def retrieveAdaptedGcsMetadata(localPath: RelativePath, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = for {
     meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
     res <- meta match {
       case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
@@ -46,7 +46,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
             else
               IO.pure(lastLockedBy)
           }
-        } yield Some(GcsMetadata(localPath, lastLock, crc32c, generation))
+        } yield Some(AdaptedGcsMetadata(localPath, lastLock, crc32c, generation))
       case _ => IO.pure(None)
     }
   } yield res

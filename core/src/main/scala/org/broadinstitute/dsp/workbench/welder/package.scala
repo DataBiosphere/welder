@@ -46,7 +46,7 @@ package object welder {
       .ensure("objectName can't be empty")(s => s.nonEmpty)
   } yield GsPath(bucketName, GcsBlobName(objectName))
 
-  def getPosssibleBaseDirectory(localPath: Path): List[Path] = {
+  def getPossibleBaseDirectory(localPath: Path): List[Path] = {
     ((localPath.getNameCount - 1).to(1, -1)).map(
       index => localPath.subpath(0, index)
     ).toList
@@ -69,7 +69,7 @@ package object welder {
   }
 
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
-  type MetadataCache = Ref[IO, Map[Path, GcsMetadata]]
+  type MetadataCache = Ref[IO, Map[Path, AdaptedGcsMetadata]]
 
   val gcpObjectType = "text/plain"
 
