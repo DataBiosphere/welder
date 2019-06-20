@@ -9,7 +9,7 @@ import cats.effect.{ContextShift, IO, Timer}
 import _root_.io.chrisdavenport.log4cats.Logger
 import _root_.io.chrisdavenport.linebacker.Linebacker
 import org.broadinstitute.dsde.workbench.google2
-import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -58,13 +58,14 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
       .through(io.file.writeAll(localAbsolutePath, linerBacker.blockingContext))
   }
 
-  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit] = {
+  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     io.file.readAll[IO](localAbsolutePath, linerBacker.blockingContext, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
         .storeObject(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(traceId))
+        .map(x => DelocalizeResponse(x.getGeneration, Crc32(x.getCrc32c)))
         .compile
-        .drain
+        .lastOrError
         .adaptError {
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
             GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")

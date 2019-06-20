@@ -4,7 +4,7 @@ import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream
 import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
-import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -14,7 +14,10 @@ trait GoogleStorageAlg {
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, bucketName: GcsBucketName, blobName: GcsBlobName, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gcsBucketName: GcsBucketName, gcsBlobName: GcsBlobName): Stream[IO, Unit]
-  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit]
+  /**
+   * Return generation for newly created object
+   */
+  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse]
 }
 
 object GoogleStorageAlg {
@@ -26,3 +29,5 @@ object GoogleStorageAlg {
 }
 
 final case class GoogleStorageAlgConfig(workingDirectory: java.nio.file.Path)
+
+final case class DelocalizeResponse(generation: Long, crc32c: Crc32)

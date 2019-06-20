@@ -168,10 +168,12 @@ class ObjectService(
       else for {
         previousMeta <- Kleisli.liftF(metadataCache.get.map(_.get(req.localObjectPath.asPath)))
         gsPath = getGsPath(req.localObjectPath, context)
-        _ <- previousMeta match {
-          case Some(m) => Kleisli.liftF[IO, TraceId, Unit](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId)) //TODO: update metadata generation cache once https://github.com/broadinstitute/workbench-libs/pull/243 is merged
-          case None => Kleisli.liftF[IO, TraceId, Unit](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
+        delocalizeResp <- previousMeta match {
+          case Some(m) => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId))
+          case None => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
         }
+        adaptedGcsMetadata = AdaptedGcsMetadata(req.localObjectPath, Some(config.ownerEmail), delocalizeResp.crc32c, delocalizeResp.generation)
+        _ <- Kleisli.liftF(metadataCache.modify(mp => (mp + (req.localObjectPath.asPath -> adaptedGcsMetadata), ())))
       } yield ()
     } yield ()
   }
