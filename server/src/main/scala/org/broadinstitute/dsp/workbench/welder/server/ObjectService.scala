@@ -69,15 +69,11 @@ class ObjectService(
 
         val localizeFile = entry.sourceUri match {
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
-          case GsPath(bucketName, blobName) =>
+          case gsPath: GsPath =>
             for {
-              _ <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, bucketName, blobName)
-              meta <- Stream.eval(googleStorageAlg.retrieveAdaptedGcsMetadata(entry.localObjectPath, bucketName, blobName, traceId))
-              _ <- meta match {
-                    case Some(m) =>
-                      Stream.eval_(metadataCache.modify(mp => (mp + (entry.localObjectPath.asPath -> m), ())))
-                    case _ => Stream.eval(IO.unit)
-                  }
+              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId)
+              metaInCache = AdaptedGcsMetadataCache(entry.localObjectPath, meta.lastLockedBy, meta.crc32c, meta.generation)
+              _ <- Stream.eval(metadataCache.modify(mp => (mp + (entry.localObjectPath.asPath -> metaInCache), ())))
             } yield ()
         }
 
@@ -105,7 +101,7 @@ class ObjectService(
       metadata = Map(GoogleStorageAlg.LAST_LOCKED_BY -> config.ownerEmail.value,
         GoogleStorageAlg.LOCK_EXPIRES_AT -> (current + config.lockExpiration.toMillis).toString)
       gsPath = getGsPath(req.localObjectPath, context)
-      meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath.bucketName, gsPath.blobName, traceId)
+      meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
       res <- meta match {
         case Some(m) =>
           if(m.lastLockedBy.isDefined && m.lastLockedBy.get == config.ownerEmail)
@@ -134,11 +130,11 @@ class ObjectService(
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         for {
-          metadata <- Kleisli.liftF[IO, TraceId, Option[AdaptedGcsMetadata]](googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, context.storageLink.cloudStorageDirectory.bucketName, fullBlobName, traceId))
+          metadata <- Kleisli.liftF[IO, TraceId, Option[AdaptedGcsMetadata]](googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.bucketName, fullBlobName), traceId))
           result <- metadata match {
             case None =>
               Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.RemoteNotFound(context.storageLink))
-            case Some(AdaptedGcsMetadata(_, lastLockedBy, crc32c, generation)) =>
+            case Some(AdaptedGcsMetadata(lastLockedBy, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               val res = for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
@@ -172,7 +168,7 @@ class ObjectService(
           case Some(m) => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId))
           case None => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
         }
-        adaptedGcsMetadata = AdaptedGcsMetadata(req.localObjectPath, Some(config.ownerEmail), delocalizeResp.crc32c, delocalizeResp.generation)
+        adaptedGcsMetadata = AdaptedGcsMetadataCache(req.localObjectPath, Some(config.ownerEmail), delocalizeResp.crc32c, delocalizeResp.generation)
         _ <- Kleisli.liftF(metadataCache.modify(mp => (mp + (req.localObjectPath.asPath -> adaptedGcsMetadata), ())))
       } yield ()
     } yield ()

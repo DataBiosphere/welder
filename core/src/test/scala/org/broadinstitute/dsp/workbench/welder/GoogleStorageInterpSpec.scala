@@ -34,7 +34,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         }
         val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorage)
         val res = for {
-          _ <- googleStorage.storeObject(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
+          _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
           _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID()), Map("lastLockedBy" -> "me"))
           meta <- googleStorage.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.lastOrError
         } yield {
@@ -70,7 +70,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
 
 object GoogleStorageServiceWithFailures extends BaseFakeGoogleStorage {
-  override def storeObject(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte], objectType: String, metadata: Map[String, String], generation: Option[Long], traceId: Option[TraceId]): Stream[IO, Blob] = {
+  override def createBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte], objectType: String, metadata: Map[String, String], generation: Option[Long], traceId: Option[TraceId]): Stream[IO, Blob] = {
     val errors = new GoogleJsonError()
     errors.setCode(412)
     Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))

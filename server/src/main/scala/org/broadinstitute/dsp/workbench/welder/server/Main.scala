@@ -28,7 +28,7 @@ object Main extends IOApp {
       implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[Path, StorageLink](appConfig.pathToStorageLinksJson, blockingEc, storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink))
-      metadataCache <- cachedResource[Path, AdaptedGcsMetadata](appConfig.pathToGcsMetadataJson, blockingEc, metadata => List(metadata.localPath.asPath -> metadata))
+      metadataCache <- cachedResource[Path, AdaptedGcsMetadataCache](appConfig.pathToGcsMetadataJson, blockingEc, metadata => List(metadata.localPath.asPath -> metadata))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
       storageLinksService = StorageLinksService(storageLinksCache)
       googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)

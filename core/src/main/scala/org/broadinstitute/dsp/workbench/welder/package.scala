@@ -69,7 +69,7 @@ package object welder {
   }
 
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
-  type MetadataCache = Ref[IO, Map[Path, AdaptedGcsMetadata]]
+  type MetadataCache = Ref[IO, Map[Path, AdaptedGcsMetadataCache]]
 
   val gcpObjectType = "text/plain"
 
