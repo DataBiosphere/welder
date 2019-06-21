@@ -38,7 +38,6 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID()), Map("lastLockedBy" -> "me"))
           meta <- googleStorage.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.lastOrError
         } yield {
-          println(s"metadata $meta")
           meta.asInstanceOf[GetMetadataResponse.Metadata].userDefined.get("lastLockedBy") shouldBe("me")
         }
         res.unsafeRunSync()
