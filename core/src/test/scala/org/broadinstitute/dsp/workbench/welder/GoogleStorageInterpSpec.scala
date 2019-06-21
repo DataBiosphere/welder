@@ -8,7 +8,7 @@ import cats.effect.IO
 import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.storage.Blob
 import fs2.Stream
-import org.broadinstitute.dsde.workbench.google2.mock.BaseFakeGoogleStorage
+import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataResponse}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -63,6 +63,29 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           resp shouldBe Left(GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch"))
         }
         res.unsafeRunSync()
+    }
+  }
+
+  "gcsToLocalFile" should "be able to down a file from gcs and write to local path" in {
+    forAll {
+      (localObjectPath: RelativePath, gsPath: GsPath) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
+          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID()))
+          _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
+        } yield {
+          val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
+          resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
+        }
+        res.compile.drain.unsafeRunSync()
     }
   }
 }

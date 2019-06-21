@@ -39,9 +39,12 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
 
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = {
     for {
-      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, Some(traceId))
-      _ <- Stream.emits(blob.getContent()).covary[IO].through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext))
-      meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), blob.getMetadata.asScala.toMap, blob.getGeneration))
+      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, Some(traceId))//.handleError(e => )
+      _ <- (Stream.emits(blob.getContent())
+        .covary[IO]
+        .through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext))) ++ Stream.eval(IO.unit)
+      userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
+      meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
   }
 
@@ -76,5 +79,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
       else
         IO.pure(lastLockedBy)
     }
-  } yield AdaptedGcsMetadata(lastLock, crc32c, generation)
+  } yield {
+    AdaptedGcsMetadata(lastLock, crc32c, generation)
+  }
 }

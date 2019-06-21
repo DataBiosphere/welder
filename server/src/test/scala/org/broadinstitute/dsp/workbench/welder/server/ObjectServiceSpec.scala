@@ -354,7 +354,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
         } yield {
           resp.get.status shouldBe Status.Ok
-          println(body)
           body shouldBe(expectedBody)
         }
         res.unsafeRunSync()
