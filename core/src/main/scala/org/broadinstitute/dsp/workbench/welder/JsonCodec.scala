@@ -22,8 +22,6 @@ object JsonCodec {
     path => if(path.isAbsolute) Left("Path should be relative") else Right(RelativePath(path))
   }
   implicit val relativePathEncoder: Encoder[RelativePath] = pathEncoder.contramap(_.asPath)
-  implicit val blobPathDecoder: Decoder[BlobPath] = Decoder.decodeString.emap(s => Either.catchNonFatal(BlobPath(s)).leftMap(_.getMessage))
-  implicit val blobPathEncoder: Encoder[BlobPath] = Encoder.encodeString.contramap(_.asString)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val workbenchEmailDecoder: Decoder[WorkbenchEmail] = Decoder.decodeString.map(WorkbenchEmail)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
@@ -31,7 +29,6 @@ object JsonCodec {
   implicit val instanceEncoder: Encoder[Instant] = Encoder.encodeLong.contramap(_.toEpochMilli)
   implicit val syncStatusEncoder: Encoder[SyncStatus] = Encoder.encodeString.contramap(_.toString)
   implicit val gcsBucketNameDecoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
-  implicit val gcsBucketNameEncoder: Encoder[GcsBucketName] = Encoder.encodeString.contramap(_.value)
   implicit val gcsBlobNameDecoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
   implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
   implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
