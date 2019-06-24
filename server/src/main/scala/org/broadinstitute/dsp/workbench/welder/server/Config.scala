@@ -26,10 +26,10 @@ object Config {
 }
 
 final case class AppConfig(
-                           serverPort: Int,
-                           pathToStorageLinksJson: Path,
-                           pathToGcsMetadataJson: Path,
-                           objectService: ObjectServiceConfig
-                          )
+    serverPort: Int,
+    pathToStorageLinksJson: Path,
+    pathToGcsMetadataJson: Path,
+    objectService: ObjectServiceConfig
+)
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)

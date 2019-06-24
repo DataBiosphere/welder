@@ -2,7 +2,6 @@ package org.broadinstitute.dsp.workbench.welder
 
 import scala.util.control.NoStackTrace
 
-
 sealed abstract class WelderException extends NoStackTrace {
   def message: String
   override def getMessage: String = message

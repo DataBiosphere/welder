@@ -19,43 +19,49 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
 
 package object welder {
-  def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blockingExecutionContext: Option[ExecutionContext] = None): Stream[F, A] = {
-    fs2.io.file.readAll[F](path, blockingExecutionContext.getOrElse(global), 4096)
+  def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blockingExecutionContext: Option[ExecutionContext] = None): Stream[F, A] =
+    fs2.io.file
+      .readAll[F](path, blockingExecutionContext.getOrElse(global), 4096)
       .through(fs2.text.utf8Decode)
       .through(_root_.io.circe.fs2.stringParser(AsyncParser.SingleValue))
       .through(decoder)
-  }
 
   val gsDirectoryReg = "gs:\\/\\/.*".r
 
   def validateGsPrefix(str: String): Either[String, Unit] = gsDirectoryReg.findPrefixOf(str).void.toRight("gs directory has to be prefixed with gs://")
 
-  def parseBucketName(str: String): Either[String, GcsBucketName] = for {
-    _ <- validateGsPrefix(str)
-    parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
-    bucketName <- Either.catchNonFatal(parsed(2))
-      .leftMap(_ => s"failed to parse bucket name")
-      .ensure("bucketName can't be empty")(s => s.nonEmpty)
-  } yield GcsBucketName(bucketName)
+  def parseBucketName(str: String): Either[String, GcsBucketName] =
+    for {
+      _ <- validateGsPrefix(str)
+      parsed <- Either.catchNonFatal(str.split("/")).leftMap(_.getMessage)
+      bucketName <- Either
+        .catchNonFatal(parsed(2))
+        .leftMap(_ => s"failed to parse bucket name")
+        .ensure("bucketName can't be empty")(s => s.nonEmpty)
+    } yield GcsBucketName(bucketName)
 
-  def parseGsPath(str: String): Either[String, GsPath] = for {
-    bucketName <- parseBucketName(str)
-    length = s"gs://${bucketName.value}/".length
-    objectName <- Either.catchNonFatal(str.drop(length))
-      .leftMap(_ => s"failed to parse object name")
-      .ensure("objectName can't be empty")(s => s.nonEmpty)
-  } yield GsPath(bucketName, GcsBlobName(objectName))
+  def parseGsPath(str: String): Either[String, GsPath] =
+    for {
+      bucketName <- parseBucketName(str)
+      length = s"gs://${bucketName.value}/".length
+      objectName <- Either
+        .catchNonFatal(str.drop(length))
+        .leftMap(_ => s"failed to parse object name")
+        .ensure("objectName can't be empty")(s => s.nonEmpty)
+    } yield GsPath(bucketName, GcsBlobName(objectName))
 
-  def getPossibleBaseDirectory(localPath: Path): List[Path] = {
-    ((localPath.getNameCount - 1).to(1, -1)).map(
-      index => localPath.subpath(0, index)
-    ).toList
-  }
+  def getPossibleBaseDirectory(localPath: Path): List[Path] =
+    ((localPath.getNameCount - 1)
+      .to(1, -1))
+      .map(
+        index => localPath.subpath(0, index)
+      )
+      .toList
 
   def getFullBlobName(basePath: Path, localPath: Path, blobPath: BlobPath): GcsBlobName = {
-      val subPath = basePath.relativize(localPath)
-      GcsBlobName(blobPath.asString + "/" + subPath.toString)
-    }
+    val subPath = basePath.relativize(localPath)
+    GcsBlobName(blobPath.asString + "/" + subPath.toString)
+  }
 
   val base64Decoder = Base64.getDecoder()
   def base64DecoderPipe[F[_]: Sync]: Pipe[F, String, Byte] = in => {
@@ -64,7 +70,8 @@ package object welder {
   }
 
   def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
-    val fullBlobName = getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
+    val fullBlobName =
+      getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
   }
 

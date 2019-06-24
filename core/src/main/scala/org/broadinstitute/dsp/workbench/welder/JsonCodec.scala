@@ -14,12 +14,11 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.http4s.Uri
 
-
 object JsonCodec {
   implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
   implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
-  implicit val relativePathDecoder: Decoder[RelativePath] = pathDecoder.emap {
-    path => if(path.isAbsolute) Left(s"${path} should be relative") else Right(RelativePath(path))
+  implicit val relativePathDecoder: Decoder[RelativePath] = pathDecoder.emap { path =>
+    if (path.isAbsolute) Left(s"${path} should be relative") else Right(RelativePath(path))
   }
   implicit val relativePathEncoder: Encoder[RelativePath] = pathEncoder.contramap(_.asPath)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
@@ -32,22 +31,20 @@ object JsonCodec {
   implicit val gcsBlobNameEncoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
   implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
   implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
-  implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap{
-    s =>
-      parseBucketName(s) match {
-        case Left(error) => Left(error)
-        case Right(bucket) =>
-          val length = s"gs://${bucket.value}/".length
-          val blobPath = BlobPath(s.drop(length))
-          Right(CloudStorageDirectory(bucket, blobPath))
-      }
+  implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap { s =>
+    parseBucketName(s) match {
+      case Left(error) => Left(error)
+      case Right(bucket) =>
+        val length = s"gs://${bucket.value}/".length
+        val blobPath = BlobPath(s.drop(length))
+        Right(CloudStorageDirectory(bucket, blobPath))
+    }
   }
-  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap{
-    x =>
-      if(x.blobPath.asString.nonEmpty)
-        s"gs://${x.bucketName.value}/${x.blobPath.asString}"
-      else
-        s"gs://${x.bucketName.value}"
+  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap { x =>
+    if (x.blobPath.asString.nonEmpty)
+      s"gs://${x.bucketName.value}/${x.blobPath.asString}"
+    else
+      s"gs://${x.bucketName.value}"
   }
   implicit val sourceUriDecoder: Decoder[SourceUri] = Decoder.decodeString.emap { s =>
     if (s.startsWith("data:application/json;base64,")) {
@@ -61,16 +58,18 @@ object JsonCodec {
   }
   implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path)
 
-  implicit val storageLinkEncoder: Encoder[StorageLink] =  Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(storageLink => StorageLink.unapply(storageLink).get)
+  implicit val storageLinkEncoder: Encoder[StorageLink] =
+    Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(
+      storageLink => StorageLink.unapply(storageLink).get
+    )
 
-  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.instance {
-    x =>
-      for {
-        baseDir <- x.downField("localBaseDirectory").as[Path]
-        safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
-        cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
-        pattern <- x.downField("pattern").as[String]
-      } yield StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(safeBaseDir), cloudStorageDir, pattern)
+  implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.instance { x =>
+    for {
+      baseDir <- x.downField("localBaseDirectory").as[Path]
+      safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
+      cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
+      pattern <- x.downField("pattern").as[String]
+    } yield StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(safeBaseDir), cloudStorageDir, pattern)
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)

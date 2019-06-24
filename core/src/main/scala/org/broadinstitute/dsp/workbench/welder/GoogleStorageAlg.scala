@@ -20,8 +20,11 @@ object GoogleStorageAlg {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
 
-  def fromGoogle(config: GoogleStorageAlgConfig , googleStorageService: GoogleStorageService[IO])
-                (implicit logger: Logger[IO], timer: Timer[IO], linerBacker: Linebacker[IO], cs: ContextShift[IO]): GoogleStorageAlg = new GoogleStorageInterp(config, googleStorageService)
+  def fromGoogle(
+      config: GoogleStorageAlgConfig,
+      googleStorageService: GoogleStorageService[IO]
+  )(implicit logger: Logger[IO], timer: Timer[IO], linerBacker: Linebacker[IO], cs: ContextShift[IO]): GoogleStorageAlg =
+    new GoogleStorageInterp(config, googleStorageService)
 }
 
 final case class GoogleStorageAlgConfig(workingDirectory: java.nio.file.Path)
