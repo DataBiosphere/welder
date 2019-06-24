@@ -3,21 +3,18 @@ package server
 
 import java.nio.file.{Path, Paths}
 
-import _root_.io.chrisdavenport.log4cats.Logger
-import _root_.io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import org.http4s.circe.CirceEntityEncoder._
 import fs2.text
 import io.circe.{Json, parser}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
+import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.FlatSpec
 
 class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
-  implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
   val storageLinks = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
   val storageLinksService = StorageLinksService(storageLinks)
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar"))
