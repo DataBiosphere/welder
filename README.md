@@ -34,6 +34,9 @@ cp -r hooks/ .git/hooks/
 chmod 755 .git/hooks/apply-git-secrets.sh
 ```
 
+## After merging your PR
+Make sure all builds are green after you merge PR
+
 # UI workflow
 ![UI workflow](UI_Interaction.png)
 
