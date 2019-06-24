@@ -11,8 +11,6 @@ import org.http4s.server.middleware.Logger
 import org.http4s.syntax.kleisli._
 import org.http4s.{HttpApp, Response}
 
-import scala.util.control.NoStackTrace
-
 class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
@@ -30,7 +28,9 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
       case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
       case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
-      case e => InternalServerError(ErrorReport(e.getCause().toString))
+      case e =>
+        val errorMessage = if (e.getCause != null) e.getCause.toString else e.toString
+        InternalServerError(ErrorReport(errorMessage))
     }
   }
 
@@ -38,22 +38,10 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
 }
 
 object WelderApp {
-  def apply(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]): WelderApp = new WelderApp(syncService, storageLinksService)
+  def apply(syncService: ObjectService, storageLinksService: StorageLinksService)(implicit cs: ContextShift[IO]): WelderApp =
+    new WelderApp(syncService, storageLinksService)
 
   implicit val errorReportEncoder: Encoder[ErrorReport] = Encoder.forProduct2("errorMessage", "errorCode")(x => ErrorReport.unapply(x).get)
 }
-
-sealed abstract class WelderException extends NoStackTrace {
-  def message: String
-  override def getMessage: String = message
-}
-final case class InternalException(message: String) extends WelderException
-final case class BadRequestException(message: String) extends WelderException
-final case class GenerationMismatch(message: String) extends WelderException
-final case class StorageLinkNotFoundException(message: String) extends WelderException
-final case class SafeDelocalizeSafeModeFileError(message: String) extends WelderException
-final case class DeleteSafeModeFileError(message: String) extends WelderException
-final case class UnknownFileState(message: String) extends WelderException
-final case class NotFoundException(message: String) extends WelderException
 
 final case class ErrorReport(message: String, errorCode: Option[Int] = None)

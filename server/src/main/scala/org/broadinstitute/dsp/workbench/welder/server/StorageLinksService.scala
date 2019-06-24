@@ -33,21 +33,17 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
   }
 
   //note: first param in the modify is the thing to do, second param is the value to return
-  def createStorageLink(storageLink: StorageLink): IO[StorageLink] = {
-    storageLinks.modify {
-      links =>
-        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
-        (links ++ toAdd, storageLink)
+  def createStorageLink(storageLink: StorageLink): IO[StorageLink] =
+    storageLinks.modify { links =>
+      val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
+      (links ++ toAdd, storageLink)
     }
-  }
 
-  def deleteStorageLink(storageLink: StorageLink): IO[Unit] = {
-    storageLinks.modify {
-      links =>
-        val toDelete = List(storageLink.localBaseDirectory.path, storageLink.localSafeModeBaseDirectory.path)
-        (links -- toDelete, ())
+  def deleteStorageLink(storageLink: StorageLink): IO[Unit] =
+    storageLinks.modify { links =>
+      val toDelete = List(storageLink.localBaseDirectory.path, storageLink.localSafeModeBaseDirectory.path)
+      (links -- toDelete, ())
     }
-  }
 
   val getStorageLinks: IO[StorageLinks] = {
     storageLinks.get.map(links => StorageLinks(links.values.toSet))

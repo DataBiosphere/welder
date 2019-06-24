@@ -1,0 +1,42 @@
+package org.broadinstitute.dsp.workbench.welder
+
+import java.nio.file.{Path, Paths}
+
+import cats.effect.IO
+import cats.effect.concurrent.Ref
+import org.broadinstitute.dsp.workbench.welder.Generators._
+import org.scalatest.FlatSpec
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+class StorageLinksInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
+  "StorageLinksInterp" should "return fail if storagelink can't be found" in {
+    forAll { (localFileDestination: RelativePath) =>
+      val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+      val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
+      val res = storageLinksAlg.findStorageLink(localFileDestination)
+      res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
+    }
+  }
+
+  it should "return isSafeMode true when localPath is in safe mode" in {
+    forAll { (storageLink: StorageLink) =>
+      val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(storageLink.localSafeModeBaseDirectory.path -> storageLink))
+      val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
+      val localPath = RelativePath(Paths.get(s"${storageLink.localSafeModeBaseDirectory.path.toString}/test.ipynb"))
+      val res = storageLinksAlg.findStorageLink(localPath)
+      val expectedResult = CommonContext(true, storageLink.localSafeModeBaseDirectory.path, storageLink)
+      res.unsafeRunSync() shouldBe(expectedResult)
+    }
+  }
+
+  it should "return isSafeMode false when localPath is in edit mode" in {
+    forAll { (storageLink: StorageLink) =>
+      val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(storageLink.localBaseDirectory.path -> storageLink))
+      val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
+      val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
+      val res = storageLinksAlg.findStorageLink(localPath)
+      val expectedResult = CommonContext(false, storageLink.localBaseDirectory.path, storageLink)
+      res.unsafeRunSync() shouldBe(expectedResult)
+    }
+  }
+}
