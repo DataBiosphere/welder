@@ -12,16 +12,7 @@ trait GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit]
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
-
-  /**
-   * @param localAbsolutePath
-   * @param gsPath
-   * @return generation of the blob
-   */
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
-  /**
-   * @return generation for newly created object
-   */
   def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse]
 }
 

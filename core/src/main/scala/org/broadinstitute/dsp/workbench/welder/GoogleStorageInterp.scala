@@ -39,7 +39,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig , googleStorageService:
 
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = {
     for {
-      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, Some(traceId))//.handleError(e => )
+      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, Some(traceId))
       _ <- (Stream.emits(blob.getContent())
         .covary[IO]
         .through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext))) ++ Stream.eval(IO.unit)
