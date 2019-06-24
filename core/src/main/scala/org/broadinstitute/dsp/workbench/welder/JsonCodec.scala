@@ -28,8 +28,8 @@ object JsonCodec {
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
   implicit val instanceEncoder: Encoder[Instant] = Encoder.encodeLong.contramap(_.toEpochMilli)
   implicit val syncStatusEncoder: Encoder[SyncStatus] = Encoder.encodeString.contramap(_.toString)
-  implicit val gcsBucketNameEncoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
-  implicit val gcsBlobNameEncoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
+  implicit val gcsBucketNameDecoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
+  implicit val gcsBlobNameDecoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
   implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
   implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
   implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap{
