@@ -36,7 +36,7 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
   "getFullBlobName" should "get object name in gcs" in {
     val localPath = Paths.get("workspaces/ws1/sub/notebook1.ipynb")
     getPossibleBaseDirectory(localPath).map(_.toString) shouldBe(List("workspaces/ws1/sub", "workspaces/ws1", "workspaces"))
-    val basePath = Paths.get("workspaces/ws1")
+    val basePath = RelativePath(Paths.get("workspaces/ws1"))
     getFullBlobName(basePath, localPath, BlobPath("notebooks")) shouldBe(GcsBlobName("notebooks/sub/notebook1.ipynb"))
   }
 

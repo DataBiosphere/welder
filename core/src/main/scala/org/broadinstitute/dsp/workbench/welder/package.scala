@@ -10,6 +10,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, IO, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
+import io.chrisdavenport.log4cats.Logger
 import io.circe.Decoder
 import io.circe.fs2._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -17,7 +18,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
-
+import scala.language.implicitConversions
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
 
@@ -61,8 +62,8 @@ package object welder {
       )
       .toList
 
-  def getFullBlobName(basePath: Path, localPath: Path, blobPath: BlobPath): GcsBlobName = {
-    val subPath = basePath.relativize(localPath)
+  def getFullBlobName(basePath: RelativePath, localPath: Path, blobPath: BlobPath): GcsBlobName = {
+    val subPath = basePath.asPath.relativize(localPath)
     GcsBlobName(blobPath.asString + "/" + subPath.toString)
   }
 
@@ -82,14 +83,15 @@ package object welder {
   //This string will be hashed when stored in GCS metadata
   def lockedByString(bucketName: GcsBucketName, ownerEmail: WorkbenchEmail): String = bucketName.value + ":" + ownerEmail.value
 
-  def hashString(metadata: String): IO[HashedLockedBy] = IO {
+  def hashString(metadata: String): Either[Throwable, HashedLockedBy] = Either.catchNonFatal {
     HashedLockedBy(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
   }
 
-  type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
-  type MetadataCache = Ref[IO, Map[Path, AdaptedGcsMetadataCache]]
+  type StorageLinksCache = Ref[IO, Map[RelativePath, StorageLink]]
+  type MetadataCache = Ref[IO, Map[RelativePath, AdaptedGcsMetadataCache]]
 
   val gcpObjectType = "text/plain"
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
+  implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
 }

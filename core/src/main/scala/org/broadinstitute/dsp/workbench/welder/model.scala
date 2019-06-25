@@ -1,6 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
+import java.time.Instant
 
 import ca.mrvisser.sealerate
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
@@ -11,6 +12,9 @@ object SyncStatus {
   // crc32c match
   final case object Live extends SyncStatus {
     override def toString: String = "LIVE"
+  }
+  final case object NotLocalizedYet extends SyncStatus {
+    override def toString: String = "NotLocalizedYet"
   }
   // crc32c mismatch
   final case object RemoteChanged extends SyncStatus {
@@ -51,11 +55,11 @@ object SourceUri {
 }
 
 sealed abstract class LocalDirectory {
-  def path: Path
+  def path: RelativePath
 }
 object LocalDirectory {
-  final case class LocalBaseDirectory(path: Path) extends LocalDirectory
-  final case class LocalSafeBaseDirectory(path: Path) extends LocalDirectory
+  final case class LocalBaseDirectory(path: RelativePath) extends LocalDirectory
+  final case class LocalSafeBaseDirectory(path: RelativePath) extends LocalDirectory
 }
 
 final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: BlobPath)
@@ -68,11 +72,29 @@ final case class StorageLink(
 )
 
 final case class HashedLockedBy(asString: String) extends AnyVal
+/**
+  * Data type represents a lock that hasn't expired
+  * @param lastLockedBy hash of who owns the lock welder knows about most recently
+  * @param lockExpiresAt Instant of when lock expires
+  */
+final case class Lock(lastLockedBy: HashedLockedBy, lockExpiresAt: Instant)
 
 // This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
-final case class AdaptedGcsMetadata(lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
+/**
+  * @param lock lock related info; This should get updated every time welder interacts with Google
+  * @param crc32c previous hash of a local file when it gets localized; We don't update this value every time we interact with Google because we need to know local file's crc32c when it was pulled from GCS
+  * @param generation previous generation of a local file when it gets localized; We don't update this value every time we interact with Google because we need to know local file's crc32c when it was pulled from GCS
+  */
+final case class AdaptedGcsMetadata(lock: Option[Lock], crc32c: Crc32, generation: Long)
 
-final case class AdaptedGcsMetadataCache(localPath: RelativePath, lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
+final case class LocalFileStateInGCS(crc32c: Crc32, generation: Long)
+
+/**
+  * @param localPath local relative path to a file
+  * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
+  * @param localFileStateInGCS Some() when a file is localized or delocalized; None when the file has not been localized
+  */
+final case class AdaptedGcsMetadataCache(localPath: RelativePath, lock: Option[Lock], localFileStateInGCS: Option[LocalFileStateInGCS])
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

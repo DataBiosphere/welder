@@ -1,5 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
+import java.nio.file.Path
+
 import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream
 import io.chrisdavenport.linebacker.Linebacker
@@ -13,7 +15,13 @@ trait GoogleStorageAlg {
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
-  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse]
+  def delocalize(
+      localObjectPath: RelativePath,
+      gsPath: GsPath,
+      generation: Long,
+      userDefinedMeta: Map[String, String],
+      traceId: TraceId
+  ): IO[DelocalizeResponse]
 }
 
 object GoogleStorageAlg {
@@ -27,6 +35,5 @@ object GoogleStorageAlg {
     new GoogleStorageInterp(config, googleStorageService)
 }
 
-final case class GoogleStorageAlgConfig(workingDirectory: java.nio.file.Path)
-
+final case class GoogleStorageAlgConfig(workingDirectory: Path)
 final case class DelocalizeResponse(generation: Long, crc32c: Crc32)

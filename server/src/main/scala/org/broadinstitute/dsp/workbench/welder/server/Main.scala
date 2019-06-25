@@ -2,9 +2,10 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 
 import cats.effect.concurrent.Ref
-import cats.effect.{ExitCode, IO, IOApp, Resource}
+import cats.effect.{ExitCode, IO, IOApp, Resource, Timer}
 import cats.implicits._
 import fs2.Stream
 import io.chrisdavenport.linebacker.Linebacker
@@ -16,43 +17,66 @@ import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.util.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.http4s.server.blaze.BlazeServerBuilder
-
 import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
-    implicit val unsafeLogger = Slf4jLogger.getLogger[IO]
+    implicit val logger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
       implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       appConfig <- Stream.fromEither[IO](Config.appConfig)
-      storageLinksCache <- cachedResource[Path, StorageLink](
+      storageLinksCache <- cachedResource[RelativePath, StorageLink](
         appConfig.pathToStorageLinksJson,
         blockingEc,
         storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink)
       )
-      metadataCache <- cachedResource[Path, AdaptedGcsMetadataCache](
+      metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         appConfig.pathToGcsMetadataJson,
         blockingEc,
-        metadata => List(metadata.localPath.asPath -> metadata)
+        metadata => List(metadata.localPath -> metadata)
       )
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
       storageLinksService = StorageLinksService(storageLinksCache)
       googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
       storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCache)
-      server <- BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
+      serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
+      cleanUpCache = (Stream.sleep(appConfig.cleanUpLockFrequency) ++ Stream.eval(cleanUpLock(metadataCache))).repeat
+      _ <- Stream(cleanUpCache, serverStream.drain).covary[IO].parJoin(2)
     } yield ()
 
     app
       .handleErrorWith { error =>
         Stream.eval(Logger[IO].error(error)("Failed to start server")) >> Stream.raiseError[IO](error)
       }
-      .evalMap(_ => IO.never)
       .compile
       .drain
       .as(ExitCode.Success)
+  }
+
+  private def cleanUpLock(metadataCache: MetadataCache)(implicit timer: Timer[IO], logger: Logger[IO]): IO[Unit] = {
+    val res = for {
+    now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
+    updatedMap <- metadataCache.modify {
+      mp =>
+        val newMap = mp.map { kv =>
+          val newLock = kv._2.lock match {
+            case Some(l) =>
+              if(l.lockExpiresAt.toEpochMilli < now)
+                None
+              else
+                Some(l)
+            case None => None
+          }
+          (kv._1 -> kv._2.copy(lock = newLock))
+        }
+        (newMap, newMap)
+    }
+    _ <- logger.info(s"updated metadata cache ${updatedMap}")
+  } yield ()
+    res.handleErrorWith(t => logger.error(t)("fail to update metadata cache"))
   }
 
   private def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(

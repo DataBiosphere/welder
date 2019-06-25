@@ -11,6 +11,8 @@ import pureconfig.ConfigReader
 import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
 
+import scala.concurrent.duration.FiniteDuration
+
 object Config {
   implicit val uriConfigReader: ConfigReader[Uri] = ConfigReader.fromString(
     s => Uri.fromString(s).leftMap(err => ExceptionThrown(err))
@@ -27,6 +29,7 @@ object Config {
 
 final case class AppConfig(
     serverPort: Int,
+    cleanUpLockFrequency: FiniteDuration,
     pathToStorageLinksJson: Path,
     pathToGcsMetadataJson: Path,
     objectService: ObjectServiceConfig
