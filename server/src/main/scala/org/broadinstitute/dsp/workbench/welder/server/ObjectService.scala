@@ -116,7 +116,7 @@ class ObjectService(
               googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
           }
         case None =>
-          googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success) //TODO: double check if this is expected
+          IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage")) //TODO: is this right?
       }
     } yield res
 

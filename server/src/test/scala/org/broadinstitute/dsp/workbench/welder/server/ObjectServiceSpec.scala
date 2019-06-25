@@ -658,12 +658,12 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         if (!directory.exists) {
           directory.mkdirs
         }
-        val expectedBody = """{"result":"SUCCESS"}"""
         val res = for {
-          res <- objectService.service.run(request).value
-          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+          r <- objectService.service.run(request).value.attempt
         } yield {
-          body shouldBe expectedBody
+          val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+          val gsPath = GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
+          r shouldBe Left(NotFoundException(s"${gsPath} not found in Google Storage"))
         }
         res.unsafeRunSync()
     }
