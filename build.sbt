@@ -27,7 +27,7 @@ lazy val core =
           outFile,
           s"""|package org.broadinstitute.dsp.workbench.welder
               |
-            |/** Auto-generated build information. */
+              |/** Auto-generated build information. */
               |object BuildInfo {
               |  val buildTime    = new java.util.Date(${t}L)
               |  val gitHeadCommit = "${git.gitHeadCommit.value.getOrElse("")}"

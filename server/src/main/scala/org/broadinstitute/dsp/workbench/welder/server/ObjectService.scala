@@ -106,12 +106,17 @@ class ObjectService(
       meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
       res <- meta match {
         case Some(m) =>
-          if (m.lastLockedBy.isDefined && m.lastLockedBy.get == config.ownerEmail)
-            googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
-          else
-            IO.pure(AcquireLockResponse.LockedByOther)
+          m.lastLockedBy match {
+            case Some(lockedBy) =>
+              if(lockedBy == config.ownerEmail)
+                googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+              else
+                IO.pure(AcquireLockResponse.LockedByOther)
+            case None =>
+              googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+          }
         case None =>
-          googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+          IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage")) //TODO: is this right?
       }
     } yield res
 

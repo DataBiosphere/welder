@@ -636,9 +636,42 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
-  "acquireLock" should "should be able to acquire lock when no one holds the lock" in {
+  "acquireLock" should "should be able to acquire lock object doesn't exist in GCS" in {
     forAll {
-      (gsPath: GsPath, storageLink: StorageLink) =>
+      (storageLink: StorageLink) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+
+        val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(storageLink.localBaseDirectory.path -> storageLink))
+        val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+        val objectService = ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metaCache)
+        val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
+        val requestBody = s"""
+                             |{
+                             |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          r <- objectService.service.run(request).value.attempt
+        } yield {
+          val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+          val gsPath = GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
+          r shouldBe Left(NotFoundException(s"${gsPath} not found in Google Storage"))
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  it should "should be able to acquire lock when no one holds the lock" in {
+    forAll {
+      (storageLink: StorageLink) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
 
@@ -659,6 +692,95 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val expectedBody = """{"result":"SUCCESS"}"""
+        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(storageLink.cloudStorageDirectory.bucketName, fullBlobPath, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
+          res <- objectService.service.run(request).value
+          _ <- FakeGoogleStorageInterpreter.getBlob(storageLink.cloudStorageDirectory.bucketName, fullBlobPath, None).compile.lastOrError //Make sure the blob exists
+          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+        } yield {
+          body shouldBe expectedBody
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  it should "should be able to acquire lock when lock is owned by current user" in {
+    forAll {
+      (storageLink: StorageLink) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+
+        val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(storageLink.localBaseDirectory.path -> storageLink))
+        val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+        val googleStorageAlg = new GoogleStorageAlg {
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = IO.unit
+          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
+            IO.pure(Some(AdaptedGcsMetadata(Some(objectServiceConfig.ownerEmail), Crc32("fakecrc32"), 0L)))
+          }
+          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+          override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse] = ???
+        }
+        val objectService = ObjectService(objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metaCache)
+        val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
+        val requestBody = s"""
+                             |{
+                             |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val expectedBody = """{"result":"SUCCESS"}"""
+        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+        val res = for {
+          res <- objectService.service.run(request).value
+          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+        } yield {
+          body shouldBe expectedBody
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  it should "not be able to acquire lock when lock is owned by some other user" in {
+    forAll {
+      (storageLink: StorageLink) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+
+        val storageLinksCache = Ref.unsafe[IO, Map[Path, StorageLink]](Map(storageLink.localBaseDirectory.path -> storageLink))
+        val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+        val googleStorageAlg = new GoogleStorageAlg {
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = ???
+          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
+            IO.pure(Some(AdaptedGcsMetadata(Some(WorkbenchEmail("someoneElse@gmail.com")), Crc32("fakecrc32"), 0L)))
+          }
+          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+          override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse] = ???
+        }
+        val objectService = ObjectService(objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metaCache)
+        val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
+        val requestBody = s"""
+                             |{
+                             |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val expectedBody = """{"result":"LOCKED_BY_OTHER"}"""
+        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
           res <- objectService.service.run(request).value
           body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
