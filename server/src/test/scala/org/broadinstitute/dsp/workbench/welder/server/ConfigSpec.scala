@@ -5,7 +5,6 @@ import java.nio.file.Paths
 
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.scalatest.{FlatSpec, Matchers}
-
 import scala.concurrent.duration._
 
 class ConfigSpec extends FlatSpec with Matchers {

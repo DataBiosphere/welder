@@ -37,7 +37,8 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       res <- meta match {
         case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
           adaptMetadata(crc32c, userDefinedMetadata, generation).map(x => Some(x))
-        case _ => IO.pure(None)
+        case _ =>
+          IO.pure(None)
       }
     } yield res
 
