@@ -180,7 +180,7 @@ class ObjectService(
             case Some(m) => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId))
             case None => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
           }
-          hashedLockedByCurrentUser <- hashString(lockedByString(gsPath.bucketName, config.ownerEmail))
+          hashedLockedByCurrentUser <- Kleisli.liftF(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
           adaptedGcsMetadata = AdaptedGcsMetadataCache(req.localObjectPath, Some(hashedLockedByCurrentUser), delocalizeResp.crc32c, delocalizeResp.generation)
           _ <- Kleisli.liftF(metadataCache.modify(mp => (mp + (req.localObjectPath.asPath -> adaptedGcsMetadata), ())))
         } yield ()
