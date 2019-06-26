@@ -67,12 +67,12 @@ final case class StorageLink(
     pattern: String
 )
 
-final case class HashedMetadata(asString: String) extends AnyVal
+final case class HashedLockedBy(asString: String) extends AnyVal
 
 // This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
-final case class AdaptedGcsMetadata(lastLockedBy: Option[HashedMetadata], crc32c: Crc32, generation: Long)
+final case class AdaptedGcsMetadata(lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
 
-final case class AdaptedGcsMetadataCache(localPath: RelativePath, lastLockedBy: Option[HashedMetadata], crc32c: Crc32, generation: Long)
+final case class AdaptedGcsMetadataCache(localPath: RelativePath, lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

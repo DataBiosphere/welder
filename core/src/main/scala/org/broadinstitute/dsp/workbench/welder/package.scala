@@ -77,8 +77,8 @@ package object welder {
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
   }
 
-  def hashMetadata(metadata: String): HashedMetadata = {
-    HashedMetadata(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
+  def hashString(metadata: String): HashedLockedBy = {
+    HashedLockedBy(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
   }
 
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]

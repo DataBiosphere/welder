@@ -41,9 +41,9 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
   }
 
   "hashMetadata" should "consistently hash a string" in {
-    val knownHash = HashedMetadata("4af48213b034805aacef2309fe802d97f2fbbfcd2ea5a641988b015e9855f394") //decodes to "test-bucket:foo@bar.com"
+    val knownHash = HashedLockedBy("4af48213b034805aacef2309fe802d97f2fbbfcd2ea5a641988b015e9855f394") //decodes to "test-bucket:foo@bar.com"
     val bucketName = GcsBucketName("test-bucket")
     val email = WorkbenchEmail("foo@bar.com")
-    hashMetadata(bucketName.value + ":" + email.value) shouldBe knownHash
+    hashString(bucketName.value + ":" + email.value) shouldBe knownHash
   }
 }

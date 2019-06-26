@@ -73,7 +73,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
 
   private def adaptMetadata(crc32c: Crc32, userDefinedMetadata: Map[String, String], generation: Long): IO[AdaptedGcsMetadata] =
     for {
-      lastLockedBy <- IO.pure(userDefinedMetadata.get(LAST_LOCKED_BY).map(HashedMetadata))
+      lastLockedBy <- IO.pure(userDefinedMetadata.get(LAST_LOCKED_BY).map(HashedLockedBy))
       expiresAt <- userDefinedMetadata.get(LOCK_EXPIRES_AT).flatTraverse { expiresAtString =>
         for {
           ea <- Either
@@ -83,9 +83,9 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         } yield instant
       }
       currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-      lastLock <- expiresAt.flatTraverse[IO, HashedMetadata] { ea =>
+      lastLock <- expiresAt.flatTraverse[IO, HashedLockedBy] { ea =>
         if (currentTime > ea.toEpochMilli)
-          IO.pure(none[HashedMetadata])
+          IO.pure(none[HashedLockedBy])
         else
           IO.pure(lastLockedBy)
       }
