@@ -211,6 +211,7 @@ class ObjectService(
     } else IO.unit
   }
 
+  //Note that bucketName below does NOT include the gs:// prefix
   private def lockedByString(bucketName: GcsBucketName, ownerEmail: WorkbenchEmail): String = bucketName.value + ":" + config.ownerEmail.value
 }
 
