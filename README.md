@@ -44,3 +44,8 @@ Make sure all builds are green after you merge PR
 * Enable [IntelliJ plugin](https://plugins.jetbrains.com/plugin/7017-plantuml-integration)
 * modify [UI_Interaction.puml](server/src/main/resources/UI_Interaction.puml)
 * Save rendered image as `UI_Interaction.png`
+
+# For Clients
+
+## Hashed Metadata
+For the the sake of privacy, some of the fields stored on the GCS object metadata are hashed. Specifically, the `lastLockedBy` field is hashed in combination with the GCS bucket name. The formula for this hash is `sha256(my-bucket-name:my-email-address@gmail.com)`. Note that `my-bucket-name` does not contain the `gs://` prefix. You can use this formula to check whether or not known email addresses hold locks in known buckets.
