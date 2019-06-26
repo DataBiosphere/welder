@@ -1,6 +1,7 @@
 import java.time.ZoneId
 
 import com.typesafe.sbt.SbtNativePackager.autoImport._
+import com.typesafe.sbt.packager.docker.Cmd
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
 import com.typesafe.sbt.packager.docker.ExecCmd
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
@@ -96,16 +97,20 @@ object Settings {
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerUpdateLatest := true,
+    // See https://www.scala-sbt.org/sbt-native-packager/formats/docker.html#add-commands
     dockerCommands ++= List(
-      ExecCmd("CMD", "export", "CLASSPATH=lib/*jar")
+      ExecCmd("CMD", "export", "CLASSPATH=lib/*jar"),
+      Cmd("USER", "root"),
+      ExecCmd("RUN", "usermod", "-a", "-G", "users", "demiourgos728"),
+      ExecCmd("RUN", "/bin/bash", "-c", "echo '#!/bin/bash\\numask 0000; /opt/docker/bin/server' > /etc/entrypoint.sh; chmod a+x /etc/entrypoint.sh"),
+      Cmd("USER", "demiourgos728")
     )
   )
 
   lazy val serverDockerSettings = commonDockerSettings ++ List(
     mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
     packageName in Docker := "broad-dsp-gcr-public/welder-server",
-//    daemonUser in Docker := "welder-user",
-    dockerEntrypoint := List("/opt/docker/bin/server"),
+    dockerEntrypoint := List("/etc/entrypoint.sh"),
     dockerAlias := DockerAlias(
       Some("us.gcr.io"),
       None,
