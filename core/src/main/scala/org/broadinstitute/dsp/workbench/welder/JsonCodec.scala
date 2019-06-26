@@ -23,6 +23,8 @@ object JsonCodec {
   implicit val relativePathEncoder: Encoder[RelativePath] = pathEncoder.contramap(_.asPath)
   implicit val workbenchEmailEncoder: Encoder[WorkbenchEmail] = Encoder.encodeString.contramap(_.value)
   implicit val workbenchEmailDecoder: Decoder[WorkbenchEmail] = Decoder.decodeString.map(WorkbenchEmail)
+  implicit val hashedMetadataEncoder: Encoder[HashedMetadata] = Encoder.encodeString.contramap(_.asString)
+  implicit val hashedMetadataDecoder: Decoder[HashedMetadata] = Decoder.decodeString.map(HashedMetadata)
   implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.renderString)
   implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.emap(s => Uri.fromString(s).leftMap(_.getMessage()))
   implicit val instanceEncoder: Encoder[Instant] = Encoder.encodeLong.contramap(_.toEpochMilli)

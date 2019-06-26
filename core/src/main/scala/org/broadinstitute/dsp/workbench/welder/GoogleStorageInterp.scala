@@ -10,7 +10,7 @@ import cats.implicits._
 import fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
-import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.GoogleStorageAlg._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import scala.collection.JavaConverters._
@@ -73,7 +73,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
 
   private def adaptMetadata(crc32c: Crc32, userDefinedMetadata: Map[String, String], generation: Long): IO[AdaptedGcsMetadata] =
     for {
-      lastLockedBy <- IO.pure(userDefinedMetadata.get(LAST_LOCKED_BY).map(WorkbenchEmail))
+      lastLockedBy <- IO.pure(userDefinedMetadata.get(LAST_LOCKED_BY).map(HashedMetadata))
       expiresAt <- userDefinedMetadata.get(LOCK_EXPIRES_AT).flatTraverse { expiresAtString =>
         for {
           ea <- Either
@@ -83,9 +83,9 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         } yield instant
       }
       currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-      lastLock <- expiresAt.flatTraverse[IO, WorkbenchEmail] { ea =>
+      lastLock <- expiresAt.flatTraverse[IO, HashedMetadata] { ea =>
         if (currentTime > ea.toEpochMilli)
-          IO.pure(none[WorkbenchEmail])
+          IO.pure(none[HashedMetadata])
         else
           IO.pure(lastLockedBy)
       }

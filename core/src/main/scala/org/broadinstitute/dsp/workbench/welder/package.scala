@@ -1,6 +1,8 @@
 package org.broadinstitute.dsp.workbench
 
+import java.math.BigInteger
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.util.Base64
 
 import cats.Eq
@@ -73,6 +75,10 @@ package object welder {
     val fullBlobName =
       getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
+  }
+
+  def hashMetadata(metadata: String): HashedMetadata = {
+    HashedMetadata(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
   }
 
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]
