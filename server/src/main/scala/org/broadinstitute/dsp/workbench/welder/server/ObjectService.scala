@@ -13,7 +13,6 @@ import ca.mrvisser.sealerate
 import cats.data.Kleisli
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
@@ -210,9 +209,6 @@ class ObjectService(
       IO(directory.mkdirs).void
     } else IO.unit
   }
-
-  //Note that bucketName below does NOT include the gs:// prefix
-  private def lockedByString(bucketName: GcsBucketName, ownerEmail: WorkbenchEmail): String = bucketName.value + ":" + config.ownerEmail.value
 }
 
 object ObjectService {
