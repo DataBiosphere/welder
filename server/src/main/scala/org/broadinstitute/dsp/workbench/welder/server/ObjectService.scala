@@ -98,17 +98,18 @@ class ObjectService(
     for {
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+      gsPath = getGsPath(req.localObjectPath, context)
+      hashedLockedByCurrentUser <- hashString(lockedByString(gsPath.bucketName, config.ownerEmail))
       metadata = Map(
-        GoogleStorageAlg.LAST_LOCKED_BY -> config.ownerEmail.value,
+        GoogleStorageAlg.LAST_LOCKED_BY -> hashedLockedByCurrentUser.asString,
         GoogleStorageAlg.LOCK_EXPIRES_AT -> (current + config.lockExpiration.toMillis).toString
       )
-      gsPath = getGsPath(req.localObjectPath, context)
       meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
       res <- meta match {
         case Some(m) =>
           m.lastLockedBy match {
             case Some(lockedBy) =>
-              if(lockedBy == config.ownerEmail)
+              if(lockedBy == hashedLockedByCurrentUser)
                 googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
               else
                 IO.pure(AcquireLockResponse.LockedByOther)
@@ -178,7 +179,8 @@ class ObjectService(
             case Some(m) => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, m.generation, traceId))
             case None => Kleisli.liftF[IO, TraceId, DelocalizeResponse](googleStorageAlg.delocalize(req.localObjectPath, gsPath, 0L, traceId))
           }
-          adaptedGcsMetadata = AdaptedGcsMetadataCache(req.localObjectPath, Some(config.ownerEmail), delocalizeResp.crc32c, delocalizeResp.generation)
+          hashedLockedByCurrentUser <- Kleisli.liftF(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+          adaptedGcsMetadata = AdaptedGcsMetadataCache(req.localObjectPath, Some(hashedLockedByCurrentUser), delocalizeResp.crc32c, delocalizeResp.generation)
           _ <- Kleisli.liftF(metadataCache.modify(mp => (mp + (req.localObjectPath.asPath -> adaptedGcsMetadata), ())))
         } yield ()
     } yield ()
@@ -328,7 +330,7 @@ object MetadataResponse {
     def syncMode: SyncMode = SyncMode.Safe
   }
 
-  final case class EditMode(syncStatus: SyncStatus, lastLockedBy: Option[WorkbenchEmail], generation: Long, storageLink: StorageLink) extends MetadataResponse {
+  final case class EditMode(syncStatus: SyncStatus, lastLockedBy: Option[HashedLockedBy], generation: Long, storageLink: StorageLink) extends MetadataResponse {
     def syncMode: SyncMode = SyncMode.Edit
   }
 

@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import ca.mrvisser.sealerate
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 
 sealed abstract class SyncStatus extends Product with Serializable
@@ -68,10 +67,12 @@ final case class StorageLink(
     pattern: String
 )
 
-// This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
-final case class AdaptedGcsMetadata(lastLockedBy: Option[WorkbenchEmail], crc32c: Crc32, generation: Long)
+final case class HashedLockedBy(asString: String) extends AnyVal
 
-final case class AdaptedGcsMetadataCache(localPath: RelativePath, lastLockedBy: Option[WorkbenchEmail], crc32c: Crc32, generation: Long)
+// This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
+final case class AdaptedGcsMetadata(lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
+
+final case class AdaptedGcsMetadataCache(localPath: RelativePath, lastLockedBy: Option[HashedLockedBy], crc32c: Crc32, generation: Long)
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

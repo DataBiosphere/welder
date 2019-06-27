@@ -1,6 +1,8 @@
 package org.broadinstitute.dsp.workbench
 
+import java.math.BigInteger
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.util.Base64
 
 import cats.Eq
@@ -11,6 +13,7 @@ import fs2.{Pipe, Stream}
 import io.circe.Decoder
 import io.circe.fs2._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
@@ -73,6 +76,14 @@ package object welder {
     val fullBlobName =
       getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
     GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
+  }
+
+  //Note that bucketName below does NOT include the gs:// prefix
+  //This string will be hashed when stored in GCS metadata
+  def lockedByString(bucketName: GcsBucketName, ownerEmail: WorkbenchEmail): String = bucketName.value + ":" + ownerEmail.value
+
+  def hashString(metadata: String): IO[HashedLockedBy] = IO {
+    HashedLockedBy(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
   }
 
   type StorageLinksCache = Ref[IO, Map[Path, StorageLink]]

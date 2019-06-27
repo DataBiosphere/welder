@@ -3,6 +3,7 @@ package org.broadinstitute.dsp.workbench.welder
 import java.nio.file.Paths
 
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -37,5 +38,12 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
     getPossibleBaseDirectory(localPath).map(_.toString) shouldBe(List("workspaces/ws1/sub", "workspaces/ws1", "workspaces"))
     val basePath = Paths.get("workspaces/ws1")
     getFullBlobName(basePath, localPath, BlobPath("notebooks")) shouldBe(GcsBlobName("notebooks/sub/notebook1.ipynb"))
+  }
+
+  "hashMetadata" should "consistently hash a string" in {
+    val knownHash = HashedLockedBy("4af48213b034805aacef2309fe802d97f2fbbfcd2ea5a641988b015e9855f394") //decodes to "test-bucket:foo@bar.com"
+    val bucketName = GcsBucketName("test-bucket")
+    val email = WorkbenchEmail("foo@bar.com")
+    hashString(bucketName.value + ":" + email.value).unsafeRunSync() shouldBe knownHash
   }
 }

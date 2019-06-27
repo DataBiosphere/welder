@@ -716,7 +716,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val googleStorageAlg = new GoogleStorageAlg {
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = IO.unit
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
-            IO.pure(Some(AdaptedGcsMetadata(Some(objectServiceConfig.ownerEmail), Crc32("fakecrc32"), 0L)))
+            IO.pure(Some(AdaptedGcsMetadata(Some(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail)).unsafeRunSync()), Crc32("fakecrc32"), 0L)))
           }
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
@@ -759,7 +759,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val googleStorageAlg = new GoogleStorageAlg {
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = ???
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
-            IO.pure(Some(AdaptedGcsMetadata(Some(WorkbenchEmail("someoneElse@gmail.com")), Crc32("fakecrc32"), 0L)))
+            IO.pure(Some(AdaptedGcsMetadata(Some(hashString(lockedByString(gsPath.bucketName, WorkbenchEmail("someoneElse@gmail.com"))).unsafeRunSync()), Crc32("fakecrc32"), 0L)))
           }
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
