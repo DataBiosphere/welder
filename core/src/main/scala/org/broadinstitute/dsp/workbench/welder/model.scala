@@ -13,9 +13,6 @@ object SyncStatus {
   final case object Live extends SyncStatus {
     override def toString: String = "LIVE"
   }
-  final case object NotLocalizedYet extends SyncStatus {
-    override def toString: String = "NotLocalizedYet"
-  }
   // crc32c mismatch
   final case object RemoteChanged extends SyncStatus {
     override def toString: String = "REMOTE_CHANGED"
