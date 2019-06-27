@@ -692,7 +692,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
             for {
               now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-              hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail))
+              hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail)))
             } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
           }
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
@@ -730,15 +730,12 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       (storageLink: StorageLink) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorageAlg = new GoogleStorageAlg {
-          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = ???
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = IO.unit
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
-<<<<<<< HEAD
-            IO.pure(Some(AdaptedGcsMetadata(Some(hashString(lockedByString(gsPath.bucketName, WorkbenchEmail("someoneElse@gmail.com"))).unsafeRunSync()), Crc32("fakecrc32"), 0L)))
-=======
             for {
+              hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, WorkbenchEmail("someoneElse@gmail.com"))))
               now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-            } yield Some(AdaptedGcsMetadata(Some(Lock(WorkbenchEmail("someoneElse@gmail.com"), Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
->>>>>>> tmp
+            } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
           }
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???

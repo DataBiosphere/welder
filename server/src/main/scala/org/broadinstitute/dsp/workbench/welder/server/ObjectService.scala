@@ -110,7 +110,7 @@ class ObjectService(
             _ <- updateLockCache(req.localObjectPath, m.lock)
             res <- m.lock match {
               case Some(lock) =>
-                if (lock.lastLockedBy == config.ownerEmail)
+                if (lock.lastLockedBy == hashedLockedByCurrentUser)
                   googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
                 else
                   IO.pure(AcquireLockResponse.LockedByOther)
@@ -220,7 +220,7 @@ class ObjectService(
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
             case Some(meta) =>
-              checkLock(meta.lock, now).as(meta.localFileStateInGCS.map(_.generation).getOrElse(0L)) //check if user owns the lock before deleting
+              checkLock(meta.lock, now, gsPath.bucketName).as(meta.localFileStateInGCS.map(_.generation).getOrElse(0L)) //check if user owns the lock before deleting
             case None =>
               IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
@@ -240,16 +240,17 @@ class ObjectService(
 
   // return metadata to push if lock is valid
   private def checkLock(lock: Option[Lock], now: Long, bucketName: GcsBucketName): IO[Map[String, String]] =
-    lock match {
-      case Some(lock) =>
-        for {
-          hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
-          res <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
-            IO.pure(lockMetadata(lock.lockExpiresAt.toEpochMilli))
-          else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
-        } yield res
-      case None => IO.pure(lockMetadata(now + config.lockExpiration.toMillis))
-    }
+    for {
+      hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
+      res <- lock match {
+        case Some(lock) =>
+           if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
+              IO.pure(lockMetadata(lock.lockExpiresAt.toEpochMilli, hashedLockedByCurrentUser))
+            else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
+        case None => IO.pure(lockMetadata(now + config.lockExpiration.toMillis, hashedLockedByCurrentUser))
+      }
+    } yield res
+
 
   private def updateLockCache(localPath: RelativePath, lock: Option[Lock]): IO[Unit] =
     metadataCache.modify { mp =>
