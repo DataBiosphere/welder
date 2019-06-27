@@ -15,7 +15,7 @@ produces:
 ## PATHS
 ##########################################################################################
 paths:
-  'lock':
+  '/lock':
     post:
       summary: ''
       responses:
@@ -66,8 +66,9 @@ paths:
         '204':
           description: ''
         '412':
+          description: ''
           schema:
-            $ref: '#/definitions/412ErrorReport'
+            $ref: '#/definitions/FailedPreconditionReport'
         '500':
           description: Internal Server Error
           schema:
@@ -121,10 +122,10 @@ definitions:
       - syncMode
       - syncStatus
       - remoteUri
-      - storageLinks
+      - storageLink
     properties:
       syncMode:
-        type: '#/definitions/SyncMode'
+        $ref: '#/definitions/SyncMode'
       syncStatus:
         $ref: '#/definitions/SyncStatus'
       lastEditedBy:
@@ -143,10 +144,10 @@ definitions:
     required:
       - syncMode
       - syncStatus
-      - storageLinks
+      - storageLink
     properties:
       syncMode:
-        type: '#/definitions/SyncMode'
+        $ref: '#/definitions/SyncMode'
       syncStatus:
         $ref: '#/definitions/SyncStatus'
       storageLink:
@@ -157,7 +158,7 @@ definitions:
       - syncMode
     properties:
       syncMode:
-        type: '#/definitions/SyncMode'
+        $ref: '#/definitions/SyncMode'
   SyncMode:
     type: string
     enum:
@@ -176,13 +177,13 @@ definitions:
       errorMessage:
         type: string
       errorCode:
-        type: Int
-  412ErrorReport:
+        type: integer
+  FailedPreconditionReport:
     properties:
       errorMessage:
         type: string
       errorCode:
-        type: Int
+        type: integer
         description: File generation mismatch(0), no storage link found for the requested file (1), trying to delocalize safe mode file (2), trying to delete safe mode file (3)
         enum:
           - 0
@@ -193,6 +194,7 @@ definitions:
     description: ''
     properties:
       action:
+        type: string
         default: "localize"
       entries:
         type: array
@@ -207,7 +209,9 @@ definitions:
   SafeDelocalize:
     description: ''
     properties:
-      default: "safeDelocalize"
+      action:
+        type: string
+        default: "safeDelocalize"
       localPath:
         type: string
   StorageLink:
@@ -230,9 +234,9 @@ definitions:
           $ref: '#/definitions/StorageLink'
   AcquireLockResponse:
     description: ''
-      properties:
-        result:
-          type: string
-          enum:
-            - "LOCKED_BY_OTHER"
-            - "SUCCESS"
+    properties:
+      result:
+        type: string
+        enum:
+          - "LOCKED_BY_OTHER"
+          - "SUCCESS"
