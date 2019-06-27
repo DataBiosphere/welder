@@ -63,7 +63,6 @@ class ObjectService(
       } yield res
   }
 
-  //TODO: do we need to check storagelink before localizing a file?
   def localize(req: Localize): Kleisli[IO, TraceId, Unit] = Kleisli { traceId =>
     val res = Stream
       .emits(req.entries)
@@ -160,7 +159,7 @@ class ObjectService(
                         meta.localFileStateInGCS match { //TODO: shall we check the file has been localized before calculating crc32c
                           case Some(previousFileState) =>
                             if (previousFileState.generation == generation)
-                              IO.pure(SyncStatus.LocalChanged) <* logger.ctxWarn[PostContext, String]("local file has changed, but it hasn't been delocalized yet").run(loggingContext)
+                              IO.pure(SyncStatus.LocalChanged) <* logger.ctxWarn[PostContext, String](s"[old gen(${previousFileState.generation}) | new gen(${generation})] local file has changed, but it hasn't been delocalized yet").run(loggingContext)
                             else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[PostContext, String]("remote has changed").run(loggingContext)
                           case None =>
                             IO.pure(SyncStatus.Desynchronized) <* logger.ctxError[PostContext, String]("We don't find local generation for a localized file. This shouldn't happen").run(loggingContext)
@@ -222,7 +221,7 @@ class ObjectService(
             case Some(meta) =>
               checkLock(meta.lock, now, gsPath.bucketName).as(meta.localFileStateInGCS.map(_.generation).getOrElse(0L)) //check if user owns the lock before deleting
             case None =>
-              IO.raiseError(UnknownFileState(s"Local GCS metadata for ${req.localObjectPath} not found"))
+              IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
           _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
           _ <- metadataCache.modify(mp => (mp - req.localObjectPath, ())) // remove the object from cache

@@ -27,7 +27,8 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
       case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
       case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
       case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
-      case UnknownFileState(x) => PreconditionFailed(ErrorReport(x, Some(4)))
+      case InvalidLock(x) => PreconditionFailed(ErrorReport(x, Some(4)))
+      case InternalException(x) => InternalServerError(ErrorReport(x))
       case e =>
         val errorMessage = if (e.getCause != null) e.getCause.toString else e.toString
         InternalServerError(ErrorReport(errorMessage))

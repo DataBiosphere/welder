@@ -13,5 +13,4 @@ final case class StorageLinkNotFoundException(message: String) extends WelderExc
 final case class SafeDelocalizeSafeModeFileError(message: String) extends WelderException
 final case class InvalidLock(message: String) extends WelderException
 final case class DeleteSafeModeFileError(message: String) extends WelderException
-final case class UnknownFileState(message: String) extends WelderException
 final case class NotFoundException(message: String) extends WelderException

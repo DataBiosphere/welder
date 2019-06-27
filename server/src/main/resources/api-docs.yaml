@@ -184,12 +184,18 @@ definitions:
         type: string
       errorCode:
         type: integer
-        description: File generation mismatch(0), no storage link found for the requested file (1), trying to delocalize safe mode file (2), trying to delete safe mode file (3)
+        description: |
+          0: File generation mismatch
+          1: no storage link found for the requested file
+          2: trying to delocalize safe mode file
+          3: trying to delete safe mode file
+          4: current user doesn't hold a lock for the file
         enum:
           - 0
           - 1
           - 2
           - 3
+          - 4
   Localize:
     description: ''
     properties:
