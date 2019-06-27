@@ -2,11 +2,12 @@ import java.time.ZoneId
 
 import com.typesafe.sbt.SbtNativePackager.autoImport._
 import com.typesafe.sbt.packager.docker.DockerPlugin.autoImport._
-import com.typesafe.sbt.packager.docker.ExecCmd
+import com.typesafe.sbt.packager.docker.{Cmd, ExecCmd}
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
 import sbt.Keys.{scalacOptions, _}
 import sbt._
 import com.typesafe.sbt.GitPlugin.autoImport._
+import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
 import com.gilt.sbt.newrelic.NewRelic.autoImport._
 
@@ -90,27 +91,39 @@ object Settings {
       addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.0")
     )
 
+  lazy val entrypoint = "/opt/docker/bin/entrypoint.sh"
+
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
     dockerBaseImage := "oracle/graalvm-ce:1.0.0-rc16",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerUpdateLatest := true,
+    // See https://www.scala-sbt.org/sbt-native-packager/formats/docker.html#add-commands
     dockerCommands ++= List(
-      ExecCmd("CMD", "export", "CLASSPATH=lib/*jar")
+      // Change the default umask for the system to support R/W access to the shared volume
+      Cmd("USER", "root"),
+      ExecCmd("RUN", "/bin/bash", "-c", s"echo '#!/bin/bash\\numask 002; /opt/docker/bin/server' > $entrypoint"),
+      Cmd("RUN", s"chown welder-user:users $entrypoint && chmod u+x,g+x $entrypoint"),
+      Cmd("USER", (daemonUser in Docker).value)
     )
   )
 
   lazy val serverDockerSettings = commonDockerSettings ++ List(
     mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
     packageName in Docker := "broad-dsp-gcr-public/welder-server",
-//    daemonUser in Docker := "welder-user",
-    dockerEntrypoint := List("/opt/docker/bin/server"),
+    daemonUser in Docker := "welder-user",
+    daemonUserUid in Docker := Some("1001"),
+    // group and gid is consistent with the jupyter container
+    daemonGroup in Docker := "users",
+    daemonGroupGid in Docker := Some("100"),
+    dockerEntrypoint := List(entrypoint),
     dockerAlias := DockerAlias(
       Some("us.gcr.io"),
       None,
       "broad-dsp-gcr-public/welder-server",
-      git.gitHeadCommit.value.map(_.substring(0, 7))
+      Some("rt-umask-test")
+      //git.gitHeadCommit.value.map(_.substring(0, 7))
     )
   )
 
