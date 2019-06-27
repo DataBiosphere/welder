@@ -74,7 +74,7 @@ object Main extends IOApp {
         }
         (newMap, newMap)
     }
-    _ <- logger.info(s"updated metadata cache ${updatedMap}")
+    _ <- logger.info(s"updated metadata cache ${updatedMap.take(100)}")
   } yield ()
     res.handleErrorWith(t => logger.error(t)("fail to update metadata cache"))
   }
