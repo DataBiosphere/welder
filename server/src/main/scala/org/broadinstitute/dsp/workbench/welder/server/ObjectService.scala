@@ -167,12 +167,12 @@ class ObjectService(
                             else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[MetaLoggingContext, String]("remote has changed").run(loggingContext)
                           case None =>
                             IO.pure(SyncStatus.Desynchronized) <* logger
-                              .ctxError[MetaLoggingContext, String]("We don't find local generation for a localized file. This shouldn't happen")
+                              .ctxError[MetaLoggingContext, String]("We don't find local generation for a localized file. Was this file localized manually?")
                               .run(loggingContext)
                         }
                       case None =>
                         IO.pure(SyncStatus.Desynchronized) <* logger
-                          .ctxError[MetaLoggingContext, String]("We don't find local cache for a localized file. This shouldn't happen")
+                          .ctxError[MetaLoggingContext, String]("We don't find local cache for a localized file. Did you update metadata cache file directly?")
                           .run(loggingContext) //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                     }
                   } yield status
