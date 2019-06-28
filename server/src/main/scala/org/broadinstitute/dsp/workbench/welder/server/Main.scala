@@ -61,14 +61,7 @@ object Main extends IOApp {
       now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
       updatedMap <- metadataCache.modify { mp =>
         val newMap = mp.map { kv =>
-          val newLock = kv._2.lock match {
-            case Some(l) =>
-              if (l.lockExpiresAt.toEpochMilli < now)
-                None
-              else
-                Some(l)
-            case None => None
-          }
+          val newLock = kv._2.lock.filter(l => l.lockExpiresAt.toEpochMilli < now)
           (kv._1 -> kv._2.copy(lock = newLock))
         }
         (newMap, newMap)
