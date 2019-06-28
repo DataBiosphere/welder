@@ -101,7 +101,7 @@ object Settings {
     dockerUpdateLatest := true,
     // See https://www.scala-sbt.org/sbt-native-packager/formats/docker.html#add-commands
     dockerCommands ++= List(
-      // Change the default umask for the system to support R/W access to the shared volume
+      // Change the default umask for welder to support R/W access to the shared volume
       Cmd("USER", "root"),
       ExecCmd("RUN", "/bin/bash", "-c", s"echo '#!/bin/bash\\numask 002; /opt/docker/bin/server' > $entrypoint"),
       Cmd("RUN", s"chown welder-user:users $entrypoint && chmod u+x,g+x $entrypoint"),
@@ -112,9 +112,9 @@ object Settings {
   lazy val serverDockerSettings = commonDockerSettings ++ List(
     mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
     packageName in Docker := "broad-dsp-gcr-public/welder-server",
+    // user, uid, group, and gid are all replicated in the Jupyter container
     daemonUser in Docker := "welder-user",
     daemonUserUid in Docker := Some("1001"),
-    // group and gid is consistent with the jupyter container
     daemonGroup in Docker := "users",
     daemonGroupGid in Docker := Some("100"),
     dockerEntrypoint := List(entrypoint),
