@@ -122,8 +122,7 @@ object Settings {
       Some("us.gcr.io"),
       None,
       "broad-dsp-gcr-public/welder-server",
-      Some("rt-umask-test")
-      //git.gitHeadCommit.value.map(_.substring(0, 7))
+      git.gitHeadCommit.value.map(_.substring(0, 7))
     )
   )
 
