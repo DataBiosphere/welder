@@ -69,6 +69,7 @@ final case class StorageLink(
 )
 
 final case class HashedLockedBy(asString: String) extends AnyVal
+
 /**
   * Data type represents a lock that hasn't expired
   * @param lastLockedBy hash of who owns the lock welder knows about most recently

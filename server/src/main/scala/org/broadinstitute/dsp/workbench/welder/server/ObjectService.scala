@@ -162,10 +162,14 @@ class ObjectService(
                               IO.pure(SyncStatus.LocalChanged) <* logger.ctxWarn[PostContext, String](s"[old gen(${previousFileState.generation}) | new gen(${generation})] local file has changed, but it hasn't been delocalized yet").run(loggingContext)
                             else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[PostContext, String]("remote has changed").run(loggingContext)
                           case None =>
-                            IO.pure(SyncStatus.Desynchronized) <* logger.ctxError[PostContext, String]("We don't find local generation for a localized file. This shouldn't happen").run(loggingContext)
+                            IO.pure(SyncStatus.Desynchronized) <* logger
+                              .ctxError[PostContext, String]("We don't find local generation for a localized file. This shouldn't happen")
+                              .run(loggingContext)
                         }
                       case None =>
-                        IO.pure(SyncStatus.Desynchronized) <* logger.ctxError[PostContext, String]("We don't find local cache for a localized file. This shouldn't happen").run(loggingContext) //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
+                        IO.pure(SyncStatus.Desynchronized) <* logger
+                          .ctxError[PostContext, String]("We don't find local cache for a localized file. This shouldn't happen")
+                          .run(loggingContext) //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                     }
                   } yield status
                 }
@@ -219,7 +223,8 @@ class ObjectService(
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
             case Some(meta) =>
-              checkLock(meta.lock, now, gsPath.bucketName).as(meta.localFileStateInGCS.map(_.generation).getOrElse(0L)) //check if user owns the lock before deleting
+              checkLock(meta.lock, now, gsPath.bucketName)
+                .as(meta.localFileStateInGCS.map(_.generation).getOrElse(0L)) //check if user owns the lock before deleting
             case None =>
               IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
@@ -243,13 +248,12 @@ class ObjectService(
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       res <- lock match {
         case Some(lock) =>
-           if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
-              IO.pure(lockMetadata(lock.lockExpiresAt.toEpochMilli, hashedLockedByCurrentUser))
-            else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
+          if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
+            IO.pure(lockMetadata(lock.lockExpiresAt.toEpochMilli, hashedLockedByCurrentUser))
+          else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
         case None => IO.pure(lockMetadata(now + config.lockExpiration.toMillis, hashedLockedByCurrentUser))
       }
     } yield res
-
 
   private def updateLockCache(localPath: RelativePath, lock: Option[Lock]): IO[Unit] =
     metadataCache.modify { mp =>

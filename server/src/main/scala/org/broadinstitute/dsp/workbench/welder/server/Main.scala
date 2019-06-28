@@ -58,13 +58,12 @@ object Main extends IOApp {
 
   private def cleanUpLock(metadataCache: MetadataCache)(implicit timer: Timer[IO], logger: Logger[IO]): IO[Unit] = {
     val res = for {
-    now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
-    updatedMap <- metadataCache.modify {
-      mp =>
+      now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
+      updatedMap <- metadataCache.modify { mp =>
         val newMap = mp.map { kv =>
           val newLock = kv._2.lock match {
             case Some(l) =>
-              if(l.lockExpiresAt.toEpochMilli < now)
+              if (l.lockExpiresAt.toEpochMilli < now)
                 None
               else
                 Some(l)
@@ -73,9 +72,9 @@ object Main extends IOApp {
           (kv._1 -> kv._2.copy(lock = newLock))
         }
         (newMap, newMap)
-    }
-    _ <- logger.info(s"updated metadata cache ${updatedMap.take(100)}")
-  } yield ()
+      }
+      _ <- logger.info(s"updated metadata cache ${updatedMap.take(100)}")
+    } yield ()
     res.handleErrorWith(t => logger.error(t)("fail to update metadata cache"))
   }
 
