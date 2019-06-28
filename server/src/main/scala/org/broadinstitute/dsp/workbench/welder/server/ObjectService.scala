@@ -133,7 +133,6 @@ class ObjectService(
     for {
       traceId <- Kleisli.ask[IO, TraceId]
       context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
-      loggingContext = PostContext(traceId, "checkMetadata", context)
       res <- if (context.isSafeMode)
         Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
       else {
@@ -154,21 +153,26 @@ class ObjectService(
                 else {
                   for {
                     metaOpt <- metadataCache.get.map(_.get(req.localObjectPath))
+                    loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileStateInGCS.map(_.generation)), generation)
                     status <- metaOpt match {
                       case Some(meta) =>
                         meta.localFileStateInGCS match { //TODO: shall we check the file has been localized before calculating crc32c
                           case Some(previousFileState) =>
                             if (previousFileState.generation == generation)
-                              IO.pure(SyncStatus.LocalChanged) <* logger.ctxWarn[PostContext, String](s"[old gen(${previousFileState.generation}) | new gen(${generation})] local file has changed, but it hasn't been delocalized yet").run(loggingContext)
-                            else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[PostContext, String]("remote has changed").run(loggingContext)
+                              IO.pure(SyncStatus.LocalChanged) <* logger
+                                .ctxWarn[MetaLoggingContext, String](
+                                  s"local file has changed, but it hasn't been delocalized yet"
+                                )
+                                .run(loggingContext)
+                            else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[MetaLoggingContext, String]("remote has changed").run(loggingContext)
                           case None =>
                             IO.pure(SyncStatus.Desynchronized) <* logger
-                              .ctxError[PostContext, String]("We don't find local generation for a localized file. This shouldn't happen")
+                              .ctxError[MetaLoggingContext, String]("We don't find local generation for a localized file. This shouldn't happen")
                               .run(loggingContext)
                         }
                       case None =>
                         IO.pure(SyncStatus.Desynchronized) <* logger
-                          .ctxError[PostContext, String]("We don't find local cache for a localized file. This shouldn't happen")
+                          .ctxError[MetaLoggingContext, String]("We don't find local cache for a localized file. This shouldn't happen")
                           .run(loggingContext) //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                     }
                   } yield status
@@ -372,6 +376,15 @@ object ObjectService {
     "isSafeMode",
     "basePath"
   )(x => (x.traceId, x.action, x.commonContext.isSafeMode, x.commonContext.basePath))
+
+  implicit val metaLoggingContextEncoder: Encoder[MetaLoggingContext] = Encoder.forProduct6(
+    "traceId",
+    "action",
+    "isSafeMode",
+    "basePath",
+    "oldGeneration",
+    "newGeneration"
+  )(x => (x.traceId, x.action, x.commonContext.isSafeMode, x.commonContext.basePath, x.oldGeneration, x.newGeneration))
 }
 
 final case class GetMetadataRequest(localObjectPath: RelativePath)
@@ -449,3 +462,4 @@ object AcquireLockResponse {
 }
 
 final case class PostContext(traceId: TraceId, action: String, commonContext: CommonContext)
+final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long)
