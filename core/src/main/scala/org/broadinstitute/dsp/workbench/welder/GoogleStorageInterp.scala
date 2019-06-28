@@ -89,15 +89,13 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         } yield instant
       }
       currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-      lock = lastLockedBy match {
-        case Some(hashedLockBy) =>
-          expiresAt.flatMap { ea =>
-            if (currentTime < ea.toEpochMilli)
-              Some(Lock(hashedLockBy, ea))
-            else
-              none[Lock] //we don't care who held lock if it has expired
-          }
-        case None => none[Lock]
+      lock = lastLockedBy.flatMap { hashedLockBy =>
+        expiresAt.flatMap { ea =>
+          if (currentTime < ea.toEpochMilli)
+            Some(Lock(hashedLockBy, ea))
+          else
+            none[Lock] //we don't care who held lock if it has expired
+        }
       }
     } yield {
       AdaptedGcsMetadata(lock, crc32c, generation)
