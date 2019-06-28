@@ -246,7 +246,10 @@ class ObjectService(
     } else IO.unit
   }
 
-  // return metadata to push if lock is valid
+  /**
+    * If lock exists and it hasn't expired, we keep the lock; if lock doesn't exist, we return empty Map as metadata
+    * @return metadata to push if lock is valid
+    */
   private def checkLock(lock: Option[Lock], now: Long, bucketName: GcsBucketName): IO[Map[String, String]] =
     for {
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
@@ -255,7 +258,7 @@ class ObjectService(
           if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
             IO.pure(lockMetadata(lock.lockExpiresAt.toEpochMilli, hashedLockedByCurrentUser))
           else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
-        case None => IO.pure(lockMetadata(now + config.lockExpiration.toMillis, hashedLockedByCurrentUser))
+        case None => IO.pure(Map.empty[String, String])
       }
     } yield res
 
