@@ -104,7 +104,7 @@ object Settings {
       // Change the default umask for welder to support R/W access to the shared volume
       Cmd("USER", "root"),
       ExecCmd("RUN", "/bin/bash", "-c", s"echo '#!/bin/bash\\numask 002; /opt/docker/bin/server' > $entrypoint"),
-      Cmd("RUN", s"chown welder-user:users $entrypoint && chmod u+x,g+x $entrypoint"),
+      Cmd("RUN", s"chown -R welder-user:users /opt/docker && chmod u+x,g+x $entrypoint"),
       Cmd("USER", (daemonUser in Docker).value)
     )
   )
