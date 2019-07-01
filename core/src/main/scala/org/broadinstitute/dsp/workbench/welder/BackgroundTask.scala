@@ -22,7 +22,8 @@ object BackgroundTask {
         }
         (newMap, newMap)
       }
-      _ <- logger.info(s"updated metadata cache ${updatedMap.take(100)}")
+      _ <- logger.info(s"updated metadata cache size ${updatedMap.size}")
+      _ <- logger.debug(s"updated metadata cache ${updatedMap.size}")
     } yield ()).handleErrorWith(t => logger.error(t)("fail to update metadata cache"))
 
     (Stream.sleep[IO](interval) ++ Stream.eval(task)).repeat
