@@ -1,6 +1,8 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.nio.file.Paths
+
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
@@ -41,6 +43,15 @@ object Main extends IOApp {
       cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockFrequency)
       _ <- Stream(cleanUpCache, serverStream.drain).covary[IO].parJoin(2)
     } yield ()
+
+    sys.addShutdownHook(
+      Stream
+        .emits("this is weird".getBytes("UTF-8")).covary[IO]
+        .through(fs2.io.file.writeAll(Paths.get("/work/qiTest"), scala.concurrent.ExecutionContext.global))
+        .compile
+        .drain
+        .unsafeRunSync()
+    )
 
     app
       .handleErrorWith { error =>
