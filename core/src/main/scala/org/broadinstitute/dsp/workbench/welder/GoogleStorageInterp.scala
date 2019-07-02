@@ -56,11 +56,17 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
 
-  def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[DelocalizeResponse] = {
+  def delocalize(
+      localObjectPath: RelativePath,
+      gsPath: GsPath,
+      generation: Long,
+      userDefinedMeta: Map[String, String],
+      traceId: TraceId
+  ): IO[DelocalizeResponse] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     io.file.readAll[IO](localAbsolutePath, linerBacker.blockingContext, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
-        .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, Some(generation), Some(traceId))
+        .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, userDefinedMeta, Some(generation), Some(traceId))
         .map(x => DelocalizeResponse(x.getGeneration, Crc32(x.getCrc32c)))
         .compile
         .lastOrError
@@ -83,13 +89,15 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         } yield instant
       }
       currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-      lastLock <- expiresAt.flatTraverse[IO, HashedLockedBy] { ea =>
-        if (currentTime > ea.toEpochMilli)
-          IO.pure(none[HashedLockedBy])
-        else
-          IO.pure(lastLockedBy)
+      lock = lastLockedBy.flatMap { hashedLockBy =>
+        expiresAt.flatMap { ea =>
+          if (currentTime < ea.toEpochMilli)
+            Some(Lock(hashedLockBy, ea))
+          else
+            none[Lock] //we don't care who held lock if it has expired
+        }
       }
     } yield {
-      AdaptedGcsMetadata(lastLock, crc32c, generation)
+      AdaptedGcsMetadata(lock, crc32c, generation)
     }
 }

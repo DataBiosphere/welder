@@ -8,7 +8,7 @@ import cats.effect.IO
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
@@ -58,7 +58,7 @@ object JsonCodec {
       res.leftMap(_.getMessage)
     } else parseGsPath(s)
   }
-  implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path)
+  implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path.asPath)
 
   implicit val storageLinkEncoder: Encoder[StorageLink] =
     Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(
@@ -71,22 +71,38 @@ object JsonCodec {
       safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
       cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
       pattern <- x.downField("pattern").as[String]
-    } yield StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(safeBaseDir), cloudStorageDir, pattern)
+    } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), LocalSafeBaseDirectory(RelativePath(safeBaseDir)), cloudStorageDir, pattern)
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)
   implicit val crc32cEncoder: Encoder[Crc32] = Encoder.encodeString.contramap(_.asString)
   implicit val crc32cDecoder: Decoder[Crc32] = Decoder.decodeString.map(Crc32)
-  implicit val gcsMetadataEncoder: Encoder[AdaptedGcsMetadataCache] = Encoder.forProduct4(
-    "localPath",
+  implicit val lockEncoder: Encoder[Lock] = Encoder.forProduct2(
     "lastLockedBy",
+    "lockExpiresAt"
+  )(x => Lock.unapply(x).get)
+  implicit val lockDecoder: Decoder[Lock] = Decoder.forProduct2(
+    "lastLockedBy",
+    "lockExpiresAt"
+  )(Lock.apply)
+  implicit val localFileStateInGCSEncoder: Encoder[LocalFileStateInGCS] = Encoder.forProduct2(
     "crc32c",
     "generation"
+  )(x => LocalFileStateInGCS.unapply(x).get)
+  implicit val localFileStateInGCSDecoder: Decoder[LocalFileStateInGCS] = Decoder.forProduct2(
+    "crc32c",
+    "generation"
+  )(LocalFileStateInGCS.apply)
+  implicit val gcsMetadataEncoder: Encoder[AdaptedGcsMetadataCache] = Encoder.forProduct3(
+    "localPath",
+    "lock",
+    "localFileStateInGCS"
   )(x => AdaptedGcsMetadataCache.unapply(x).get)
-  implicit val gcsMetadataDecoder: Decoder[AdaptedGcsMetadataCache] = Decoder.forProduct4(
+  implicit val gcsMetadataDecoder: Decoder[AdaptedGcsMetadataCache] = Decoder.forProduct3(
     "localPath",
-    "lastLockedBy",
-    "crc32c",
-    "generation"
+    "lock",
+    "localFileStateInGCS"
   )(AdaptedGcsMetadataCache.apply)
+
+  implicit val traceIdEncoder: Encoder[TraceId] = Encoder.encodeString.contramap(_.uuid.toString)
 }

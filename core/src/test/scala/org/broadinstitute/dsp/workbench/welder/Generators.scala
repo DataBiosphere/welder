@@ -26,14 +26,14 @@ object Generators {
   val genRelativePath = Gen.uuid.map(uuid => RelativePath(Paths.get(s"dir/${uuid}")))
   val genLocalBaseDirectory = for {
     workspaceName <- Gen.uuid
-  } yield LocalBaseDirectory(Paths.get(s"workspaces/$workspaceName"))
+  } yield LocalBaseDirectory(RelativePath(Paths.get(s"workspaces/$workspaceName")))
   val genLocalPathWithSubDirectory = for {
     workspaceName <- Gen.uuid
     fileName <- Gen.uuid
   } yield Paths.get(s"workspaces/$workspaceName/sub/$fileName")
   val genLocalSafeBaseDirectory = for {
     workspaceName <- Gen.uuid
-  } yield LocalSafeBaseDirectory(Paths.get(s"workspaces_safe/$workspaceName"))
+  } yield LocalSafeBaseDirectory(RelativePath(Paths.get(s"workspaces_safe/$workspaceName")))
   val genLocalPathScratch = for {
     fileName <- Gen.uuid
   } yield Paths.get(s"scratch/$fileName")

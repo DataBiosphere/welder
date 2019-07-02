@@ -1,7 +1,5 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Path
-
 import cats.effect.IO
 
 trait StorageLinksAlg {
@@ -11,4 +9,4 @@ trait StorageLinksAlg {
 object StorageLinksAlg {
   def fromCache(storageLinksCache: StorageLinksCache): StorageLinksAlg = new StorageLinksInterp(storageLinksCache)
 }
-final case class CommonContext(isSafeMode: Boolean, basePath: Path, storageLink: StorageLink)
+final case class CommonContext(isSafeMode: Boolean, basePath: RelativePath, storageLink: StorageLink)

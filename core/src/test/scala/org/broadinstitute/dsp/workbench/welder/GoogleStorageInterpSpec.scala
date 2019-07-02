@@ -57,7 +57,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         }
         val res = for {
           _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](localAbsolutePath, global)).compile.drain //write to local file
-          resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, TraceId(randomUUID())).attempt
+          resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, TraceId(randomUUID())).attempt
           _ <- IO((new File(localAbsolutePath.toString)).delete())
         } yield {
           resp shouldBe Left(GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch"))

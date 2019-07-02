@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
@@ -15,11 +15,11 @@ import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.FlatSpec
 
 class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
-  val storageLinks = Ref.unsafe[IO, Map[Path, StorageLink]](Map.empty)
+  val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val storageLinksService = StorageLinksService(storageLinks)
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar"))
-  val baseDir = Paths.get("/foo")
-  val baseSafeDir = Paths.get("/bar")
+  val baseDir = RelativePath(Paths.get("foo"))
+  val baseSafeDir = RelativePath(Paths.get("bar"))
 
   "GET /storageLinks" should "return 200 and an empty list of no storage links exist" in {
     val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/"))
@@ -40,7 +40,7 @@ class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return 200 and a list of storage links when they exist" in {
     val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/"))
 
-    val expectedBody = """{"storageLinks":[{"localBaseDirectory":"/foo","localSafeModeBaseDirectory":"/bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}]}"""
+    val expectedBody = """{"storageLinks":[{"localBaseDirectory":"foo","localSafeModeBaseDirectory":"bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}]}"""
 
     val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(baseSafeDir), cloudStorageDirectory, ".zip")
 
