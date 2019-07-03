@@ -22,7 +22,7 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
       for {
         storageLink <- req.as[StorageLink]
         _ <- deleteStorageLink(storageLink)
-        resp <- Ok(())
+        resp <- NoContent()
       } yield resp
     case req @ POST -> Root =>
       for {

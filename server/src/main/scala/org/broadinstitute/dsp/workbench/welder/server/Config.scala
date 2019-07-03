@@ -29,7 +29,8 @@ object Config {
 
 final case class AppConfig(
     serverPort: Int,
-    cleanUpLockFrequency: FiniteDuration,
+    cleanUpLockInterval: FiniteDuration,
+    flushCacheInterval: FiniteDuration,
     pathToStorageLinksJson: Path,
     pathToGcsMetadataJson: Path,
     objectService: ObjectServiceConfig
