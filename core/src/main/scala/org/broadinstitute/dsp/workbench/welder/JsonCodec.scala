@@ -39,7 +39,7 @@ object JsonCodec {
       case Right(bucket) =>
         val length = s"gs://${bucket.value}/".length
         val blobPathString = s.drop(length)
-        val blobPath = if(blobPathString.isEmpty) None else Some(BlobPath(blobPathString))
+        val blobPath = if (blobPathString.isEmpty) None else Some(BlobPath(blobPathString))
         Right(CloudStorageDirectory(bucket, blobPath))
     }
   }

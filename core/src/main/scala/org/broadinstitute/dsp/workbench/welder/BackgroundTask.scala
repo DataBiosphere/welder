@@ -31,12 +31,14 @@ object BackgroundTask {
     (Stream.sleep[IO](interval) ++ Stream.eval(task)).repeat
   }
 
-  def flushBothCache(interval: FiniteDuration,
-                      storageLinksPath: Path,
-                 metadataCachePath: Path,
-                 storageLinksCache: StorageLinksCache,
-                 metadataCache: MetadataCache,
-                 blockingEc: ExecutionContext)(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]): Stream[IO, Unit] = {
+  def flushBothCache(
+      interval: FiniteDuration,
+      storageLinksPath: Path,
+      metadataCachePath: Path,
+      storageLinksCache: StorageLinksCache,
+      metadataCache: MetadataCache,
+      blockingEc: ExecutionContext
+  )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]): Stream[IO, Unit] = {
     val flushStorageLinks = flushCache(storageLinksPath, blockingEc, storageLinksCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush storagelinks cache to disk"))
     }

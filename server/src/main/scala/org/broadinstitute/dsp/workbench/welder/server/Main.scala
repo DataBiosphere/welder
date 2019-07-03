@@ -34,12 +34,14 @@ object Main extends IOApp {
       welderApp <- initWelderApp(appConfig, blockingEc, storageLinksCache, metadataCache)
       serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
       cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockInterval)
-      flushCache = BackgroundTask.flushBothCache(appConfig.flushCacheInterval,
+      flushCache = BackgroundTask.flushBothCache(
+        appConfig.flushCacheInterval,
         appConfig.pathToStorageLinksJson,
         appConfig.pathToGcsMetadataJson,
         storageLinksCache,
         metadataCache,
-        blockingEc)
+        blockingEc
+      )
       _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(3)
     } yield ()
 
