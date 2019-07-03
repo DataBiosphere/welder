@@ -40,7 +40,7 @@ object Main extends IOApp {
         storageLinksCache,
         metadataCache,
         blockingEc)
-      _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(2)
+      _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(3)
     } yield ()
 
     app
