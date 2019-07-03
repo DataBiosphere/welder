@@ -11,12 +11,8 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import java.nio.file.Path
 
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 
 class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Path) extends Http4sDsl[IO] {
-  implicit val logger: Logger[IO] = Slf4jLogger.getLogger[IO]
-
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
       for {
@@ -39,27 +35,28 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
 
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] =
-    storageLinks.modify { links =>
+    for {
+      link <- storageLinks.modify { links =>
+        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
+        (links ++ toAdd, storageLink)
+      }
+      _ <- initializeDirectories(storageLink)
+    } yield link
 
-      val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
-
-      initializeDirectories(storageLink)
-
-      (links ++ toAdd, storageLink)
-    }
 
   //returns whether the directories exist at the end of execution
-  def initializeDirectories(storageLink: StorageLink): Boolean = {
+  def initializeDirectories(storageLink: StorageLink): IO[Boolean] = {
     val localSafeAbsolutePath = workingDirectory.resolve(storageLink.localSafeModeBaseDirectory.path.asPath)
     val localEditAbsolutePath = workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)
 
     val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](localSafeAbsolutePath, localEditAbsolutePath)
 
-    dirsToCreate
+    IO(dirsToCreate
       .map(path => new java.io.File(path.toUri))
       .map(dir => dir.exists() || dir.mkdir()) //mkdir returns true if the directory is created. if it exists it returns false.
-      .foldRight(true)(_ && _)
+      .foldRight(true)(_ && _))
   }
+
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] =
     storageLinks.modify { links =>
