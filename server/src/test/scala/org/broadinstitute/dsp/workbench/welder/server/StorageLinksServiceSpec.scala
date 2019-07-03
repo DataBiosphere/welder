@@ -14,13 +14,15 @@ import org.scalatest.{FlatSpec, Matchers}
 class StorageLinksServiceSpec extends FlatSpec with Matchers {
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar/baz.zip"))
-  val baseDir = LocalBaseDirectory(RelativePath(Paths.get("/foo")))
-  val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("/bar")))
+  val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
+  val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
+
+  val workingDirectory = Paths.get("/tmp")
 
   //TODO: remove boilerplate at the top of each test
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
 
@@ -30,7 +32,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "not create duplicate storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
 
@@ -41,9 +43,32 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
     assert(listResult.storageLinks equals Set(linkToAdd))
   }
 
+  it should "initialize directories" in {
+    val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+
+    val safeAbsolutePath = workingDirectory.resolve(baseSafeDir.path.asPath)
+    val editAbsolutePath = workingDirectory.resolve(baseDir.path.asPath)
+
+    val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](safeAbsolutePath, editAbsolutePath)
+
+    dirsToCreate
+      .map(path => new java.io.File(path.toUri))
+      .map(dir => if (dir.exists()) dir.delete())
+
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+
+    dirsToCreate
+      .map(path => new java.io.File(path.toUri))
+      .map(dir => assert(dir.exists))
+  }
+
+
+//  initializeDirectories
   it should "list storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
@@ -58,7 +83,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "delete a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
@@ -78,7 +103,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "gracefully handle deleting a storage link that doesn't exist" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)

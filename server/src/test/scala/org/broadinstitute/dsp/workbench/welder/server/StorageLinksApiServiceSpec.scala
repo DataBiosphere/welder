@@ -16,10 +16,12 @@ import org.scalatest.FlatSpec
 
 class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-  val storageLinksService = StorageLinksService(storageLinks)
+  val workingDirectory = Paths.get("/tmp")
+  val storageLinksService = StorageLinksService(storageLinks, workingDirectory)
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar"))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))
+
 
   "GET /storageLinks" should "return 200 and an empty list of no storage links exist" in {
     val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/"))
