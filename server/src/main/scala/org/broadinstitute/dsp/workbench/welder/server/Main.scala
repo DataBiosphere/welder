@@ -33,7 +33,7 @@ object Main extends IOApp {
         metadata => List(metadata.localPath -> metadata)
       )
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
-      storageLinksService = StorageLinksService(storageLinksCache)
+      storageLinksService = StorageLinksService(storageLinksCache, appConfig.objectService.workingDirectory)
       googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
       storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCache)
