@@ -66,8 +66,7 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
           exists <- IO(file.exists())
           canDirBeMade <- if (exists) IO.unit else {
             IO(file.mkdir()).flatMap(r => {
-              if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
-              IO.unit
+              if (r) IO.unit else logger.warn(s"could not initialize dir ${file.getPath()}")
             })
           }
         } yield ()
