@@ -59,7 +59,7 @@ object LocalDirectory {
   final case class LocalSafeBaseDirectory(path: RelativePath) extends LocalDirectory
 }
 
-final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: BlobPath)
+final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Option[BlobPath])
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,

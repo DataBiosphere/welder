@@ -13,7 +13,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class StorageLinksServiceSpec extends FlatSpec with Matchers {
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
-  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar/baz.zip"))
+  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar/baz.zip")))
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
 

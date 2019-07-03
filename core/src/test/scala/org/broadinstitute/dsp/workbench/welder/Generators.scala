@@ -40,8 +40,9 @@ object Generators {
 
   val genCloudStorageDirectory = for {
     bucketName <- google2.Generators.genGcsBucketName
-    blobPath <- Gen.uuid.map(x => BlobPath(x.toString))
-  } yield CloudStorageDirectory(bucketName, blobPath)
+    blobPath = Gen.uuid.map(x => BlobPath(x.toString))
+    blobPathOpt <- Gen.option[BlobPath](blobPath)
+  } yield CloudStorageDirectory(bucketName, blobPathOpt)
 
   val genStorageLink = for {
     localBaseDirectory <- genLocalBaseDirectory

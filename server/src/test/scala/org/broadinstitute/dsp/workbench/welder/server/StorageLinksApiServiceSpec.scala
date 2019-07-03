@@ -18,7 +18,7 @@ class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
   val storageLinksService = StorageLinksService(storageLinks, workingDirectory)
-  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), BlobPath("bar"))
+  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar")))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))
 
