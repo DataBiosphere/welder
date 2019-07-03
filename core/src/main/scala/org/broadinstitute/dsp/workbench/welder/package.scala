@@ -103,15 +103,17 @@ package object welder {
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(
           ref =>
-            Stream
-              .eval(ref.get)
-              .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-              .through(fs2.io.file.writeAll(path, blockingEc))
-              .compile
-              .drain
+            flushCache(path, blockingEc, ref).compile.drain
         )
       )
     } yield ref
+
+  def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(implicit cs: ContextShift[IO]): Stream[IO, Unit] = {
+    Stream
+      .eval(ref.get)
+      .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
+      .through(fs2.io.file.writeAll[IO](path, blockingEc))
+  }
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
