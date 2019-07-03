@@ -135,7 +135,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         val res = for {
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
@@ -160,7 +161,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         val res = for {
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
@@ -189,7 +191,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -230,7 +233,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -268,7 +272,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -303,7 +308,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -338,7 +344,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -372,7 +379,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}/${cloudStorageDirectory.blobPath.asString}","pattern":"*.ipynb"}}"""
+        val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
