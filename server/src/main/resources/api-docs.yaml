@@ -25,7 +25,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/ErrorReport'
-  '/lock':
+  '/objects/lock':
     post:
       summary: ''
       responses:

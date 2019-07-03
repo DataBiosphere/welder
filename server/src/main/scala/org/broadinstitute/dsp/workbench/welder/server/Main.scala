@@ -20,7 +20,6 @@ object Main extends IOApp {
 
     val app: Stream[IO, Unit] = for {
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
-      implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         appConfig.pathToStorageLinksJson,
@@ -34,8 +33,14 @@ object Main extends IOApp {
       )
       welderApp <- initWelderApp(appConfig, blockingEc, storageLinksCache, metadataCache)
       serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
-      cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockFrequency)
-      _ <- Stream(cleanUpCache, serverStream.drain).covary[IO].parJoin(2)
+      cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockInterval)
+      flushCache = BackgroundTask.flushBothCache(appConfig.flushCacheInterval,
+        appConfig.pathToStorageLinksJson,
+        appConfig.pathToGcsMetadataJson,
+        storageLinksCache,
+        metadataCache,
+        blockingEc)
+      _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(2)
     } yield ()
 
     app
