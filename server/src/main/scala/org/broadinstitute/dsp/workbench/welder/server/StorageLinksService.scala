@@ -11,8 +11,13 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import java.nio.file.Path
 
+import cats.implicits._
+import io.chrisdavenport.log4cats.Logger
 
-class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Path) extends Http4sDsl[IO] {
+
+class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Path)(
+  implicit logger: Logger[IO]
+) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
       for {
@@ -45,18 +50,29 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
 
 
   //returns whether the directories exist at the end of execution
-  def initializeDirectories(storageLink: StorageLink): IO[Boolean] = {
+  def initializeDirectories(storageLink: StorageLink): IO[Unit] = {
     val localSafeAbsolutePath = workingDirectory.resolve(storageLink.localSafeModeBaseDirectory.path.asPath)
     val localEditAbsolutePath = workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)
 
     val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](localSafeAbsolutePath, localEditAbsolutePath)
 
-    IO(dirsToCreate
+    val files = dirsToCreate
       .map(path => new java.io.File(path.toUri))
-      .map(dir => dir.exists() || dir.mkdir()) //mkdir returns true if the directory is created. if it exists it returns false.
-      .foldRight(true)(_ && _))
-  }
 
+    //creates all dirs and logs any errors
+    files.traverse {
+      file =>
+        for {
+          exists <- IO(file.exists())
+          canDirBeMade <- if (exists) IO.unit else {
+            IO(file.mkdir()).flatMap(r => {
+              if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
+              IO.unit
+            })
+          }
+        } yield ()
+    }.void
+  }
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] =
     storageLinks.modify { links =>
@@ -72,7 +88,8 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache, workingDirectory: Path): StorageLinksService = new StorageLinksService(storageLinks, workingDirectory)
+  def apply(storageLinks: StorageLinksCache, workingDirectory: Path)
+           (implicit logger: Logger[IO]): StorageLinksService = new StorageLinksService(storageLinks, workingDirectory)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"
