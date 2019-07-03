@@ -12,8 +12,9 @@ import org.http4s.dsl.Http4sDsl
 
 import scala.concurrent.ExecutionContext
 
-class CacheService(config: CachedServiceConfig, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache, blockingEc: ExecutionContext)
-                  (implicit cs: ContextShift[IO]) extends Http4sDsl[IO] {
+class CacheService(config: CachedServiceConfig, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache, blockingEc: ExecutionContext)(
+    implicit cs: ContextShift[IO]
+) extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case POST -> Root / "flush" =>
@@ -28,8 +29,9 @@ class CacheService(config: CachedServiceConfig, storageLinksCache: StorageLinksC
 }
 
 object CacheService {
-  def apply(config: CachedServiceConfig, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache, blockingEc: ExecutionContext)
-           (implicit cs: ContextShift[IO]): CacheService = new CacheService(config, storageLinksCache, metadataCache, blockingEc)
+  def apply(config: CachedServiceConfig, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache, blockingEc: ExecutionContext)(
+      implicit cs: ContextShift[IO]
+  ): CacheService = new CacheService(config, storageLinksCache, metadataCache, blockingEc)
 }
 
 final case class CachedServiceConfig(storageLinksPath: Path, metadataCachePath: Path)

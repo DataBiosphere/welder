@@ -42,7 +42,6 @@ class CacheServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
         }
       res.unsafeRunSync()
     }
-
   }
 }
 
