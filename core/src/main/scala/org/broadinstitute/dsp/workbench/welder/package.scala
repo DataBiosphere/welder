@@ -63,9 +63,12 @@ package object welder {
       )
       .toList
 
-  def getFullBlobName(basePath: RelativePath, localPath: Path, blobPath: BlobPath): GcsBlobName = {
+  def getFullBlobName(basePath: RelativePath, localPath: Path, blobPath: Option[BlobPath]): GcsBlobName = {
     val subPath = basePath.asPath.relativize(localPath)
-    GcsBlobName(blobPath.asString + "/" + subPath.toString)
+    blobPath match {
+      case Some(bp) => GcsBlobName(bp.asString + "/" + subPath.toString)
+      case None => GcsBlobName(subPath.toString)
+    }
   }
 
   val base64Decoder = Base64.getDecoder()

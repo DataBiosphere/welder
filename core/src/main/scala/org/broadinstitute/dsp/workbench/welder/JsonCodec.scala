@@ -38,15 +38,16 @@ object JsonCodec {
       case Left(error) => Left(error)
       case Right(bucket) =>
         val length = s"gs://${bucket.value}/".length
-        val blobPath = BlobPath(s.drop(length))
+        val blobPathString = s.drop(length)
+        val blobPath = if(blobPathString.isEmpty) None else Some(BlobPath(blobPathString))
         Right(CloudStorageDirectory(bucket, blobPath))
     }
   }
   implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap { x =>
-    if (x.blobPath.asString.nonEmpty)
-      s"gs://${x.bucketName.value}/${x.blobPath.asString}"
-    else
-      s"gs://${x.bucketName.value}"
+    x.blobPath match {
+      case Some(bp) => s"gs://${x.bucketName.value}/${bp.asString}"
+      case None => s"gs://${x.bucketName.value}"
+    }
   }
   implicit val sourceUriDecoder: Decoder[SourceUri] = Decoder.decodeString.emap { s =>
     if (s.startsWith("data:application/json;base64,")) {
