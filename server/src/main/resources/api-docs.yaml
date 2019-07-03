@@ -15,7 +15,17 @@ produces:
 ## PATHS
 ##########################################################################################
 paths:
-  '/lock':
+  '/cache/flush':
+    post:
+      summary: 'flush in memory metadata and storagelinks cache to disk'
+      responses:
+        '204':
+          description: ''
+        '500':
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorReport'
+  '/objects/lock':
     post:
       summary: ''
       responses:

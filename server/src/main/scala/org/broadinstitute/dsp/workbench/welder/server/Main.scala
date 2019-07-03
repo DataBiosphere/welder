@@ -20,7 +20,6 @@ object Main extends IOApp {
 
     val app: Stream[IO, Unit] = for {
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
-      implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         appConfig.pathToStorageLinksJson,
@@ -32,14 +31,16 @@ object Main extends IOApp {
         blockingEc,
         metadata => List(metadata.localPath -> metadata)
       )
-      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
-      storageLinksService = StorageLinksService(storageLinksCache, appConfig.objectService.workingDirectory)
-      googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
-      storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
-      objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCache)
-      serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(WelderApp(objectService, storageLinksService).service).serve
-      cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockFrequency)
-      _ <- Stream(cleanUpCache, serverStream.drain).covary[IO].parJoin(2)
+      welderApp <- initWelderApp(appConfig, blockingEc, storageLinksCache, metadataCache)
+      serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
+      cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockInterval)
+      flushCache = BackgroundTask.flushBothCache(appConfig.flushCacheInterval,
+        appConfig.pathToStorageLinksJson,
+        appConfig.pathToGcsMetadataJson,
+        storageLinksCache,
+        metadataCache,
+        blockingEc)
+      _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(3)
     } yield ()
 
     app
@@ -50,4 +51,24 @@ object Main extends IOApp {
       .drain
       .as(ExitCode.Success)
   }
+
+  def initWelderApp(appConfig: AppConfig, blockingEc: ExecutionContext, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
+      implicit logger: Logger[IO]
+  ): Stream[IO, WelderApp] =
+    for {
+      implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
+      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
+    } yield {
+      val storageLinksService = StorageLinksService(storageLinksCache, appConfig.objectService.workingDirectory)
+      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
+      val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+      val objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCache)
+      val cacheService = CacheService(
+        CachedServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson),
+        storageLinksCache,
+        metadataCache,
+        blockingEc
+      )
+      WelderApp(objectService, storageLinksService, cacheService)
+    }
 }

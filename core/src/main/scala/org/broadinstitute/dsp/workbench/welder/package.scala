@@ -94,7 +94,8 @@ package object welder {
   val gcpObjectType = "text/plain"
 
   def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(
-    implicit logger: Logger[IO], cs: ContextShift[IO]
+      implicit logger: Logger[IO],
+      cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       cached <- readJsonFileToA[IO, List[B]](path).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
@@ -102,16 +103,16 @@ package object welder {
       }
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(
-          ref =>
-            Stream
-              .eval(ref.get)
-              .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-              .through(fs2.io.file.writeAll(path, blockingEc))
-              .compile
-              .drain
+          ref => flushCache(path, blockingEc, ref).compile.drain
         )
       )
     } yield ref
+
+  def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(implicit cs: ContextShift[IO]): Stream[IO, Unit] =
+    Stream
+      .eval(ref.get)
+      .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
+      .through(fs2.io.file.writeAll[IO](path, blockingEc))
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)

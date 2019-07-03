@@ -27,7 +27,7 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
       for {
         storageLink <- req.as[StorageLink]
         _ <- deleteStorageLink(storageLink)
-        resp <- Ok(())
+        resp <- NoContent()
       } yield resp
     case req @ POST -> Root =>
       for {
