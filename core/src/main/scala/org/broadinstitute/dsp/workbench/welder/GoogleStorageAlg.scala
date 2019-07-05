@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 trait GoogleStorageAlg {
-  def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit]
+  def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
@@ -37,3 +37,9 @@ object GoogleStorageAlg {
 
 final case class GoogleStorageAlgConfig(workingDirectory: Path)
 final case class DelocalizeResponse(generation: Long, crc32c: Crc32)
+
+sealed trait UpdateMetadataResponse extends Product with Serializable
+object UpdateMetadataResponse {
+  final case object DirectMetadataUpdate extends UpdateMetadataResponse
+  final case class ReUploadObject(generation: Long, crc32c: Crc32) extends UpdateMetadataResponse
+}
