@@ -9,9 +9,14 @@ import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
+import java.nio.file.Path
 
-class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO] {
+import cats.implicits._
+import io.chrisdavenport.log4cats.Logger
 
+class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Path)(
+    implicit logger: Logger[IO]
+) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case GET -> Root =>
       for {
@@ -34,10 +39,38 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
 
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] =
-    storageLinks.modify { links =>
-      val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
-      (links ++ toAdd, storageLink)
-    }
+    for {
+      link <- storageLinks.modify { links =>
+        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
+        (links ++ toAdd, storageLink)
+      }
+      _ <- initializeDirectories(storageLink)
+    } yield link
+
+  //returns whether the directories exist at the end of execution
+  def initializeDirectories(storageLink: StorageLink): IO[Unit] = {
+    val localSafeAbsolutePath = workingDirectory.resolve(storageLink.localSafeModeBaseDirectory.path.asPath)
+    val localEditAbsolutePath = workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)
+
+    val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](localSafeAbsolutePath, localEditAbsolutePath)
+
+    val files = dirsToCreate
+      .map(path => new java.io.File(path.toUri))
+
+    //creates all dirs and logs any errors
+    files.traverse { file =>
+      for {
+        exists <- IO(file.exists())
+        canDirBeMade <- if (exists) IO.unit
+        else {
+          IO(file.mkdir()).flatMap(r => {
+            if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
+            else IO.unit
+          })
+        }
+      } yield ()
+    }.void
+  }
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] =
     storageLinks.modify { links =>
@@ -53,7 +86,8 @@ class StorageLinksService(storageLinks: StorageLinksCache) extends Http4sDsl[IO]
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache): StorageLinksService = new StorageLinksService(storageLinks)
+  def apply(storageLinks: StorageLinksCache, workingDirectory: Path)(implicit logger: Logger[IO]): StorageLinksService =
+    new StorageLinksService(storageLinks, workingDirectory)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"
