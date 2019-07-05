@@ -410,7 +410,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
 
         val storageAlg = new GoogleStorageAlg {
-          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = ???
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
@@ -696,7 +696,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       (storageLink: StorageLink) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorageAlg = new GoogleStorageAlg {
-          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = IO.unit
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
             for {
               now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
@@ -707,7 +707,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
         }
-        val objectService = initObjectServiceWithGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, googleStorageAlg)
+        val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
+        val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)
         val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
         val requestBody = s"""
                              |{
@@ -726,6 +727,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val res = for {
           res <- objectService.service.run(request).value
           body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+          cache <- metaCache.get
         } yield {
           body shouldBe expectedBody
         }
@@ -738,7 +740,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       (storageLink: StorageLink) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorageAlg = new GoogleStorageAlg {
-          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = IO.unit
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
             for {
               hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, WorkbenchEmail("someoneElse@gmail.com"))))
@@ -775,6 +777,56 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
+
+  it should "should be able to acquire lock when lock is owned by another user and it can't update metadata directly" in {
+    forAll {
+      (storageLink: StorageLink) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorageAlg = new GoogleStorageAlg {
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.ReUploadObject(1L, Crc32("newcrc32")))
+          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
+            for {
+              now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+              hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail)))
+            } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
+          }
+          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+          override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
+        }
+        val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
+        val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)
+        val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
+        val requestBody = s"""
+                             |{
+                             |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val expectedBody = """{"result":"SUCCESS"}"""
+        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+        val res = for {
+          res <- objectService.service.run(request).value
+          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+          cache <- metaCache.get
+          expectedHashedLockedBy <- IO.fromEither(hashString(lockedByString(storageLink.cloudStorageDirectory.bucketName, objectServiceConfig.ownerEmail)))
+        } yield {
+          body shouldBe expectedBody
+          val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
+          val actualCache = cache.get(localPath).get
+          actualCache.lock.get.lastLockedBy shouldBe(expectedHashedLockedBy)
+          actualCache.localFileStateInGCS.get shouldBe(LocalFileStateInGCS(Crc32("newcrc32"), 1L))
+        }
+        res.unsafeRunSync()
+    }
+  }
+
   private def initObjectService(storageLinks: Map[RelativePath, StorageLink], metadata: Map[RelativePath, AdaptedGcsMetadataCache], googleStorageService: Option[GoogleStorageService[IO]]): ObjectService = {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
@@ -788,6 +840,12 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metadata)
+  }
+
+  private def initObjectServiceWithMetadataCacheAndGoogleStorageAlg(storageLinks: Map[RelativePath, StorageLink], metadata: Ref[IO, Map[RelativePath, AdaptedGcsMetadataCache]], googleStorageAlg: GoogleStorageAlg): ObjectService = {
+    val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
+    val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+    ObjectService(objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadata)
   }
 
   private def initObjectServiceWithGoogleStorageAlg(storageLinks: Map[RelativePath, StorageLink], metadata: Map[RelativePath, AdaptedGcsMetadataCache], googleStorageAlg: GoogleStorageAlg): ObjectService = {

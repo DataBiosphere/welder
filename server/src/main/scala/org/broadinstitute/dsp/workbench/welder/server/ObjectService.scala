@@ -7,10 +7,10 @@ import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
+import _root_.io.chrisdavenport.log4cats.Logger
 import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
-import _root_.io.chrisdavenport.log4cats.Logger
 import cats.data.Kleisli
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
@@ -110,17 +110,27 @@ class ObjectService(
             res <- m.lock match {
               case Some(lock) =>
                 if (lock.lastLockedBy == hashedLockedByCurrentUser)
-                  googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+                  updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).as(AcquireLockResponse.Success)
                 else
                   IO.pure(AcquireLockResponse.LockedByOther)
               case None =>
-                googleStorageAlg.updateMetadata(gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+                updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).as(AcquireLockResponse.Success)
             }
           } yield res
         case None =>
-          IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage")) //TODO: is this right?
+          IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage"))
       }
     } yield res
+
+  private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[Unit] = {
+    googleStorageAlg.updateMetadata(gsPath, traceId, metadata).flatMap(
+      updateMetadataResponse =>
+        updateMetadataResponse match {
+          case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
+          case UpdateMetadataResponse.ReUploadObject(generation, crc32c) => updateLocalFileStateCache(localPath, LocalFileStateInGCS(crc32c, generation))
+        }
+    )
+  }
 
   /**
     * In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
