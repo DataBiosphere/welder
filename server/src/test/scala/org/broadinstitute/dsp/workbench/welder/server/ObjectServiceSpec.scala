@@ -477,13 +477,26 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
-  it should "return invalidLock when file is not found in metadata cache" in {
+  it should "be able to delocalize a new file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val objectService = initObjectService(Map(localBaseDirectory.path -> storageLink), Map.empty, None)
+        val storageAlg = new GoogleStorageAlg {
+          override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
+          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
+          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+          override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = {
+            IO(localObjectPath.asPath.toString shouldBe(localPath)) >>
+              IO(gsPath.bucketName shouldBe(cloudStorageDirectory.bucketName)) >>
+              IO(gsPath.blobName shouldBe(getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
+              IO(generation shouldBe(0L)) >>
+              IO(DelocalizeResponse(112L, Crc32("newHash")))
+          }
+        }
+        val objectService = initObjectServiceWithGoogleStorageAlg(Map(localBaseDirectory.path -> storageLink), Map.empty, storageAlg)
         val requestBody = s"""
                              |{
                              |  "action": "safeDelocalize",
@@ -492,9 +505,9 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
         val res = for {
-          resp <- objectService.service.run(request).value.attempt
+          resp <- objectService.service.run(request).value
         } yield {
-          resp shouldBe(Left(InvalidLock("Lock not found in local cache. You should acquireLock more often")))
+          resp.get.status shouldBe(Status.NoContent)
         }
         res.unsafeRunSync()
     }
