@@ -106,6 +106,39 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     res.unsafeRunSync()
   }
 
+  it should "return 404 if trying to localize a non-existent file" in {
+    forAll {(bucketName: GcsBucketName, blobName: GcsBlobName, bodyString: String, localFileDestination: Path) => //Use string here just so it's easier to debug
+      val body = bodyString.getBytes()
+      // It would be nice to test objects with `/` in its name, but google storage emulator doesn't support it
+      val requestBody =
+        s"""
+           |{
+           |  "action": "localize",
+           |  "entries": [
+           |   {
+           |     "sourceUri": "gs://${bucketName.value}/${blobName.value}",
+           |     "localDestinationPath": "${localFileDestination}"
+           |   }
+           |  ]
+           |}
+      """.stripMargin
+      val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+      val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+
+      val localAbsoluteFilePath = Paths.get(s"/tmp/${localFileDestination}")
+      val metadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
+      val objectService = initObjectServiceWithMetadataCache(Map.empty, metadataCache, None)
+
+      val res = for {
+        resp <- objectService.service.run(request).value.attempt
+      } yield {
+        resp shouldBe Left(NotFoundException(s"gs://${bucketName.value}/${blobName.value} not found"))
+      }
+
+      res.unsafeRunSync()
+    }
+  }
+
   "checkMetadata" should "return no storage link is found if storagelink isn't found" in {
     forAll {
       (localFileDestination: Path) =>

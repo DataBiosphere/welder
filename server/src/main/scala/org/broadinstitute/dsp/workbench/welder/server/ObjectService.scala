@@ -73,8 +73,8 @@ class ObjectService(
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case gsPath: GsPath =>
             for {
-              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId)
-              _ <- Stream.eval(updateCache(entry.localObjectPath, meta))
+              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
+              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(m => Stream.eval(updateCache(entry.localObjectPath, m)))
             } yield ()
         }
 
