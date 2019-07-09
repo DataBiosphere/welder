@@ -73,8 +73,8 @@ class ObjectService(
           case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
           case gsPath: GsPath =>
             for {
-              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId)
-              _ <- Stream.eval(updateCache(entry.localObjectPath, meta))
+              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
+              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(m => Stream.eval(updateCache(entry.localObjectPath, m)))
             } yield ()
         }
 
@@ -213,7 +213,12 @@ class ObjectService(
           lockToPush <- previousMeta match {
             case Some(meta) =>
               checkLock(meta.lock, now, gsPath.bucketName)
-            case None => IO.raiseError(InvalidLock("Lock not found in local cache. You should acquireLock more often"))
+            case None =>
+              // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
+              for {
+                hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+                current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+              } yield lockMetadata(current + config.lockExpiration.toMillis, hashedLockedByCurrentUser)
           }
           generation = previousMeta.flatMap(_.localFileStateInGCS.map(_.generation)).getOrElse(0L)
           delocalizeResp <- googleStorageAlg.delocalize(req.localObjectPath, gsPath, generation, lockToPush, traceId)
