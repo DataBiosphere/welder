@@ -1,13 +1,15 @@
 <configuration>
+  <property name="WORKING_DIRECTORY" value="/work" />
+
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>application.log</file>
+    <file>${WORKING_DIRECTORY}/welder.log</file>
 
     <encoder>
       <pattern>%date %level [%thread] %logger{10} [%file:%line] %msg%n</pattern>
     </encoder>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
       <!-- daily rollover -->
-      <fileNamePattern>logs\application.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <fileNamePattern>${WORKING_DIRECTORY}/welder.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
       <timeBasedFileNamingAndTriggeringPolicy
               class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
         <!-- or whenever the file size reaches 50MB -->
