@@ -1,6 +1,8 @@
 <configuration>
+  <property name="WORKING_DIRECTORY" value="/work" />
+
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>application.log</file>
+    <file>${WORKING_DIRECTORY}/welder.log</file>
 
     <encoder>
       <pattern>%date %level [%thread] %logger{10} [%file:%line] %msg%n</pattern>
