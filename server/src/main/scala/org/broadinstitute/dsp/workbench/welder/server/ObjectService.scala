@@ -49,7 +49,7 @@ class ObjectService(
         traceId <- IO(TraceId(randomUUID()))
         request <- req.as[AcquireLockRequest]
         res <- acquireLock(request, traceId)
-        resp <- Ok(res)
+        resp <- NoContent()
       } yield resp
     case req @ POST -> Root =>
       for {
@@ -95,7 +95,7 @@ class ObjectService(
   // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
   //       bucket policy only enabled, which will allow step 1 to succeed.
   //
-  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[AcquireLockResponse] =
+  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[Unit] =
     for {
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
@@ -110,11 +110,11 @@ class ObjectService(
             res <- m.lock match {
               case Some(lock) =>
                 if (lock.lastLockedBy == hashedLockedByCurrentUser)
-                  updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+                  updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).void
                 else
-                  IO.pure(AcquireLockResponse.LockedByOther)
+                  IO.raiseError(LockedByOther(s"lock is already acquired by someone else"))
               case None =>
-                updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).as(AcquireLockResponse.Success)
+                updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, metadata).void
             }
           } yield res
         case None =>
@@ -254,13 +254,6 @@ class ObjectService(
       }
     } yield ()
 
-  private def mkdirIfNotExist(path: java.nio.file.Path): IO[Unit] = {
-    val directory = new File(path.toString)
-    if (!directory.exists) {
-      IO(directory.mkdirs).void
-    } else IO.unit
-  }
-
   /**
     * If lock exists and it hasn't expired, we keep the lock; if lock doesn't exist, we return empty Map as metadata
     * @return metadata to push if lock is valid
@@ -386,8 +379,6 @@ object ObjectService {
   }
   implicit val acquireLockRequestDecoder: Decoder[AcquireLockRequest] = Decoder.forProduct1("localPath")(AcquireLockRequest.apply)
 
-  implicit val acquireLockResponseEncoder: Encoder[AcquireLockResponse] = Encoder.forProduct1("result")(x => x.result)
-
   implicit val postContextEncoder: Encoder[PostContext] = Encoder.forProduct4(
     "traceId",
     "action",
@@ -466,18 +457,6 @@ final case class ObjectServiceConfig(
 final case class GsPathAndMetadata(gsPath: GsPath, metadata: AdaptedGcsMetadata)
 
 final case class AcquireLockRequest(localObjectPath: RelativePath)
-
-sealed abstract class AcquireLockResponse {
-  def result: String
-}
-object AcquireLockResponse {
-  final case object LockedByOther extends AcquireLockResponse {
-    def result: String = "LOCKED_BY_OTHER"
-  }
-  final case object Success extends AcquireLockResponse {
-    def result: String = "SUCCESS"
-  }
-}
 
 final case class PostContext(traceId: TraceId, action: String, commonContext: CommonContext)
 final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long)

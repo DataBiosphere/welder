@@ -14,3 +14,4 @@ final case class SafeDelocalizeSafeModeFileError(message: String) extends Welder
 final case class InvalidLock(message: String) extends WelderException
 final case class DeleteSafeModeFileError(message: String) extends WelderException
 final case class NotFoundException(message: String) extends WelderException
+final case class LockedByOther(message: String) extends WelderException

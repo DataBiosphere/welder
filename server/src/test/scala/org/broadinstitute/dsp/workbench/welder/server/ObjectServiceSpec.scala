@@ -723,15 +723,13 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         if (!directory.exists) {
           directory.mkdirs
         }
-        val expectedBody = """{"result":"SUCCESS"}"""
         val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(storageLink.cloudStorageDirectory.bucketName, fullBlobPath, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
           res <- objectService.service.run(request).value
           _ <- FakeGoogleStorageInterpreter.getBlob(storageLink.cloudStorageDirectory.bucketName, fullBlobPath, None).compile.lastOrError //Make sure the blob exists
-          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
         } yield {
-          body shouldBe expectedBody
+          res.get.status shouldBe(Status.NoContent)
         }
         res.unsafeRunSync()
     }
@@ -768,14 +766,12 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         if (!directory.exists) {
           directory.mkdirs
         }
-        val expectedBody = """{"result":"SUCCESS"}"""
         val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
           res <- objectService.service.run(request).value
-          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
           cache <- metaCache.get
         } yield {
-          body shouldBe expectedBody
+          res.get.status shouldBe(Status.NoContent)
         }
         res.unsafeRunSync()
     }
@@ -811,13 +807,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         if (!directory.exists) {
           directory.mkdirs
         }
-        val expectedBody = """{"result":"LOCKED_BY_OTHER"}"""
         val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
-          res <- objectService.service.run(request).value
-          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
+          res <- objectService.service.run(request).value.attempt
         } yield {
-          body shouldBe expectedBody
+          res shouldBe(Left(LockedByOther(s"lock is already acquired by someone else")))
         }
         res.unsafeRunSync()
     }
@@ -855,15 +849,13 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         if (!directory.exists) {
           directory.mkdirs
         }
-        val expectedBody = """{"result":"SUCCESS"}"""
         val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
           res <- objectService.service.run(request).value
-          body <- res.get.body.through(text.utf8Decode).compile.foldMonoid
           cache <- metaCache.get
           expectedHashedLockedBy <- IO.fromEither(hashString(lockedByString(storageLink.cloudStorageDirectory.bucketName, objectServiceConfig.ownerEmail)))
         } yield {
-          body shouldBe expectedBody
+          res.get.status shouldBe(Status.NoContent)
           val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
           val actualCache = cache.get(localPath).get
           actualCache.lock.get.lastLockedBy shouldBe(expectedHashedLockedBy)
