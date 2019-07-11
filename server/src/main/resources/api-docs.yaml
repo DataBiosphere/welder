@@ -29,10 +29,10 @@ paths:
     post:
       summary: ''
       responses:
-        '200':
+        '204':
           description: ''
-          schema:
-            $ref: '#/definitions/AcquireLockResponse'
+        '409':
+          description: 'lock is held by someone else'
         '412':
           description: 'storagelink is not found for the file'
           schema:

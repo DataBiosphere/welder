@@ -1,5 +1,6 @@
 package org.broadinstitute.dsp.workbench
 
+import java.io.File
 import java.math.BigInteger
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -19,6 +20,7 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 import io.circe.syntax._
+
 import scala.language.implicitConversions
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
@@ -96,11 +98,19 @@ package object welder {
 
   val gcpObjectType = "text/plain"
 
+  def mkdirIfNotExist(path: java.nio.file.Path): IO[Unit] = {
+    val directory = new File(path.toString)
+    if (!directory.exists) {
+      IO(directory.mkdirs).void
+    } else IO.unit
+  }
+
   def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(
       implicit logger: Logger[IO],
       cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
+      _ <- Stream.eval(mkdirIfNotExist(path))
       cached <- readJsonFileToA[IO, List[B]](path).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
         Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
       }
