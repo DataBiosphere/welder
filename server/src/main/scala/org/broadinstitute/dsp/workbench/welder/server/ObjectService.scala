@@ -1,7 +1,6 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.io.File
 import java.nio.file.Path
 import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
