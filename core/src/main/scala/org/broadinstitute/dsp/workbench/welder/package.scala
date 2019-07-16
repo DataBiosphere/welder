@@ -2,7 +2,7 @@ package org.broadinstitute.dsp.workbench
 
 import java.io.File
 import java.math.BigInteger
-import java.nio.file.Path
+import java.nio.file.{Path, StandardOpenOption}
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -110,7 +110,7 @@ package object welder {
       cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
-      _ <- Stream.eval(mkdirIfNotExist(path.getParent))
+      _ <- Option(path.getParent).traverse_(parentDir => Stream.eval(mkdirIfNotExist(parentDir)))
       cached <- readJsonFileToA[IO, List[B]](path).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
         Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
       }
@@ -125,7 +125,7 @@ package object welder {
     Stream
       .eval(ref.get)
       .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-      .through(fs2.io.file.writeAll[IO](path, blockingEc))
+      .through(fs2.io.file.writeAll[IO](path, blockingEc, List(StandardOpenOption.TRUNCATE_EXISTING)))
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
