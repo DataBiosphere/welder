@@ -110,7 +110,7 @@ package object welder {
       cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
-      _ <- Stream.eval(mkdirIfNotExist(path))
+      _ <- Stream.eval(mkdirIfNotExist(path.getParent))
       cached <- readJsonFileToA[IO, List[B]](path).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
         Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
       }
