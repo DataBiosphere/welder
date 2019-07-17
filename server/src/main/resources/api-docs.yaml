@@ -207,7 +207,7 @@ definitions:
           - 3
           - 4
   Localize:
-    description: ''
+    description: "Calling localize API will overwrite local file if it already exists"
     properties:
       action:
         type: string

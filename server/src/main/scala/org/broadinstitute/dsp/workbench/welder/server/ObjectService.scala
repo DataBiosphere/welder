@@ -69,7 +69,7 @@ class ObjectService(
         val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath.asPath)
 
         val localizeFile = entry.sourceUri match {
-          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc))
+          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc, writeFileOptions))
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last

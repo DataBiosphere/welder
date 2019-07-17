@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Paths
 import java.util.UUID.randomUUID
 
+import cats.implicits._
 import cats.effect.IO
 import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.storage.Blob
@@ -66,7 +67,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
     }
   }
 
-  "gcsToLocalFile" should "be able to down a file from gcs and write to local path" in {
+  "gcsToLocalFile" should "be able to download a file from gcs and write to local path" in {
     forAll {
       (localObjectPath: RelativePath, gsPath: GsPath) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -84,6 +85,32 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         } yield {
           val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
           resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
+        }
+        res.compile.drain.unsafeRunSync()
+    }
+  }
+
+  it should "overwrite a file if it already exists " in {
+    forAll {
+      (localObjectPath: RelativePath, gsPath: GsPath) =>
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
+          _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through fs2.io.file.writeAll[IO](localAbsolutePath, global)) ++ Stream.eval(IO.unit)
+          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID()))
+          newFileContent <- fs2.io.file.readAll[IO](localAbsolutePath, global, 4086).map(x => List(x)).foldMonoid
+          _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
+        } yield {
+          val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
+          resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
+          newFileContent should contain theSameElementsAs(bodyBytes)
         }
         res.compile.drain.unsafeRunSync()
     }
