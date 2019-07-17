@@ -125,7 +125,9 @@ package object welder {
     Stream
       .eval(ref.get)
       .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-      .through(fs2.io.file.writeAll[IO](path, blockingEc, List(StandardOpenOption.TRUNCATE_EXISTING)))
+      .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
+
+  val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)

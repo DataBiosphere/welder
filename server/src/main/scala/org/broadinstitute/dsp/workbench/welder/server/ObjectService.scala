@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.{Path, StandardOpenOption}
+import java.nio.file.Path
 import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 
@@ -69,7 +69,7 @@ class ObjectService(
         val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath.asPath)
 
         val localizeFile = entry.sourceUri match {
-          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc, List(StandardOpenOption.TRUNCATE_EXISTING)))
+          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc, writeFileOptions))
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last

@@ -1,6 +1,5 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -57,7 +56,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       _ <- (Stream
         .emits(blob.getContent())
         .covary[IO]
-        .through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext, List(StandardOpenOption.TRUNCATE_EXISTING)))) ++ Stream.eval(IO.unit)
+        .through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext, writeFileOptions))) ++ Stream.eval(IO.unit)
       userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
