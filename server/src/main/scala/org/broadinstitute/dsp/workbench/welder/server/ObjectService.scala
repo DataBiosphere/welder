@@ -111,7 +111,7 @@ class ObjectService(
             _ <- updateRemoteStateCache(req.localObjectPath, RemoteState(m.lock, m.crc32c))
             res <- m.lock match {
               case Some(lock) =>
-                if (lock.lastLockedBy == hashedLockedByCurrentUser)
+                if (lock.hashedLockedBy == hashedLockedByCurrentUser)
                   updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
                 else
                   IO.raiseError(LockedByOther(s"lock is already acquired by someone else"))
@@ -191,7 +191,7 @@ class ObjectService(
                   } yield status
                 }
                 _ <- updateRemoteStateCache(req.localObjectPath, RemoteState(lock, crc32c))
-              } yield MetadataResponse.EditMode(syncStatus, lock.map(_.lastLockedBy), generation, context.storageLink)
+              } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
               Kleisli.liftF[IO, TraceId, MetadataResponse](res)
           }
         } yield result
@@ -282,7 +282,7 @@ class ObjectService(
   private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName): IO[Unit] =
     for {
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
-      res <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
+      res <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
       else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()

@@ -915,7 +915,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           res.get.status shouldBe(Status.NoContent)
           val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
           val actualCache = cache.get(localPath).get
-          actualCache.remoteState.lock.get.lastLockedBy shouldBe(expectedHashedLockedBy)
+          actualCache.remoteState.lock.get.hashedLockedBy shouldBe(expectedHashedLockedBy)
           actualCache.remoteState.crc32c shouldBe Crc32("newcrc32")
           actualCache.localFileGeneration shouldBe(Some(1L))
         }

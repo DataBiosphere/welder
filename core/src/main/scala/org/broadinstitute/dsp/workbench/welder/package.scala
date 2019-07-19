@@ -136,9 +136,4 @@ package object welder {
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
-
-  private[welder] def lockMetadata(lockExpiresAt: Long, hashedLockedBy: HashedLockedBy): Map[String, String] = Map(
-    LAST_LOCKED_BY -> hashedLockedBy.asString,
-    LOCK_EXPIRES_AT -> lockExpiresAt.toString
-  )
 }

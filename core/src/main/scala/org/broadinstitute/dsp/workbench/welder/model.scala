@@ -72,11 +72,14 @@ final case class HashedLockedBy(asString: String) extends AnyVal
 
 /**
   * Data type represents a lock that hasn't expired
-  * @param lastLockedBy hash of who owns the lock welder knows about most recently
+  * @param hashedLockedBy hash of who owns the lock welder knows about most recently
   * @param lockExpiresAt Instant of when lock expires
   */
-final case class Lock(lastLockedBy: HashedLockedBy, lockExpiresAt: Instant) {
-  def toMetadataMap: Map[String, String] = lockMetadata(lockExpiresAt.toEpochMilli, lastLockedBy)
+final case class Lock(hashedLockedBy: HashedLockedBy, lockExpiresAt: Instant) {
+  def toMetadataMap: Map[String, String] = Map(
+    LAST_LOCKED_BY -> hashedLockedBy.asString,
+    LOCK_EXPIRES_AT -> lockExpiresAt.toEpochMilli.toString
+  )
 }
 
 // This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
