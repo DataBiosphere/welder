@@ -74,7 +74,9 @@ class ObjectService(
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
-              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(m => Stream.eval(updateCache(entry.localObjectPath, m)))
+              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(
+                m => Stream.eval(updateCache(entry.localObjectPath, m))
+              )
             } yield ()
         }
 
@@ -122,15 +124,16 @@ class ObjectService(
       }
     } yield res
 
-  private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] = {
-    googleStorageAlg.updateMetadata(gsPath, traceId, lock.toMetadataMap).flatMap(
-      updateMetadataResponse =>
-        updateMetadataResponse match {
-          case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
-          case UpdateMetadataResponse.ReUploadObject(generation, crc32c) => updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
-        }
-    )
-  }
+  private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
+    googleStorageAlg
+      .updateMetadata(gsPath, traceId, lock.toMetadataMap)
+      .flatMap(
+        updateMetadataResponse =>
+          updateMetadataResponse match {
+            case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
+            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) => updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
+          }
+      )
 
   /**
     * In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
@@ -159,7 +162,8 @@ class ObjectService(
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               val res = for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
-                syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live) else {
+                syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live)
+                else {
                   for {
                     metaOpt <- metadataCache.get.map(_.get(req.localObjectPath))
                     loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation)
@@ -214,7 +218,7 @@ class ObjectService(
           // Hence, we should be able to rely on cache for checking lock
           _ <- previousMeta match {
             case Some(meta) =>
-              if(calculatedCrc32c == meta.remoteState.crc32c)
+              if (calculatedCrc32c == meta.remoteState.crc32c)
                 IO.unit
               else
                 for {
@@ -251,7 +255,8 @@ class ObjectService(
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
             case Some(meta) =>
-              meta.remoteState.lock.traverse(l => checkLock(l, now, gsPath.bucketName)) //check if user owns the lock before deleting
+              meta.remoteState.lock
+                .traverse(l => checkLock(l, now, gsPath.bucketName)) //check if user owns the lock before deleting
                 .as(meta.localFileGeneration.getOrElse(0L))
             case None =>
               IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
@@ -272,14 +277,14 @@ class ObjectService(
   }
 
   /**
-    * If lock exists and it hasn't expired, we keep the lock; if lock doesn't exist, we return empty Map as metadata
+    * If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
     */
   private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName): IO[Unit] =
     for {
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       res <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.lastLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
-            IO.unit
-          else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
+        IO.unit
+      else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()
 
   private def updateRemoteStateCache(localPath: RelativePath, remoteState: RemoteState): IO[Unit] =

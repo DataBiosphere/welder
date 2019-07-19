@@ -92,6 +92,7 @@ final case class AdaptedGcsMetadata(lock: Option[Lock], crc32c: Crc32, generatio
   * @param crc32c latest crc32c we know in GCS
   */
 final case class RemoteState(lock: Option[Lock], crc32c: Crc32)
+
 /**
   * @param localPath local relative path to a file
   * @param remoteState File state in GCS as far as Welder is aware. Updated every time we interacts with GCS

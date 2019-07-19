@@ -124,7 +124,9 @@ package object welder {
       )
     } yield ref
 
-  private[welder] def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(implicit cs: ContextShift[IO]): Stream[IO, Unit] =
+  private[welder] def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
+      implicit cs: ContextShift[IO]
+  ): Stream[IO, Unit] =
     Stream
       .eval(ref.get)
       .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
