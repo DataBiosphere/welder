@@ -6,6 +6,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
+import org.broadinstitute.dsde.workbench.google2.Crc32
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.http4s.{Method, Request, Status, Uri}
@@ -20,7 +21,7 @@ class CacheServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
   "CacheService" should "return service status" in {
     forAll {
       (localPath: RelativePath, storageLink: StorageLink) =>
-        val metadata = AdaptedGcsMetadataCache(localPath, None, None)
+        val metadata = AdaptedGcsMetadataCache(localPath, RemoteState(None, Crc32("sfds")), None)
         val cacheService = CacheService (
           config,
           Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localPath -> storageLink)),

@@ -28,9 +28,6 @@ trait GoogleStorageAlg {
 }
 
 object GoogleStorageAlg {
-  val LAST_LOCKED_BY = "lastLockedBy"
-  val LOCK_EXPIRES_AT = "lockExpiresAt"
-
   def fromGoogle(
       config: GoogleStorageAlgConfig,
       googleStorageService: GoogleStorageService[IO]

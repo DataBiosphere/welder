@@ -19,8 +19,8 @@ object BackgroundTask {
       now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
       updatedMap <- metadataCache.modify { mp =>
         val newMap = mp.map { kv =>
-          val newLock = kv._2.lock.filter(l => l.lockExpiresAt.toEpochMilli < now)
-          (kv._1 -> kv._2.copy(lock = newLock))
+          val newLock = kv._2.remoteState.lock.filter(l => l.lockExpiresAt.toEpochMilli < now)
+          (kv._1 -> kv._2.copy(remoteState = RemoteState(newLock, kv._2.remoteState.crc32c))) //This can be a bit cleaner with monocle
         }
         (newMap, newMap)
       }

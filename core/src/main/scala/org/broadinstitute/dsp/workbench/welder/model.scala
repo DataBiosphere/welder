@@ -75,7 +75,9 @@ final case class HashedLockedBy(asString: String) extends AnyVal
   * @param lastLockedBy hash of who owns the lock welder knows about most recently
   * @param lockExpiresAt Instant of when lock expires
   */
-final case class Lock(lastLockedBy: HashedLockedBy, lockExpiresAt: Instant)
+final case class Lock(lastLockedBy: HashedLockedBy, lockExpiresAt: Instant) {
+  def toMetadataMap: Map[String, String] = lockMetadata(lockExpiresAt.toEpochMilli, lastLockedBy)
+}
 
 // This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
 /**
@@ -85,14 +87,17 @@ final case class Lock(lastLockedBy: HashedLockedBy, lockExpiresAt: Instant)
   */
 final case class AdaptedGcsMetadata(lock: Option[Lock], crc32c: Crc32, generation: Long)
 
-final case class LocalFileStateInGCS(crc32c: Crc32, generation: Long)
-
+/**
+  * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
+  * @param crc32c latest crc32c we know in GCS
+  */
+final case class RemoteState(lock: Option[Lock], crc32c: Crc32)
 /**
   * @param localPath local relative path to a file
-  * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
-  * @param localFileStateInGCS Some() when a file is localized or delocalized; None when the file has not been localized
+  * @param remoteState File state in GCS as far as Welder is aware. Updated every time we interacts with GCS
+  * @param localFileGeneration Some() when a file is localized or delocalized; None when the file has not been localized
   */
-final case class AdaptedGcsMetadataCache(localPath: RelativePath, lock: Option[Lock], localFileStateInGCS: Option[LocalFileStateInGCS])
+final case class AdaptedGcsMetadataCache(localPath: RelativePath, remoteState: RemoteState, localFileGeneration: Option[Long])
 
 final case class RelativePath(asPath: Path) extends AnyVal {
   override def toString: String = asPath.toString

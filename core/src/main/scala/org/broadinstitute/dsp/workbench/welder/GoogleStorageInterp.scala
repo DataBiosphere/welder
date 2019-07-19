@@ -11,7 +11,6 @@ import fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsp.workbench.welder.GoogleStorageAlg._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 import scala.collection.JavaConverters._
