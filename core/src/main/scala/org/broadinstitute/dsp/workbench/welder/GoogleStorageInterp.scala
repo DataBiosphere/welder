@@ -11,7 +11,6 @@ import fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsp.workbench.welder.GoogleStorageAlg._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 import scala.collection.JavaConverters._
@@ -23,18 +22,19 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
     cs: ContextShift[IO]
 ) extends GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
-    googleStorageService.setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
+    googleStorageService
+      .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
       .compile
       .drain
       .as(UpdateMetadataResponse.DirectMetadataUpdate)
       .handleErrorWith {
-      case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
-        for {
-          _ <- logger.info(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
-          bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to[Array]
-          blob <- googleStorageService.createBlob(gsPath.bucketName, gsPath.blobName, bytes, "text/plain", metadata, None, Some(traceId)).compile.lastOrError
-        } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
-    }
+        case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
+          for {
+            _ <- logger.info(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
+            bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to[Array]
+            blob <- googleStorageService.createBlob(gsPath.bucketName, gsPath.blobName, bytes, "text/plain", metadata, None, Some(traceId)).compile.lastOrError
+          } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
+      }
 
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] =
     for {

@@ -86,23 +86,23 @@ object JsonCodec {
     "lastLockedBy",
     "lockExpiresAt"
   )(Lock.apply)
-  implicit val localFileStateInGCSEncoder: Encoder[LocalFileStateInGCS] = Encoder.forProduct2(
-    "crc32c",
-    "generation"
-  )(x => LocalFileStateInGCS.unapply(x).get)
-  implicit val localFileStateInGCSDecoder: Decoder[LocalFileStateInGCS] = Decoder.forProduct2(
-    "crc32c",
-    "generation"
-  )(LocalFileStateInGCS.apply)
+  implicit val remoteStateEncoder: Encoder[RemoteState] = Encoder.forProduct2(
+    "lock",
+    "crc32c"
+  )(x => RemoteState.unapply(x).get)
+  implicit val remoteStateDecoder: Decoder[RemoteState] = Decoder.forProduct2(
+    "lock",
+    "crc32c"
+  )(RemoteState.apply)
   implicit val gcsMetadataEncoder: Encoder[AdaptedGcsMetadataCache] = Encoder.forProduct3(
     "localPath",
-    "lock",
-    "localFileStateInGCS"
+    "remoteState",
+    "localFileGeneration"
   )(x => AdaptedGcsMetadataCache.unapply(x).get)
   implicit val gcsMetadataDecoder: Decoder[AdaptedGcsMetadataCache] = Decoder.forProduct3(
     "localPath",
-    "lock",
-    "localFileStateInGCS"
+    "remoteState",
+    "localFileGeneration"
   )(AdaptedGcsMetadataCache.apply)
 
   implicit val traceIdEncoder: Encoder[TraceId] = Encoder.encodeString.contramap(_.uuid.toString)

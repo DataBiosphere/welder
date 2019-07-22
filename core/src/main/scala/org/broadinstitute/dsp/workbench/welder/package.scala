@@ -26,6 +26,9 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
 
 package object welder {
+  val LAST_LOCKED_BY = "lastLockedBy"
+  val LOCK_EXPIRES_AT = "lockExpiresAt"
+
   def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blockingExecutionContext: Option[ExecutionContext] = None): Stream[F, A] =
     fs2.io.file
       .readAll[F](path, blockingExecutionContext.getOrElse(global), 4096)
@@ -98,14 +101,14 @@ package object welder {
 
   val gcpObjectType = "text/plain"
 
-  def mkdirIfNotExist(path: java.nio.file.Path): IO[Unit] = {
+  private[welder] def mkdirIfNotExist(path: java.nio.file.Path): IO[Unit] = {
     val directory = new File(path.toString)
     if (!directory.exists) {
       IO(directory.mkdirs).void
     } else IO.unit
   }
 
-  def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(
+  private[welder] def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(
       implicit logger: Logger[IO],
       cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
@@ -121,13 +124,15 @@ package object welder {
       )
     } yield ref
 
-  def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(implicit cs: ContextShift[IO]): Stream[IO, Unit] =
+  private[welder] def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
+      implicit cs: ContextShift[IO]
+  ): Stream[IO, Unit] =
     Stream
       .eval(ref.get)
       .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
       .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
 
-  val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+  private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
   implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
