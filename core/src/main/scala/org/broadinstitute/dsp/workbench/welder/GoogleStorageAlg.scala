@@ -8,6 +8,7 @@ import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 trait GoogleStorageAlg {
@@ -26,6 +27,15 @@ trait GoogleStorageAlg {
       userDefinedMeta: Map[String, String],
       traceId: TraceId
   ): IO[DelocalizeResponse]
+
+  /**
+    * Recursively download files in cloudStorageDirectory to local directory.
+    * If file exists locally, we don't download the file
+    * @param localBaseDirectory: base directory where remote files will be download to
+    * @param cloudStorageDirectory: GCS directory where files will be download from
+    * @return AdaptedGcsMetadataCache that should be added to local metadata cache
+    */
+  def localizeCloudDirectory(localBaseDirectory: LocalBaseDirectory, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache]
 }
 
 object GoogleStorageAlg {

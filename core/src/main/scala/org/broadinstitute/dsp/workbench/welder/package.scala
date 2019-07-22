@@ -2,7 +2,7 @@ package org.broadinstitute.dsp.workbench
 
 import java.io.File
 import java.math.BigInteger
-import java.nio.file.{Path, StandardOpenOption}
+import java.nio.file.{Path, Paths, StandardOpenOption}
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -12,18 +12,19 @@ import cats.effect.{Concurrent, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
 import io.chrisdavenport.log4cats.Logger
-import io.circe.{Decoder, Encoder, Printer}
 import io.circe.fs2._
+import io.circe.syntax._
+import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
-import io.circe.syntax._
 
-import scala.language.implicitConversions
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
+import scala.language.implicitConversions
 
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
@@ -76,6 +77,22 @@ package object welder {
     }
   }
 
+  /**
+    * @param localBaseDirectory local base directory
+    * @param blobPath blob path defined in CloudStorageDirectory
+    * @param blobName actual blob name
+    * @return
+    */
+  def getLocalPath(localBaseDirectory: LocalBaseDirectory, blobPath: Option[BlobPath], blobName: String): Either[Throwable, RelativePath] = {
+    for {
+      localName <- blobPath match {
+        case Some(bp) => Either.catchNonFatal (Paths.get(bp.asString).relativize(Paths.get(blobName)))
+        case None => Right(Paths.get(blobName))
+      }
+      localPath <- Either.catchNonFatal(localBaseDirectory.path.asPath.resolve(localName))
+    } yield RelativePath(localPath)
+  }
+
   val base64Decoder = Base64.getDecoder()
   def base64DecoderPipe[F[_]: Sync]: Pipe[F, String, Byte] = in => {
     in.evalMap(s => Sync[F].catchNonFatal(base64Decoder.decode(s)))
@@ -124,13 +141,12 @@ package object welder {
       )
     } yield ref
 
-  private[welder] def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
-      implicit cs: ContextShift[IO]
-  ): Stream[IO, Unit] =
-    Stream
-      .eval(ref.get)
-      .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-      .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
+  def flushCache[A, B: Decoder : Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
+    implicit cs: ContextShift[IO]
+  ): Stream[IO, Unit] =  Stream
+    .eval(ref.get)
+    .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
+    .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
 
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 

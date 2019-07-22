@@ -1,15 +1,18 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.text
+import fs2.{Stream, text}
 import io.circe.{Json, parser}
+import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
+import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.FlatSpec
@@ -17,7 +20,16 @@ import org.scalatest.FlatSpec
 class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
-  val storageLinksService = StorageLinksService(storageLinks, workingDirectory)
+  val googleStorageAlg = new GoogleStorageAlg {
+    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
+    override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
+    override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+    override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+    override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
+    override def localizeCloudDirectory(localBaseDirectory: LocalBaseDirectory, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+  }
+  val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
+  val storageLinksService = StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, workingDirectory)
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar")))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))
