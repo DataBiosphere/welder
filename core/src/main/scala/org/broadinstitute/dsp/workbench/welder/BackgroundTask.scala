@@ -1,20 +1,27 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
+import java.util.UUID
 import java.util.concurrent.TimeUnit
+
 import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
 import JsonCodec._
+import cats.implicits._
+import org.broadinstitute.dsde.workbench.model.TraceId
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
-object BackgroundTask {
-  def cleanUpLock(metadataCache: MetadataCache, interval: FiniteDuration)(
-      implicit logger: Logger[IO],
-      timer: Timer[IO]
-  ): Stream[IO, Unit] = {
+class BackgroundTask(
+    config: BackgroundTaskConfig,
+    metadataCache: MetadataCache,
+    storageLinksCache: StorageLinksCache,
+    googleStorageAlg: GoogleStorageAlg,
+    metadataCacheAlg: MetadataCacheAlg
+)(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]) {
+  val cleanUpLock: Stream[IO, Unit] = {
     val task = (for {
       now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
       updatedMap <- metadataCache.modify { mp =>
@@ -28,23 +35,44 @@ object BackgroundTask {
       _ <- logger.debug(s"updated metadata cache ${updatedMap}")
     } yield ()).handleErrorWith(t => logger.error(t)("fail to update metadata cache"))
 
-    (Stream.sleep[IO](interval) ++ Stream.eval(task)).repeat
+    (Stream.sleep[IO](config.cleanUpLockInterval) ++ Stream.eval(task)).repeat
   }
 
   def flushBothCache(
-      interval: FiniteDuration,
       storageLinksPath: Path,
       metadataCachePath: Path,
-      storageLinksCache: StorageLinksCache,
-      metadataCache: MetadataCache,
       blockingEc: ExecutionContext
-  )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]): Stream[IO, Unit] = {
+  ): Stream[IO, Unit] = {
     val flushStorageLinks = flushCache(storageLinksPath, blockingEc, storageLinksCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush storagelinks cache to disk"))
     }
     val flushMetadataCache = flushCache(metadataCachePath, blockingEc, metadataCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush metadata cache to disk"))
     }
-    (Stream.sleep[IO](interval) ++ flushStorageLinks ++ flushMetadataCache).repeat
+    (Stream.sleep[IO](config.flushCacheInterval) ++ flushStorageLinks ++ flushMetadataCache).repeat
+  }
+
+  val syncCloudStorageDirectory: Stream[IO, Unit] = {
+    val res = for {
+      storageLinks <- storageLinksCache.get
+      traceId <- IO(TraceId(UUID.randomUUID()))
+      _ <- storageLinks.values.toList.traverse { storageLink =>
+        logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
+        (googleStorageAlg
+          .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, traceId)
+          .through(metadataCacheAlg.updateCachePipe))
+          .compile
+          .drain
+      }
+    } yield ()
+
+    (Stream.sleep[IO](config.syncCloudStorageDirectoryInterval) ++ Stream.eval(res)).repeat
   }
 }
+
+final case class BackgroundTaskConfig(
+    workingDirectory: Path,
+    cleanUpLockInterval: FiniteDuration,
+    flushCacheInterval: FiniteDuration,
+    syncCloudStorageDirectoryInterval: FiniteDuration
+)

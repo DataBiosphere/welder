@@ -31,6 +31,7 @@ final case class AppConfig(
     serverPort: Int,
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
+    syncCloudStorageDirectoryInterval: FiniteDuration,
     pathToStorageLinksJson: Path,
     pathToGcsMetadataJson: Path,
     objectService: ObjectServiceConfig

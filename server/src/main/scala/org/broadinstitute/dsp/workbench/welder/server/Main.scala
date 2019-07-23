@@ -31,18 +31,8 @@ object Main extends IOApp {
         blockingEc,
         metadata => List(metadata.localPath -> metadata)
       )
-      welderApp <- initWelderApp(appConfig, blockingEc, storageLinksCache, metadataCache)
-      serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
-      cleanUpCache = BackgroundTask.cleanUpLock(metadataCache, appConfig.cleanUpLockInterval)
-      flushCache = BackgroundTask.flushBothCache(
-        appConfig.flushCacheInterval,
-        appConfig.pathToStorageLinksJson,
-        appConfig.pathToGcsMetadataJson,
-        storageLinksCache,
-        metadataCache,
-        blockingEc
-      )
-      _ <- Stream(cleanUpCache, flushCache, serverStream.drain).covary[IO].parJoin(3)
+      streams <- initStreams(appConfig, blockingEc, storageLinksCache, metadataCache)
+      _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)
     } yield ()
 
     app
@@ -54,9 +44,9 @@ object Main extends IOApp {
       .as(ExitCode.Success)
   }
 
-  def initWelderApp(appConfig: AppConfig, blockingEc: ExecutionContext, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
+  def initStreams(appConfig: AppConfig, blockingEc: ExecutionContext, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
       implicit logger: Logger[IO]
-  ): Stream[IO, WelderApp] =
+  ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
       implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
@@ -72,6 +62,16 @@ object Main extends IOApp {
         metadataCache,
         blockingEc
       )
-      WelderApp(objectService, storageLinksService, cacheService)
+      val welderApp = WelderApp(objectService, storageLinksService, cacheService)
+      val serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
+
+      val backGroundTaskConfig = BackgroundTaskConfig(appConfig.objectService.workingDirectory, appConfig.cleanUpLockInterval, appConfig.flushCacheInterval, appConfig.syncCloudStorageDirectoryInterval)
+      val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
+      val flushCache = backGroundTask.flushBothCache(
+        appConfig.pathToStorageLinksJson,
+        appConfig.pathToGcsMetadataJson,
+        blockingEc
+      )
+      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, serverStream.drain)
     }
 }
