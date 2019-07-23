@@ -122,44 +122,42 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
     }
   }
 
-  //TODO: turn this on if emulator has better support for list objects with prefix
-//  "localizeCloudDirectory" should "recursively download files for a given CloudStorageDirectory" in {
-//    forAll {
-//      (cloudStorageDirectoryNew: CloudStorageDirectory) =>
-//        val cloudStorageDirectory = if(cloudStorageDirectoryNew.blobPath.isDefined) cloudStorageDirectoryNew else cloudStorageDirectoryNew.copy(blobPath = Some(BlobPath("prefix")))
-//        val allObjects = Gen.listOfN(4, genGcsBlobName).sample.get.map {
-//          x =>
-//            cloudStorageDirectory.blobPath match {
-//              case Some(bp) => GcsBlobName(s"${bp.asString}/${x.value}")
-//              case None => GcsBlobName(s"${x.value}")
-//            }
-//        }
-//        val objectBody = genGcsObjectBody.sample.get
-//        val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-//        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
-//        val workingDir = Paths.get("/tmp")
-//        val localBaseDir = LocalBaseDirectory(RelativePath(Paths.get("edit")))
-//
-//        val res = for {
-//          _ <- allObjects.parTraverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
-//          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, TraceId(UUID.randomUUID())).compile.drain
-//          objectsList <- FakeGoogleStorageInterpreter.listBlobsWithPrefix(cloudStorageDirectory.bucketName, cloudStorageDirectory.blobPath.map(_.asString).getOrElse(""), true).compile.toList
-//        } yield {
-//          val prefix = (workingDir.resolve(localBaseDir.path.asPath))
-//          val allFiles = allObjects.map {blobName =>
-//            cloudStorageDirectory.blobPath match {
-//              case Some(bp) =>
-//                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get(blobName.value)))
-//              case None =>
-//                prefix.resolve(Paths.get(blobName.value))
-//            }
-//          }
-//          allFiles.forall(_.toFile.exists()) shouldBe true
-//          allFiles.foreach(_.toFile.delete())
-//        }
-//        res.unsafeRunSync()
-//    }
-//  }
+  "localizeCloudDirectory" should "recursively download files for a given CloudStorageDirectory" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory) =>
+        val allObjects = Gen.listOfN(4, genGcsBlobName).sample.get.map {
+          x =>
+            cloudStorageDirectory.blobPath match {
+              case Some(bp) => GcsBlobName(s"${bp.asString}/${x.value}")
+              case None => GcsBlobName(s"${x.value}")
+            }
+        }
+        val objectBody = genGcsObjectBody.sample.get
+        val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val workingDir = Paths.get("/tmp")
+        val localBaseDir = LocalBaseDirectory(RelativePath(Paths.get("edit")))
+
+        val res = for {
+          _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, TraceId(UUID.randomUUID())).compile.drain
+        } yield {
+          val prefix = (workingDir.resolve(localBaseDir.path.asPath))
+          val allFiles = allObjects.map {blobName =>
+            cloudStorageDirectory.blobPath match {
+              case Some(bp) =>
+                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get(blobName.value)))
+              case None =>
+                prefix.resolve(Paths.get(blobName.value))
+            }
+          }
+
+          allFiles.forall(_.toFile.exists()) shouldBe true
+          allFiles.foreach(_.toFile.delete())
+        }
+        res.unsafeRunSync()
+    }
+  }
 }
 
 

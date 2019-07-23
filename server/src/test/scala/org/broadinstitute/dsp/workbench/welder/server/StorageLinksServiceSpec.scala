@@ -53,29 +53,6 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     assert(listResult.storageLinks equals Set(linkToAdd))
   }
 
-//  it should "download files from CloudStorageDirectory recursively" in {
-//    val bucketName = genGcsBucketName.sample.get
-//    val prefix = "samePrefix"
-//    val blobNameWithPrefix = Gen.listOfN(4, genGcsBlobName).sample.get.map(x => GcsBlobName(s"$prefix/${x.value}"))
-//    val blobNames = Gen.listOfN(5, genGcsBlobName).sample.get
-//    val allObjects = blobNameWithPrefix ++ blobNames
-//    val objectBody = genGcsObjectBody.sample.get
-//    val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-//    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
-//    val cloudStorageDirectory = CloudStorageDirectory(bucketName, Some(BlobPath(prefix)))
-//
-//    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, "*")
-//    val res = for {
-//      _ <- allObjects.parTraverse(obj => localStorage.createBlob(bucketName, obj, objectBody, objectType).compile.drain)
-//      _ = println(s"allfiles ${allObjects}")
-//      _ <- storageLinksService.createStorageLink(linkToAdd)
-//    } yield {
-//      val allFiles = allObjects.map(blobName => workingDirectory.resolve(Paths.get(prefix).relativize(Paths.get(blobName.value))))
-//      allFiles.forall(_.toFile.exists()) shouldBe true
-//    }
-//    res.unsafeRunSync()
-//  }
-
   it should "initialize directories" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
