@@ -93,7 +93,7 @@ package object welder {
   def lockedByString(bucketName: GcsBucketName, ownerEmail: WorkbenchEmail): String = bucketName.value + ":" + ownerEmail.value
 
   def hashString(metadata: String): Either[Throwable, HashedLockedBy] = Either.catchNonFatal {
-    HashedLockedBy(String.format("%032x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
+    HashedLockedBy(String.format("%064x", new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(metadata.getBytes("UTF-8")))))
   }
 
   type StorageLinksCache = Ref[IO, Map[RelativePath, StorageLink]]
