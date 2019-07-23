@@ -83,15 +83,14 @@ package object welder {
     * @param blobName actual blob name
     * @return
     */
-  def getLocalPath(localBaseDirectory: LocalBaseDirectory, blobPath: Option[BlobPath], blobName: String): Either[Throwable, RelativePath] = {
+  def getLocalPath(localBaseDirectory: LocalBaseDirectory, blobPath: Option[BlobPath], blobName: String): Either[Throwable, RelativePath] =
     for {
       localName <- blobPath match {
-        case Some(bp) => Either.catchNonFatal (Paths.get(bp.asString).relativize(Paths.get(blobName)))
+        case Some(bp) => Either.catchNonFatal(Paths.get(bp.asString).relativize(Paths.get(blobName)))
         case None => Right(Paths.get(blobName))
       }
       localPath <- Either.catchNonFatal(localBaseDirectory.path.asPath.resolve(localName))
     } yield RelativePath(localPath)
-  }
 
   val base64Decoder = Base64.getDecoder()
   def base64DecoderPipe[F[_]: Sync]: Pipe[F, String, Byte] = in => {
@@ -141,12 +140,13 @@ package object welder {
       )
     } yield ref
 
-  def flushCache[A, B: Decoder : Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
-    implicit cs: ContextShift[IO]
-  ): Stream[IO, Unit] =  Stream
-    .eval(ref.get)
-    .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-    .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
+  def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
+      implicit cs: ContextShift[IO]
+  ): Stream[IO, Unit] =
+    Stream
+      .eval(ref.get)
+      .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
+      .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
 
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 

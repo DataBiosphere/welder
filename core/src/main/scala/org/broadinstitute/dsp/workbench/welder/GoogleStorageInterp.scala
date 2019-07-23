@@ -83,12 +83,24 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
     }
   }
 
-  override def localizeCloudDirectory(localBaseDirectory: LocalDirectory.LocalBaseDirectory, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = {
+  override def localizeCloudDirectory(
+      localBaseDirectory: LocalDirectory.LocalBaseDirectory,
+      cloudStorageDirectory: CloudStorageDirectory,
+      workingDir: Path,
+      traceId: TraceId
+  ): Stream[IO, AdaptedGcsMetadataCache] = {
     val res = for {
-      blob <- googleStorageService.listBlobsWithPrefix(cloudStorageDirectory.bucketName, cloudStorageDirectory.blobPath.map(_.asString).getOrElse(""), true, 1000, Some(traceId))
+      blob <- googleStorageService.listBlobsWithPrefix(
+        cloudStorageDirectory.bucketName,
+        cloudStorageDirectory.blobPath.map(_.asString).getOrElse(""),
+        true,
+        1000,
+        Some(traceId)
+      )
       localPath <- Stream.eval(IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName)))
       localAbsolutePath <- Stream.fromEither[IO](Either.catchNonFatal(workingDir.resolve(localPath.asPath)))
-      result <- if(localAbsolutePath.toFile.exists()) Stream(None).covary[IO] else {
+      result <- if (localAbsolutePath.toFile.exists()) Stream(None).covary[IO]
+      else {
         val res = for {
           metadata <- adaptMetadata(Crc32(blob.getCrc32c), Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty), blob.getGeneration)
           metadataCache = AdaptedGcsMetadataCache(localPath, RemoteState(metadata.lock, metadata.crc32c), Some(metadata.generation))

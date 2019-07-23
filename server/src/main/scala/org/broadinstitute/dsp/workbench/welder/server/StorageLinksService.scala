@@ -50,17 +50,17 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
       }
       _ <- initializeDirectories(storageLink)
       _ <- (googleStorageAlg
-        .localizeCloudDirectory(
-          storageLink.localBaseDirectory.asInstanceOf[LocalBaseDirectory],
-          storageLink.cloudStorageDirectory,
-          workingDirectory,
-          traceId).through(metadataCacheAlg.updateCachePipe)).compile.drain.runAsync {
-        cb =>
+        .localizeCloudDirectory(storageLink.localBaseDirectory.asInstanceOf[LocalBaseDirectory], storageLink.cloudStorageDirectory, workingDirectory, traceId)
+        .through(metadataCacheAlg.updateCachePipe))
+        .compile
+        .drain
+        .runAsync { cb =>
           cb match {
             case Left(r) => logger.warn(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
             case Right(()) => IO.unit
           }
-      }.toIO
+        }
+        .toIO
     } yield link
 
   //returns whether the directories exist at the end of execution
@@ -102,7 +102,9 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, workingDirectory: Path)(implicit logger: Logger[IO]): StorageLinksService =
+  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, workingDirectory: Path)(
+      implicit logger: Logger[IO]
+  ): StorageLinksService =
     new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(

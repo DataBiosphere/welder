@@ -131,7 +131,8 @@ class ObjectService(
         updateMetadataResponse =>
           updateMetadataResponse match {
             case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
-            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) => metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
+            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
+              metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
           }
       )
 
@@ -262,7 +263,7 @@ class ObjectService(
               IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
           _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
-          _ <- metadataCacheAlg.removeCache(req.localObjectPath)// remove the object from cache
+          _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
         Kleisli.liftF(res)
       }
