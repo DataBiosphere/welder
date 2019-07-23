@@ -84,7 +84,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
   }
 
   override def localizeCloudDirectory(
-      localBaseDirectory: LocalDirectory.LocalBaseDirectory,
+      localBaseDirectory: RelativePath,
       cloudStorageDirectory: CloudStorageDirectory,
       workingDir: Path,
       traceId: TraceId

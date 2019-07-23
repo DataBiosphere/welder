@@ -6,7 +6,6 @@ import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -48,14 +47,14 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
   }
 
   "getLocalPath" should "calculate local path correctly when blobPath exists" in {
-    val baseDirectory = LocalBaseDirectory(RelativePath(Paths.get("edit")))
+    val baseDirectory = RelativePath(Paths.get("edit"))
     val blobPath = Some(BlobPath("directory"))
     val blobName = "directory/a/blob1"
     getLocalPath(baseDirectory, blobPath, blobName) shouldBe(Right(RelativePath(Paths.get("edit/a/blob1"))))
   }
 
   it should "calculate local path correctly when blobPath is None" in {
-    val baseDirectory = LocalBaseDirectory(RelativePath(Paths.get("edit")))
+    val baseDirectory = RelativePath(Paths.get("edit"))
     val blobPath = None
     val blobName = "directory/a/blob1"
     getLocalPath(baseDirectory, blobPath, blobName) shouldBe(Right(RelativePath(Paths.get("edit/directory/a/blob1"))))

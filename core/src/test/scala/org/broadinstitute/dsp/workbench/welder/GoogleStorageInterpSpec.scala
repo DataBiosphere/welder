@@ -18,7 +18,6 @@ import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataRespon
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators._
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalacheck.Gen
 import org.scalatest.FlatSpec
@@ -136,13 +135,13 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
         val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
         val workingDir = Paths.get("/tmp")
-        val localBaseDir = LocalBaseDirectory(RelativePath(Paths.get("edit")))
+        val localBaseDir = RelativePath(Paths.get("edit"))
 
         val res = for {
           _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
           _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, TraceId(UUID.randomUUID())).compile.drain
         } yield {
-          val prefix = (workingDir.resolve(localBaseDir.path.asPath))
+          val prefix = (workingDir.resolve(localBaseDir.asPath))
           val allFiles = allObjects.map {blobName =>
             cloudStorageDirectory.blobPath match {
               case Some(bp) =>

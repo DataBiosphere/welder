@@ -18,7 +18,6 @@ import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 
@@ -83,13 +82,13 @@ package object welder {
     * @param blobName actual blob name
     * @return
     */
-  def getLocalPath(localBaseDirectory: LocalBaseDirectory, blobPath: Option[BlobPath], blobName: String): Either[Throwable, RelativePath] =
+  def getLocalPath(localBaseDirectory: RelativePath, blobPath: Option[BlobPath], blobName: String): Either[Throwable, RelativePath] =
     for {
       localName <- blobPath match {
         case Some(bp) => Either.catchNonFatal(Paths.get(bp.asString).relativize(Paths.get(blobName)))
         case None => Right(Paths.get(blobName))
       }
-      localPath <- Either.catchNonFatal(localBaseDirectory.path.asPath.resolve(localName))
+      localPath <- Either.catchNonFatal(localBaseDirectory.asPath.resolve(localName))
     } yield RelativePath(localPath)
 
   val base64Decoder = Base64.getDecoder()

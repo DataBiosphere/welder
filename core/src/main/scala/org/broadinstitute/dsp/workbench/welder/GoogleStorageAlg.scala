@@ -8,7 +8,6 @@ import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 trait GoogleStorageAlg {
@@ -36,7 +35,7 @@ trait GoogleStorageAlg {
     * @return AdaptedGcsMetadataCache that should be added to local metadata cache
     */
   def localizeCloudDirectory(
-      localBaseDirectory: LocalBaseDirectory,
+      localBaseDirectory: RelativePath,
       cloudStorageDirectory: CloudStorageDirectory,
       workingDir: Path,
       traceId: TraceId

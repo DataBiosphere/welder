@@ -15,7 +15,6 @@ import java.util.UUID
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 
 class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, workingDirectory: Path)(
     implicit logger: Logger[IO]
@@ -50,7 +49,7 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
       }
       _ <- initializeDirectories(storageLink)
       _ <- (googleStorageAlg
-        .localizeCloudDirectory(storageLink.localBaseDirectory.asInstanceOf[LocalBaseDirectory], storageLink.cloudStorageDirectory, workingDirectory, traceId)
+        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, traceId)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
         .drain
