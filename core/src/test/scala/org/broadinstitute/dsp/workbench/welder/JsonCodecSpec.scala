@@ -6,7 +6,7 @@ import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import io.circe.parser.parse
+
 import scala.util.matching.Regex
 
 class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
@@ -32,10 +32,9 @@ class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTe
 
   "regexDecoder" should "be able to decode expected regex" in {
     val res = for {
-      json <- parse("""\.ipynb$""")
-      regex <- json.as[Regex]
+      regex <- Json.fromString("\\.ipynb$").as[Regex]
     } yield regex
-
-    res shouldBe(Right("\\.ipynb$".r))
+    val regex = res.getOrElse(throw new Exception("fail to turn strng into regex"))
+    assert(regexEq.eqv(regex, "\\.ipynb$".r))
   }
 }

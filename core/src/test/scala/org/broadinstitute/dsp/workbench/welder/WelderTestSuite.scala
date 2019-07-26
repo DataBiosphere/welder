@@ -11,6 +11,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
+import scala.util.matching.Regex
 
 trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Configuration {
   implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
@@ -22,6 +23,8 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 
   // Regex's equals doesn't compare Regex as expected. Hence, we define Eq[StorageLink] when we need to check equality of two StorageLink
+  implicit val regexEq: Eq[Regex] = Eq.instance((r1, r2) => r1.pattern.pattern == r2.pattern.pattern)
+
   implicit val storageLinkEq: Eq[StorageLink] = Eq.instance{ (s1, s2) =>
     s1.pattern.pattern.pattern == s2.pattern.pattern.pattern &&
     s1.localBaseDirectory == s2.localBaseDirectory &&
