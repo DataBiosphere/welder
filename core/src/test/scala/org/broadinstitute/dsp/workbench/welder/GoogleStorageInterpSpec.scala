@@ -2,19 +2,23 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.io.File
 import java.nio.file.Paths
+import java.util.UUID
 import java.util.UUID.randomUUID
 
-import cats.implicits._
 import cats.effect.IO
+import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.storage.Blob
 import fs2.Stream
+import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, genGcsObjectBody}
+import org.broadinstitute.dsde.workbench.google2.GoogleStorageInterpreterSpec.objectType
 import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataResponse}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.scalacheck.Gen
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
@@ -113,6 +117,73 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           newFileContent should contain theSameElementsAs(bodyBytes)
         }
         res.compile.drain.unsafeRunSync()
+    }
+  }
+
+  "localizeCloudDirectory" should "recursively download files for a given CloudStorageDirectory" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory) =>
+        val allObjects = Gen.listOfN(4, genGcsBlobName).sample.get.map {
+          x =>
+            cloudStorageDirectory.blobPath match {
+              case Some(bp) => GcsBlobName(s"${bp.asString}/${x.value}")
+              case None => GcsBlobName(s"${x.value}")
+            }
+        }
+        val objectBody = genGcsObjectBody.sample.get
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val workingDir = Paths.get("/tmp")
+        val localBaseDir = RelativePath(Paths.get("edit"))
+
+        val res = for {
+          _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r, TraceId(UUID.randomUUID())).compile.drain
+        } yield {
+          val prefix = (workingDir.resolve(localBaseDir.asPath))
+          val allFiles = allObjects.map {blobName =>
+            cloudStorageDirectory.blobPath match {
+              case Some(bp) =>
+                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get(blobName.value)))
+              case None =>
+                prefix.resolve(Paths.get(blobName.value))
+            }
+          }
+
+          allFiles.forall(_.toFile.exists()) shouldBe true
+          allFiles.foreach(_.toFile.delete())
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  "localizeCloudDirectory" should "only download files that match pattern" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory) =>
+        val blob = cloudStorageDirectory.blobPath match {
+          case Some(bp) => GcsBlobName(s"${bp.asString}/test.suffix")
+          case None => GcsBlobName(s"test.suffix")
+        }
+        val objectBody = genGcsObjectBody.sample.get
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val workingDir = Paths.get("/tmp")
+        val localBaseDir = RelativePath(Paths.get("edit"))
+
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, blob, objectBody, objectType).compile.drain
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "suffix".r, TraceId(UUID.randomUUID())).compile.drain
+        } yield {
+          val prefix = (workingDir.resolve(localBaseDir.asPath))
+          val file = cloudStorageDirectory.blobPath match {
+              case Some(bp) =>
+                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get("test.suffix")))
+              case None =>
+                prefix.resolve(Paths.get("test.suffix"))
+            }
+
+          assert(!file.toFile.exists())
+          file.toFile.delete()
+        }
+        res.unsafeRunSync()
     }
   }
 }

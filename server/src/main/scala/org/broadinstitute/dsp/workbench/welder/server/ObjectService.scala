@@ -33,7 +33,7 @@ class ObjectService(
     googleStorageAlg: GoogleStorageAlg,
     blockingEc: ExecutionContext,
     storageLinksAlg: StorageLinksAlg,
-    metadataCache: MetadataCache
+    metadataCacheAlg: MetadataCacheAlg
 )(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
     extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -75,7 +75,7 @@ class ObjectService(
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
               _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(
-                m => Stream.eval(updateCache(entry.localObjectPath, m))
+                m => Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
               )
             } yield ()
         }
@@ -108,7 +108,7 @@ class ObjectService(
       res <- meta match {
         case Some(m) =>
           for {
-            _ <- updateRemoteStateCache(req.localObjectPath, RemoteState(m.lock, m.crc32c))
+            _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState(m.lock, m.crc32c))
             res <- m.lock match {
               case Some(lock) =>
                 if (lock.hashedLockedBy == hashedLockedByCurrentUser)
@@ -131,7 +131,8 @@ class ObjectService(
         updateMetadataResponse =>
           updateMetadataResponse match {
             case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
-            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) => updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
+            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
+              metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
           }
       )
 
@@ -165,7 +166,7 @@ class ObjectService(
                 syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live)
                 else {
                   for {
-                    metaOpt <- metadataCache.get.map(_.get(req.localObjectPath))
+                    metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
                     loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation)
                     status <- metaOpt match {
                       case Some(meta) =>
@@ -190,7 +191,7 @@ class ObjectService(
                     }
                   } yield status
                 }
-                _ <- updateRemoteStateCache(req.localObjectPath, RemoteState(lock, crc32c))
+                _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState(lock, crc32c))
               } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
               Kleisli.liftF[IO, TraceId, MetadataResponse](res)
           }
@@ -208,7 +209,7 @@ class ObjectService(
       else {
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
         val res: IO[Unit] = for {
-          previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
+          previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           gsPath = getGsPath(req.localObjectPath, context)
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
@@ -251,7 +252,7 @@ class ObjectService(
       else {
         val gsPath = getGsPath(req.localObjectPath, context)
         val res = for {
-          previousMeta <- metadataCache.get.map(_.get(req.localObjectPath))
+          previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
             case Some(meta) =>
@@ -262,7 +263,7 @@ class ObjectService(
               IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
           _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
-          _ <- metadataCache.modify(mp => (mp - req.localObjectPath, ())) // remove the object from cache
+          _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
         Kleisli.liftF(res)
       }
@@ -272,7 +273,7 @@ class ObjectService(
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
       delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId)
-      _ <- updateLocalFileStateCache(localObjectPath, RemoteState(lock, delocalizeResp.crc32c), delocalizeResp.generation)
+      _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState(lock, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
   }
 
@@ -286,30 +287,6 @@ class ObjectService(
         IO.unit
       else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()
-
-  private def updateRemoteStateCache(localPath: RelativePath, remoteState: RemoteState): IO[Unit] =
-    metadataCache.modify { mp =>
-      val previousMeta = mp.get(localPath)
-      val newCache = mp + (localPath -> AdaptedGcsMetadataCache(localPath, remoteState, previousMeta.flatMap(_.localFileGeneration)))
-      (newCache, ())
-    }
-
-  private def updateLocalFileStateCache(localPath: RelativePath, remoteState: RemoteState, localFileGeneration: Long): IO[Unit] =
-    metadataCache.modify { mp =>
-      val previousMeta = mp.get(localPath)
-      val newCache = mp + (localPath -> AdaptedGcsMetadataCache(localPath, remoteState, Some(localFileGeneration)))
-      (newCache, ())
-    }
-
-  private def updateCache(localPath: RelativePath, adaptedGcsMetadata: AdaptedGcsMetadata): IO[Unit] =
-    metadataCache.modify { mp =>
-      val newCache = mp + (localPath -> AdaptedGcsMetadataCache(
-        localPath,
-        RemoteState(adaptedGcsMetadata.lock, adaptedGcsMetadata.crc32c),
-        Some(adaptedGcsMetadata.generation)
-      ))
-      (newCache, ())
-    }
 }
 
 object ObjectService {
@@ -318,12 +295,12 @@ object ObjectService {
       googleStorageAlg: GoogleStorageAlg,
       blockingEc: ExecutionContext,
       storageLinksAlg: StorageLinksAlg,
-      metadataCache: MetadataCache
+      metadataCacheAlg: MetadataCacheAlg
   )(
       implicit cs: ContextShift[IO],
       timer: Timer[IO],
       logger: Logger[IO]
-  ): ObjectService = new ObjectService(config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCache)
+  ): ObjectService = new ObjectService(config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
     Action.stringToAction.get(str).toRight("invalid action")

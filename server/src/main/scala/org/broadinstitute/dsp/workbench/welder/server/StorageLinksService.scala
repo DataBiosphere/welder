@@ -10,11 +10,13 @@ import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import java.nio.file.Path
+import java.util.UUID
 
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
+import org.broadinstitute.dsde.workbench.model.TraceId
 
-class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Path)(
+class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, workingDirectory: Path)(
     implicit logger: Logger[IO]
 ) extends Http4sDsl[IO] {
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -40,11 +42,24 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): IO[StorageLink] =
     for {
+      traceId <- IO(TraceId(UUID.randomUUID()))
       link <- storageLinks.modify { links =>
         val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
         (links ++ toAdd, storageLink)
       }
       _ <- initializeDirectories(storageLink)
+      _ <- (googleStorageAlg
+        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, storageLink.pattern, traceId)
+        .through(metadataCacheAlg.updateCachePipe))
+        .compile
+        .drain
+        .runAsync { cb =>
+          cb match {
+            case Left(r) => logger.warn(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
+            case Right(()) => IO.unit
+          }
+        }
+        .toIO
     } yield link
 
   //returns whether the directories exist at the end of execution
@@ -86,8 +101,10 @@ class StorageLinksService(storageLinks: StorageLinksCache, workingDirectory: Pat
 final case class StorageLinks(storageLinks: Set[StorageLink])
 
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache, workingDirectory: Path)(implicit logger: Logger[IO]): StorageLinksService =
-    new StorageLinksService(storageLinks, workingDirectory)
+  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, workingDirectory: Path)(
+      implicit logger: Logger[IO]
+  ): StorageLinksService =
+    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"

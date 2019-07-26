@@ -46,6 +46,20 @@ class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTest
     getFullBlobName(basePath, localPath, None) shouldBe(GcsBlobName("sub/notebook1.ipynb"))
   }
 
+  "getLocalPath" should "calculate local path correctly when blobPath exists" in {
+    val baseDirectory = RelativePath(Paths.get("edit"))
+    val blobPath = Some(BlobPath("directory"))
+    val blobName = "directory/a/blob1"
+    getLocalPath(baseDirectory, blobPath, blobName) shouldBe(Right(RelativePath(Paths.get("edit/a/blob1"))))
+  }
+
+  it should "calculate local path correctly when blobPath is None" in {
+    val baseDirectory = RelativePath(Paths.get("edit"))
+    val blobPath = None
+    val blobName = "directory/a/blob1"
+    getLocalPath(baseDirectory, blobPath, blobName) shouldBe(Right(RelativePath(Paths.get("edit/directory/a/blob1"))))
+  }
+
   "hashMetadata" should "consistently hash a string" in {
     val knownHash = HashedLockedBy("4af48213b034805aacef2309fe802d97f2fbbfcd2ea5a641988b015e9855f394") //decodes to "test-bucket:foo@bar.com"
     val bucketName = GcsBucketName("test-bucket")

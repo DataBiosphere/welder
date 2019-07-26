@@ -14,6 +14,8 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
 import org.http4s.Uri
 
+import scala.util.matching.Regex
+
 object JsonCodec {
   implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emap(s => Either.catchNonFatal(Paths.get(s)).leftMap(_.getMessage))
   implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
@@ -61,6 +63,10 @@ object JsonCodec {
   }
   implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path.asPath)
 
+  implicit val regexEncoder: Encoder[Regex] = Encoder.encodeString.contramap(_.pattern.pattern())
+
+  implicit val regexDecoder: Decoder[Regex] = Decoder.decodeString.emap(s => Either.catchNonFatal(s.r).leftMap(_.getMessage))
+
   implicit val storageLinkEncoder: Encoder[StorageLink] =
     Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(
       storageLink => StorageLink.unapply(storageLink).get
@@ -71,7 +77,7 @@ object JsonCodec {
       baseDir <- x.downField("localBaseDirectory").as[Path]
       safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
       cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
-      pattern <- x.downField("pattern").as[String]
+      pattern <- x.downField("pattern").as[Regex]
     } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), LocalSafeBaseDirectory(RelativePath(safeBaseDir)), cloudStorageDir, pattern)
   }
 

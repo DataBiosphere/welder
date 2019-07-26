@@ -10,6 +10,8 @@ import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, R
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
+import scala.util.matching.Regex
+
 trait GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
@@ -26,6 +28,15 @@ trait GoogleStorageAlg {
       userDefinedMeta: Map[String, String],
       traceId: TraceId
   ): IO[DelocalizeResponse]
+
+  /**
+    * Recursively download files in cloudStorageDirectory to local directory.
+    * If file exists locally, we don't download the file
+    * @param localBaseDirectory: base directory where remote files will be download to
+    * @param cloudStorageDirectory: GCS directory where files will be download from
+    * @return AdaptedGcsMetadataCache that should be added to local metadata cache
+    */
+  def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache]
 }
 
 object GoogleStorageAlg {

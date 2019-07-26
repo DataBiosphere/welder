@@ -7,6 +7,8 @@ import ca.mrvisser.sealerate
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 
+import scala.util.matching.Regex
+
 sealed abstract class SyncStatus extends Product with Serializable
 object SyncStatus {
   // crc32c match
@@ -61,12 +63,7 @@ object LocalDirectory {
 
 final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Option[BlobPath])
 
-final case class StorageLink(
-    localBaseDirectory: LocalDirectory,
-    localSafeModeBaseDirectory: LocalDirectory,
-    cloudStorageDirectory: CloudStorageDirectory,
-    pattern: String
-)
+final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: Regex)
 
 final case class HashedLockedBy(asString: String) extends AnyVal
 

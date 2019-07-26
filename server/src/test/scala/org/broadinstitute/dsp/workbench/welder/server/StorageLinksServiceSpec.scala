@@ -1,30 +1,42 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import fs2.Stream
+import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
-import org.scalatest.{FlatSpec, Matchers}
+import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.scalatest.FlatSpec
 
-class StorageLinksServiceSpec extends FlatSpec with Matchers {
-  implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
+import scala.util.matching.Regex
+
+class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar/baz.zip")))
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
 
+  val googleStorageAlg = new GoogleStorageAlg {
+    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
+    override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
+    override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+    override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+    override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
+    override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+  }
+  val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
+  val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)
   val workingDirectory = Paths.get("/tmp")
 
-  //TODO: remove boilerplate at the top of each test
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     val addResult = storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
     assert(addResult equals linkToAdd)
@@ -32,9 +44,9 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "not create duplicate storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
@@ -45,7 +57,7 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "initialize directories" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
     val safeAbsolutePath = workingDirectory.resolve(baseSafeDir.path.asPath)
     val editAbsolutePath = workingDirectory.resolve(baseDir.path.asPath)
@@ -56,24 +68,23 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
       .map(path => new java.io.File(path.toUri))
       .map(dir => if (dir.exists()) dir.delete())
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
     dirsToCreate
-      .map(path => new java.io.File(path.toUri))
-      .map(dir => assert(dir.exists))
+      .map(path => assert(path.toFile.exists))
   }
 
 
 //  initializeDirectories
   it should "list storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
@@ -83,12 +94,12 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "delete a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAddAndRemove).unsafeRunSync()
 
@@ -103,12 +114,12 @@ class StorageLinksServiceSpec extends FlatSpec with Matchers {
 
   it should "gracefully handle deleting a storage link that doesn't exist" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, workingDirectory)
+    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.deleteStorageLink(linkToRemove).unsafeRunSync()
 
