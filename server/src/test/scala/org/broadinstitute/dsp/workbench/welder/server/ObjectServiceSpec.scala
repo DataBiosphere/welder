@@ -24,6 +24,7 @@ import org.scalatest.FlatSpec
 
 import scala.concurrent.ExecutionContext.global
 import scala.concurrent.duration._
+import scala.util.matching.Regex
 
 class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes)
@@ -159,7 +160,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return RemoteNotFound if metadata is not found in GCS" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val objectService = initObjectService(Map(localBaseDirectory.path -> storageLink), Map.empty, None)
 
         val requestBody = s"""
@@ -169,7 +170,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         val res = for {
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
@@ -184,7 +185,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return SafeMode if storagelink exists in LocalSafeBaseDirectory" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
 
         val requestBody =
@@ -195,7 +196,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         val res = for {
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
@@ -210,7 +211,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return SyncStatus.LIVE if crc32c matches" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is from gsutil
         val storageService = FakeGoogleStorageService(metadataResp)
@@ -225,7 +226,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -250,7 +251,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return SyncStatus.LocalChanged if crc32c doesn't match but local cached generation matches remote" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(RelativePath(Paths.get(localPath)), RemoteState(None, Crc32("asdf")), Some(111L))))
@@ -268,7 +269,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -290,7 +291,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return SyncStatus.RemoteChanged if crc32c doesn't match and local cached generation doesn't match remote" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(RelativePath(Paths.get(localPath)), RemoteState(None, Crc32("asdf")), Some(0L))))
@@ -308,7 +309,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -330,7 +331,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return SyncStatus.OutOfSync if crc32c doesn't match and no local cached metadata found for the file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, """\.ipynb$""".stripMargin.r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great! Okay".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 1L) //This crc32c is from gsutil
@@ -344,7 +345,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb$$"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -366,7 +367,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return lastLockedBy if metadata shows it's locked by someone" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map("lastLockedBy" -> lockedBy.value, "lockExpiresAt" -> Long.MaxValue.toString), 0L) //This crc32c is from gsutil
@@ -380,7 +381,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -402,7 +403,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return not return lastLockedBy if lock has expired" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map("lastLockedBy" -> lockedBy.value, "lockExpiresAt" -> Long.MinValue.toString), 0L) //This crc32c is from gsutil
@@ -415,7 +416,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
-        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"*.ipynb"}}"""
+        val expectedBody = s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.bucketName}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -437,7 +438,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   "/safeDelocalize" should "delocalize a file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -456,7 +457,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
             IO(generation shouldBe(111L)) >>
             IO(DelocalizeResponse(112L, Crc32("newHash")))
           }
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val objectService = ObjectService(objectServiceConfig, storageAlg, global, storageLinkAlg, metadataCacheAlg)
@@ -491,7 +492,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "not delocalize a file if its crc32c is the same as remote" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -500,7 +501,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
 
         val storageAlg = new GoogleStorageAlg {
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
@@ -537,11 +538,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "be able to delocalize a new file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val storageAlg = new GoogleStorageAlg {
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
@@ -580,7 +581,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "do not delocalize a SAFE mode file" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localSafeDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
@@ -612,7 +613,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "throw GenerationMismatch exception if remote file has changed" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(RelativePath(Paths.get(localPath)), RemoteState(None, Crc32("asdf")), Some(111L))))
@@ -668,7 +669,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return DeleteSafeModeFile" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localSafeDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
@@ -700,7 +701,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "return Delete a file from GCS" in {
     forAll {
       (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory, lockedBy: WorkbenchEmail) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(RelativePath(Paths.get(localPath)), RemoteState(None, Crc32("asdf")), Some(111L))))
@@ -815,7 +816,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
         }
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
         val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)
@@ -858,7 +859,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
         }
         val objectService = initObjectServiceWithGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, googleStorageAlg)
         val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
@@ -900,7 +901,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
-          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
         }
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
         val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)

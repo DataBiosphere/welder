@@ -6,7 +6,6 @@ import java.util.UUID
 import java.util.UUID.randomUUID
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.storage.Blob
@@ -132,14 +131,13 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
             }
         }
         val objectBody = genGcsObjectBody.sample.get
-        val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
         val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
         val workingDir = Paths.get("/tmp")
         val localBaseDir = RelativePath(Paths.get("edit"))
 
         val res = for {
           _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
-          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, TraceId(UUID.randomUUID())).compile.drain
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r, TraceId(UUID.randomUUID())).compile.drain
         } yield {
           val prefix = (workingDir.resolve(localBaseDir.asPath))
           val allFiles = allObjects.map {blobName =>
@@ -153,6 +151,37 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
           allFiles.forall(_.toFile.exists()) shouldBe true
           allFiles.foreach(_.toFile.delete())
+        }
+        res.unsafeRunSync()
+    }
+  }
+
+  "localizeCloudDirectory" should "only download files that match pattern" in {
+    forAll {
+      (cloudStorageDirectory: CloudStorageDirectory) =>
+        val blob = cloudStorageDirectory.blobPath match {
+          case Some(bp) => GcsBlobName(s"${bp.asString}/test.suffix")
+          case None => GcsBlobName(s"test.suffix")
+        }
+        val objectBody = genGcsObjectBody.sample.get
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val workingDir = Paths.get("/tmp")
+        val localBaseDir = RelativePath(Paths.get("edit"))
+
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, blob, objectBody, objectType).compile.drain
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "suffix".r, TraceId(UUID.randomUUID())).compile.drain
+        } yield {
+          val prefix = (workingDir.resolve(localBaseDir.asPath))
+          val file = cloudStorageDirectory.blobPath match {
+              case Some(bp) =>
+                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get("test.suffix")))
+              case None =>
+                prefix.resolve(Paths.get("test.suffix"))
+            }
+
+          assert(!file.toFile.exists())
+          file.toFile.delete()
         }
         res.unsafeRunSync()
     }

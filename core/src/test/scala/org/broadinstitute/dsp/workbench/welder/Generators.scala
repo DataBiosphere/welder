@@ -48,7 +48,7 @@ object Generators {
     localBaseDirectory <- genLocalBaseDirectory
     localSafeDirectory <- genLocalSafeBaseDirectory
     cloudStorageDirectory <- genCloudStorageDirectory
-  } yield StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "*.ipynb")
+  } yield StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb$".r)
 
   val genWorkbenchEmail = Gen.uuid.map(x => WorkbenchEmail(s"$x@gmail.com"))
 

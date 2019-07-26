@@ -49,7 +49,7 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
       }
       _ <- initializeDirectories(storageLink)
       _ <- (googleStorageAlg
-        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, traceId)
+        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
         .drain

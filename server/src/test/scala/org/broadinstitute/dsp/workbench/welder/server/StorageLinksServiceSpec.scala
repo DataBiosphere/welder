@@ -13,6 +13,8 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.FlatSpec
 
+import scala.util.matching.Regex
+
 class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar/baz.zip")))
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
@@ -24,7 +26,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
     override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
     override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
-    override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+    override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
   }
   val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
   val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)
@@ -34,7 +36,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     val addResult = storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
     assert(addResult equals linkToAdd)
@@ -44,7 +46,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, workingDirectory)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
@@ -66,12 +68,11 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
       .map(path => new java.io.File(path.toUri))
       .map(dir => if (dir.exists()) dir.delete())
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
     dirsToCreate
-      .map(path => new java.io.File(path.toUri))
-      .map(dir => assert(dir.exists))
+      .map(path => assert(path.toFile.exists))
   }
 
 
@@ -83,7 +84,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
 
@@ -98,7 +99,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAddAndRemove).unsafeRunSync()
 
@@ -118,7 +119,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip")
+    val linkToRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
     storageLinksService.deleteStorageLink(linkToRemove).unsafeRunSync()
 

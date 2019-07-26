@@ -6,6 +6,8 @@ import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import io.circe.parser.parse
+import scala.util.matching.Regex
 
 class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "cloudStorageDirectoryDecoder" should "be able to parse cloudStorageDirectory correctly" in {
@@ -26,5 +28,14 @@ class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTe
         val res = Json.fromString(inputString).as[CloudStorageDirectory]
         res shouldBe(Right(CloudStorageDirectory(bucketName, None)))
     }
+  }
+
+  "regexDecoder" should "be able to decode expected regex" in {
+    val res = for {
+      json <- parse("""\.ipynb$""")
+      regex <- json.as[Regex]
+    } yield regex
+
+    res shouldBe(Right("\\.ipynb$".r))
   }
 }

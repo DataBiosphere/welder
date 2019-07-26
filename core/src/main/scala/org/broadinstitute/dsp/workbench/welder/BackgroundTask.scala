@@ -59,7 +59,7 @@ class BackgroundTask(
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
         (googleStorageAlg
-          .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, traceId)
+          .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
           .through(metadataCacheAlg.updateCachePipe))
           .compile
           .drain

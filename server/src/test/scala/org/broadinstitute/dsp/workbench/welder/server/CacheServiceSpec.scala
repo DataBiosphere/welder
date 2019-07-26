@@ -11,14 +11,13 @@ import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.{FlatSpec, Matchers}
-
 import scala.concurrent.ExecutionContext.global
 
 class CacheServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
   val config = CachedServiceConfig(Paths.get("/tmp/storagelinks.json"), Paths.get("/tmp/metadata.json"))
 
 
-  "CacheService" should "return service status" in {
+  "CacheService" should "return flush cache" in {
     forAll {
       (localPath: RelativePath, storageLink: StorageLink) =>
         val metadata = AdaptedGcsMetadataCache(localPath, RemoteState(None, Crc32("sfds")), None)
@@ -38,7 +37,8 @@ class CacheServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
           _ <- IO((new File(config.metadataCachePath.toString)).delete())
         } yield {
           resp.get.status shouldBe Status.NoContent
-          storageLinkResult shouldBe(List(storageLink))
+
+          assert(storageLinkEq.eqv(storageLinkResult(0), (storageLink)))
           metadataResult shouldBe(List(metadata))
         }
       res.unsafeRunSync()
