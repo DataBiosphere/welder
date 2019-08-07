@@ -1,5 +1,5 @@
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.0.0")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.0.3")
 addSbtPlugin("ch.epfl.scala" % "sbt-bloop" % "1.2.1")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.23")

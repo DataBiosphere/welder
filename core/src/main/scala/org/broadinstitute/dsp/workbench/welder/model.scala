@@ -63,7 +63,12 @@ object LocalDirectory {
 
 final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Option[BlobPath])
 
-final case class StorageLink(localBaseDirectory: LocalDirectory, localSafeModeBaseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory, pattern: Regex)
+final case class StorageLink(
+    localBaseDirectory: LocalDirectory,
+    localSafeModeBaseDirectory: LocalDirectory,
+    cloudStorageDirectory: CloudStorageDirectory,
+    pattern: Regex
+)
 
 final case class HashedLockedBy(asString: String) extends AnyVal
 

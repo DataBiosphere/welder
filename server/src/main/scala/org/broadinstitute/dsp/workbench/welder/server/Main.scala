@@ -65,7 +65,12 @@ object Main extends IOApp {
       val welderApp = WelderApp(objectService, storageLinksService, cacheService)
       val serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
 
-      val backGroundTaskConfig = BackgroundTaskConfig(appConfig.objectService.workingDirectory, appConfig.cleanUpLockInterval, appConfig.flushCacheInterval, appConfig.syncCloudStorageDirectoryInterval)
+      val backGroundTaskConfig = BackgroundTaskConfig(
+        appConfig.objectService.workingDirectory,
+        appConfig.cleanUpLockInterval,
+        appConfig.flushCacheInterval,
+        appConfig.syncCloudStorageDirectoryInterval
+      )
       val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(
         appConfig.pathToStorageLinksJson,

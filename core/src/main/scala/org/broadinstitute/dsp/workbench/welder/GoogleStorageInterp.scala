@@ -84,7 +84,13 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
     }
   }
 
-  override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = {
+  override def localizeCloudDirectory(
+      localBaseDirectory: RelativePath,
+      cloudStorageDirectory: CloudStorageDirectory,
+      workingDir: Path,
+      pattern: Regex,
+      traceId: TraceId
+  ): Stream[IO, AdaptedGcsMetadataCache] = {
     val res = for {
       blob <- googleStorageService.listBlobsWithPrefix(
         cloudStorageDirectory.bucketName,
@@ -93,7 +99,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         1000,
         Some(traceId)
       )
-      r <- if(pattern.findFirstIn(blob.getName).isDefined){
+      r <- if (pattern.findFirstIn(blob.getName).isDefined) {
         for {
           localPath <- Stream.eval(IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName)))
           localAbsolutePath <- Stream.fromEither[IO](Either.catchNonFatal(workingDir.resolve(localPath.asPath)))

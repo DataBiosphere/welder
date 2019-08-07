@@ -36,7 +36,13 @@ trait GoogleStorageAlg {
     * @param cloudStorageDirectory: GCS directory where files will be download from
     * @return AdaptedGcsMetadataCache that should be added to local metadata cache
     */
-  def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache]
+  def localizeCloudDirectory(
+      localBaseDirectory: RelativePath,
+      cloudStorageDirectory: CloudStorageDirectory,
+      workingDir: Path,
+      pattern: Regex,
+      traceId: TraceId
+  ): Stream[IO, AdaptedGcsMetadataCache]
 }
 
 object GoogleStorageAlg {
