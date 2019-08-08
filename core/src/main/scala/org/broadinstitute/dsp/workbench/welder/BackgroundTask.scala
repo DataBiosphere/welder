@@ -58,11 +58,17 @@ class BackgroundTask(
       traceId <- IO(TraceId(UUID.randomUUID()))
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
-        (googleStorageAlg
-          .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
-          .through(metadataCacheAlg.updateCachePipe))
-          .compile
-          .drain
+          (googleStorageAlg
+            .localizeCloudDirectory(
+              storageLink.localBaseDirectory.path,
+              storageLink.cloudStorageDirectory,
+              config.workingDirectory,
+              storageLink.pattern,
+              traceId
+            )
+            .through(metadataCacheAlg.updateCachePipe))
+            .compile
+            .drain
       }
     } yield ()
 
