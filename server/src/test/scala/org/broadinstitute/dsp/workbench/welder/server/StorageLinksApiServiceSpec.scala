@@ -2,6 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.nio.file.{Path, Paths}
+import java.util.UUID
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
@@ -60,7 +61,7 @@ class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID())).unsafeRunSync()
 
     val intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(intermediateListResult.storageLinks equals Set(linkToAdd))

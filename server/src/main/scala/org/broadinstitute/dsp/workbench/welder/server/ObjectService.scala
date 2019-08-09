@@ -3,7 +3,6 @@ package server
 
 import java.nio.file.Path
 import java.time.Instant
-import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
@@ -23,7 +22,6 @@ import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
 import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
-import org.http4s.dsl.Http4sDsl
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -35,32 +33,32 @@ class ObjectService(
     storageLinksAlg: StorageLinksAlg,
     metadataCacheAlg: MetadataCacheAlg
 )(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
-    extends Http4sDsl[IO] {
-  val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
+    extends WelderService {
+  val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        metadataReq <- req.as[GetMetadataRequest]
-        res <- checkMetadata(metadataReq).run(traceId)
-        resp <- Ok(res)
-      } yield resp
+      traceId =>
+        for {
+          metadataReq <- req.as[GetMetadataRequest]
+          res <- checkMetadata(metadataReq).run(traceId)
+          resp <- Ok(res)
+        } yield resp
     case req @ POST -> Root / "lock" =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        request <- req.as[AcquireLockRequest]
-        res <- acquireLock(request, traceId)
-        resp <- NoContent()
-      } yield resp
+      traceId =>
+        for {
+          request <- req.as[AcquireLockRequest]
+          res <- acquireLock(request, traceId)
+          resp <- NoContent()
+        } yield resp
     case req @ POST -> Root =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        localizeReq <- req.as[PostObjectRequest]
-        res <- localizeReq match {
-          case x: Localize => localize(x).run(traceId) >> NoContent()
-          case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
-          case x: Delete => delete(x).run(traceId) >> NoContent()
-        }
-      } yield res
+      traceId =>
+        for {
+          localizeReq <- req.as[PostObjectRequest]
+          res <- localizeReq match {
+            case x: Localize => localize(x).run(traceId) >> NoContent()
+            case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
+            case x: Delete => delete(x).run(traceId) >> NoContent()
+          }
+        } yield res
   }
 
   def localize(req: Localize): Kleisli[IO, TraceId, Unit] = Kleisli { traceId =>
