@@ -11,6 +11,7 @@ import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
+import cats.effect.concurrent.Semaphore
 import cats.effect.{ContextShift, IO, Timer}
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -27,6 +28,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class ObjectService(
+    permits: Semaphore[IO],
     config: ObjectServiceConfig,
     googleStorageAlg: GoogleStorageAlg,
     blockingEc: ExecutionContext,
@@ -97,6 +99,7 @@ class ObjectService(
   //
   def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[Unit] =
     for {
+      _ <- permits.acquire
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
       gsPath = getGsPath(req.localObjectPath, context)
@@ -120,6 +123,7 @@ class ObjectService(
         case None =>
           IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage"))
       }
+      _ <- permits.release
     } yield res
 
   private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
@@ -143,6 +147,7 @@ class ObjectService(
     */
   def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] =
     for {
+      _ <- Kleisli.liftF(permits.acquire)
       traceId <- Kleisli.ask[IO, TraceId]
       context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
       res <- if (context.isSafeMode)
@@ -195,10 +200,12 @@ class ObjectService(
           }
         } yield result
       }
+      _ <- Kleisli.liftF(permits.release)
     } yield res
 
   def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] =
     for {
+      _ <- Kleisli.liftF(permits.acquire)
       traceId <- Kleisli.ask[IO, TraceId]
       context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
       loggingContext = PostContext(traceId, "safeDelocalize", context)
@@ -239,6 +246,7 @@ class ObjectService(
 
         Kleisli.liftF(res)
       }
+      _ <- Kleisli.liftF(permits.release)
     } yield ()
 
   def delete(req: Delete): Kleisli[IO, TraceId, Unit] =
@@ -289,6 +297,7 @@ class ObjectService(
 
 object ObjectService {
   def apply(
+      permits: Semaphore[IO],
       config: ObjectServiceConfig,
       googleStorageAlg: GoogleStorageAlg,
       blockingEc: ExecutionContext,
@@ -298,7 +307,7 @@ object ObjectService {
       implicit cs: ContextShift[IO],
       timer: Timer[IO],
       logger: Logger[IO]
-  ): ObjectService = new ObjectService(config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
+  ): ObjectService = new ObjectService(permits, config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
     Action.stringToAction.get(str).toRight("invalid action")
