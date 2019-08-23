@@ -42,27 +42,26 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
   }
 
   //note: first param in the modify is the thing to do, second param is the value to return
-  def createStorageLink(storageLink: StorageLink): Kleisli[IO, TraceId, StorageLink] = Kleisli {
-    traceId =>
-      for {
-        link <- storageLinks.modify { links =>
-          val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
-          (links ++ toAdd, storageLink)
-        }
-        _ <- initializeDirectories(storageLink)
-        _ <- (googleStorageAlg
-          .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, storageLink.pattern, traceId)
-          .through(metadataCacheAlg.updateCachePipe))
-          .compile
-          .drain
-          .runAsync { cb =>
-            cb match {
-              case Left(r) => logger.warn(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
-              case Right(()) => IO.unit
-            }
+  def createStorageLink(storageLink: StorageLink): Kleisli[IO, TraceId, StorageLink] = Kleisli { traceId =>
+    for {
+      link <- storageLinks.modify { links =>
+        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
+        (links ++ toAdd, storageLink)
+      }
+      _ <- initializeDirectories(storageLink)
+      _ <- (googleStorageAlg
+        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, workingDirectory, storageLink.pattern, traceId)
+        .through(metadataCacheAlg.updateCachePipe))
+        .compile
+        .drain
+        .runAsync { cb =>
+          cb match {
+            case Left(r) => logger.warn(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
+            case Right(()) => IO.unit
           }
-          .toIO
-      } yield link
+        }
+        .toIO
+    } yield link
   }
 
   //returns whether the directories exist at the end of execution

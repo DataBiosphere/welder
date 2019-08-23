@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
@@ -50,7 +50,7 @@ object Main extends IOApp {
   ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
       implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
-      permits <- Stream.eval(Semaphore[IO](1))
+      permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
     } yield {
       val metadataCacheAlg = new MetadataCacheInterp(metadataCache)

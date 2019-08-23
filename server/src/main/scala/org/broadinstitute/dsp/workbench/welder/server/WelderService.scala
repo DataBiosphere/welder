@@ -14,9 +14,7 @@ trait WelderService extends Http4sDsl[IO] {
     traceIdFromHeader.fold(IO(TraceId(UUID.randomUUID().toString)))(IO.pure)
   }
 
-  def withTraceId(route: PartialFunction[
-                             Request[IO],
-                             (TraceId => IO[Response[IO]])]): HttpRoutes[IO] = HttpRoutes.of {
+  def withTraceId(route: PartialFunction[Request[IO], (TraceId => IO[Response[IO]])]): HttpRoutes[IO] = HttpRoutes.of {
     case req if route.isDefinedAt(req) =>
       for {
         traceId <- extractTraceId(req)

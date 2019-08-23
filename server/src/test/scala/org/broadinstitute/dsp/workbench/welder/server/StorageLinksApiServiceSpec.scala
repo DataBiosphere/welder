@@ -61,7 +61,7 @@ class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID())).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     val intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(intermediateListResult.storageLinks equals Set(linkToAdd))
