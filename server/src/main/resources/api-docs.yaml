@@ -27,7 +27,7 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects/lock':
     post:
-      summary: 'acquires lock for object specified'
+      summary: 'acquires lock for an object'
       parameters:
         - in: body
           description: ''
@@ -37,7 +37,7 @@ paths:
             $ref: '#/definitions/AcquireLockRequest'
       responses:
         '204':
-          description: 'lock is successfully acquired'
+          description: 'lock for the object was successfully acquired'
           schema:
             $ref: '#/definitions/AcquireLockResponse'
         '409':
@@ -52,7 +52,7 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects/metadata':
     post:
-      summary: 'retrieves metadata for object'
+      summary: 'retrieves metadata for an object'
       parameters:
         - in: body
           description: ''
@@ -78,7 +78,7 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects':
     post:
-      summary: 'localize object'
+      summary: 'localize an object'
       parameters:
         - in: body
           description: ''
