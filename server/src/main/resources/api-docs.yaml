@@ -27,10 +27,19 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects/lock':
     post:
-      summary: ''
+      summary: 'acquires lock for object specified'
+      parameters:
+        - in: body
+          description: ''
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/AcquireLockRequest'
       responses:
         '204':
-          description: ''
+          description: 'lock is successfully acquired'
+          schema:
+            $ref: '#/definitions/AcquireLockResponse'
         '409':
           description: 'lock is held by someone else'
         '412':
@@ -43,7 +52,14 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects/metadata':
     post:
-      summary: ''
+      summary: 'retrieves metadata for object'
+      parameters:
+        - in: body
+          description: ''
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/AcquireLockRequest'
       responses:
         '200':
           description: ''
@@ -62,7 +78,7 @@ paths:
             $ref: '#/definitions/ErrorReport'
   '/objects':
     post:
-      summary: ''
+      summary: 'localize object'
       parameters:
         - in: body
           description: ''
@@ -248,11 +264,16 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/StorageLink'
+  AcquireLockRequest:
+    description: ''
+    properties:
+      localPath:
+        type: string
   AcquireLockResponse:
     description: ''
     properties:
       result:
         type: string
         enum:
-          - "LOCKED_BY_OTHER"
           - "SUCCESS"
+          - "LOCKED_BY_OTHER"
