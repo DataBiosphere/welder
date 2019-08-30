@@ -35,7 +35,7 @@ chmod 755 .git/hooks/apply-git-secrets.sh
 ```
 
 ## After merging your PR
-Make sure all builds are green after you merge PR
+Make sure all builds are green after you merge PR. Look for `welder-update-hash` notification in `dsp-callisto-internal` channel, and open the PR for updating welder hash in leonardo. Make sure to include relevant Jira ticket number in the PR title if necessary.
 
 ## Run unit tests
 Set up environment variables
