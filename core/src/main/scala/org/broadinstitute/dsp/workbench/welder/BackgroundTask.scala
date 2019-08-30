@@ -55,7 +55,7 @@ class BackgroundTask(
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
     val res = for {
       storageLinks <- storageLinksCache.get
-      traceId <- IO(TraceId(UUID.randomUUID()))
+      traceId <- IO(TraceId(UUID.randomUUID().toString))
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
           (googleStorageAlg

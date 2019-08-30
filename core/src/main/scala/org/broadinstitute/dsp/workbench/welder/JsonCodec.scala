@@ -111,5 +111,5 @@ object JsonCodec {
     "localFileGeneration"
   )(AdaptedGcsMetadataCache.apply)
 
-  implicit val traceIdEncoder: Encoder[TraceId] = Encoder.encodeString.contramap(_.uuid.toString)
+  implicit val traceIdEncoder: Encoder[TraceId] = Encoder.encodeString.contramap(_.asString)
 }

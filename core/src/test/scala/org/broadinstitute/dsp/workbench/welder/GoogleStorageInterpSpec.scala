@@ -10,6 +10,7 @@ import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonError
 import com.google.cloud.storage.Blob
 import fs2.Stream
+import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, genGcsObjectBody}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageInterpreterSpec.objectType
 import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
@@ -31,7 +32,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
       (gsPath: GsPath) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorage = new BaseFakeGoogleStorage {
-          override def setObjectMetadata(bucketName: GcsBucketName,blobName: GcsBlobName,metadata: Map[String,String],traceId: Option[TraceId]): fs2.Stream[IO,Unit] = {
+          override def setObjectMetadata(bucketName: GcsBucketName,blobName: GcsBlobName,metadata: Map[String,String],traceId: Option[TraceId], retryConfig: RetryConfig): fs2.Stream[IO,Unit] = {
             val errors = new GoogleJsonError()
             errors.setCode(403)
             Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))
@@ -40,7 +41,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorage)
         val res = for {
           _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
-          _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID()), Map("lastLockedBy" -> "me"))
+          _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID().toString), Map("lastLockedBy" -> "me"))
           meta <- googleStorage.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.lastOrError
         } yield {
           meta.asInstanceOf[GetMetadataResponse.Metadata].userDefined.get("lastLockedBy") shouldBe("me")
@@ -62,7 +63,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         }
         val res = for {
           _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](localAbsolutePath, global)).compile.drain //write to local file
-          resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, TraceId(randomUUID())).attempt
+          resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, TraceId(randomUUID().toString)).attempt
           _ <- IO((new File(localAbsolutePath.toString)).delete())
         } yield {
           resp shouldBe Left(GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch"))
@@ -84,7 +85,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         }
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
-          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID()))
+          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID().toString))
           _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
         } yield {
           val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
@@ -108,7 +109,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
           _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through fs2.io.file.writeAll[IO](localAbsolutePath, global)) ++ Stream.eval(IO.unit)
-          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID()))
+          resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID().toString))
           newFileContent <- fs2.io.file.readAll[IO](localAbsolutePath, global, 4086).map(x => List(x)).foldMonoid
           _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
         } yield {
@@ -137,7 +138,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
         val res = for {
           _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
-          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r, TraceId(UUID.randomUUID())).compile.drain
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r, TraceId(UUID.randomUUID().toString)).compile.drain
         } yield {
           val prefix = (workingDir.resolve(localBaseDir.asPath))
           val allFiles = allObjects.map {blobName =>
@@ -170,7 +171,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, blob, objectBody, objectType).compile.drain
-          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "suffix".r, TraceId(UUID.randomUUID())).compile.drain
+          _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "suffix".r, TraceId(UUID.randomUUID().toString)).compile.drain
         } yield {
           val prefix = (workingDir.resolve(localBaseDir.asPath))
           val file = cloudStorageDirectory.blobPath match {
@@ -190,7 +191,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
 
 object GoogleStorageServiceWithFailures extends BaseFakeGoogleStorage {
-  override def createBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte], objectType: String, metadata: Map[String, String], generation: Option[Long], traceId: Option[TraceId]): Stream[IO, Blob] = {
+  override def createBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte], objectType: String, metadata: Map[String, String], generation: Option[Long], traceId: Option[TraceId], retryConfig: RetryConfig): Stream[IO, Blob] = {
     val errors = new GoogleJsonError()
     errors.setCode(412)
     Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))

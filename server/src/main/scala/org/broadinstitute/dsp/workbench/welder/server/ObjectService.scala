@@ -3,7 +3,6 @@ package server
 
 import java.nio.file.Path
 import java.time.Instant
-import java.util.UUID.randomUUID
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
@@ -12,7 +11,8 @@ import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.concurrent.Semaphore
+import cats.effect.{ContextShift, IO, Resource, Timer}
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
@@ -23,44 +23,44 @@ import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
 import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
-import org.http4s.dsl.Http4sDsl
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class ObjectService(
+    permitsRef: Permits,
     config: ObjectServiceConfig,
     googleStorageAlg: GoogleStorageAlg,
     blockingEc: ExecutionContext,
     storageLinksAlg: StorageLinksAlg,
     metadataCacheAlg: MetadataCacheAlg
 )(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
-    extends Http4sDsl[IO] {
-  val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
+    extends WelderService {
+  val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        metadataReq <- req.as[GetMetadataRequest]
-        res <- checkMetadata(metadataReq).run(traceId)
-        resp <- Ok(res)
-      } yield resp
+      traceId =>
+        for {
+          metadataReq <- req.as[GetMetadataRequest]
+          res <- checkMetadata(metadataReq).run(traceId)
+          resp <- Ok(res)
+        } yield resp
     case req @ POST -> Root / "lock" =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        request <- req.as[AcquireLockRequest]
-        res <- acquireLock(request, traceId)
-        resp <- NoContent()
-      } yield resp
+      traceId =>
+        for {
+          request <- req.as[AcquireLockRequest]
+          res <- acquireLock(request, traceId)
+          resp <- NoContent()
+        } yield resp
     case req @ POST -> Root =>
-      for {
-        traceId <- IO(TraceId(randomUUID()))
-        localizeReq <- req.as[PostObjectRequest]
-        res <- localizeReq match {
-          case x: Localize => localize(x).run(traceId) >> NoContent()
-          case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
-          case x: Delete => delete(x).run(traceId) >> NoContent()
-        }
-      } yield res
+      traceId =>
+        for {
+          localizeReq <- req.as[PostObjectRequest]
+          res <- localizeReq match {
+            case x: Localize => localize(x).run(traceId) >> NoContent()
+            case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
+            case x: Delete => delete(x).run(traceId) >> NoContent()
+          }
+        } yield res
   }
 
   def localize(req: Localize): Kleisli[IO, TraceId, Unit] = Kleisli { traceId =>
@@ -97,8 +97,8 @@ class ObjectService(
   // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
   //       bucket policy only enabled, which will allow step 1 to succeed.
   //
-  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[Unit] =
-    for {
+  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[Unit] = {
+    val actionToLock = for {
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
       gsPath = getGsPath(req.localObjectPath, context)
@@ -123,6 +123,9 @@ class ObjectService(
           IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage"))
       }
     } yield res
+
+    preventConcurrentAction(actionToLock, req.localObjectPath)
+  }
 
   private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
     googleStorageAlg
@@ -151,17 +154,15 @@ class ObjectService(
         Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
-        for {
-          metadata <- Kleisli.liftF[IO, TraceId, Option[AdaptedGcsMetadata]](
-            googleStorageAlg
-              .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.bucketName, fullBlobName), traceId)
-          )
+        val actionToLock = for {
+          metadata <- googleStorageAlg
+            .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.bucketName, fullBlobName), traceId)
           result <- metadata match {
             case None =>
-              Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.RemoteNotFound(context.storageLink))
+              IO.pure(MetadataResponse.RemoteNotFound(context.storageLink))
             case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
-              val res = for {
+              for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
                 syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live)
                 else {
@@ -193,9 +194,9 @@ class ObjectService(
                 }
                 _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState(lock, crc32c))
               } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
-              Kleisli.liftF[IO, TraceId, MetadataResponse](res)
           }
         } yield result
+        Kleisli.liftF[IO, TraceId, MetadataResponse](preventConcurrentAction(actionToLock, req.localObjectPath))
       }
     } yield res
 
@@ -203,12 +204,11 @@ class ObjectService(
     for {
       traceId <- Kleisli.ask[IO, TraceId]
       context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
-      loggingContext = PostContext(traceId, "safeDelocalize", context)
       _ <- if (context.isSafeMode)
         Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode")))
       else {
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
-        val res: IO[Unit] = for {
+        val actionToLock: IO[Unit] = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           gsPath = getGsPath(req.localObjectPath, context)
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
@@ -239,7 +239,7 @@ class ObjectService(
           }
         } yield ()
 
-        Kleisli.liftF(res)
+        Kleisli.liftF(preventConcurrentAction(actionToLock, req.localObjectPath))
       }
     } yield ()
 
@@ -251,7 +251,7 @@ class ObjectService(
         Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode")))
       else {
         val gsPath = getGsPath(req.localObjectPath, context)
-        val res = for {
+        val actionToLock = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
@@ -265,7 +265,7 @@ class ObjectService(
           _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
           _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
-        Kleisli.liftF(res)
+        Kleisli.liftF(preventConcurrentAction(actionToLock, req.localObjectPath))
       }
     } yield ()
 
@@ -287,10 +287,21 @@ class ObjectService(
         IO.unit
       else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()
+
+  private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =
+    for {
+      permitOpt <- permitsRef.get.map(_.get(localPath))
+      permit <- permitOpt.fold {
+        Semaphore[IO](1L).flatMap(s => permitsRef.modify(mp => (mp + (localPath -> s), s)))
+      }(p => IO.pure(p))
+      lock = Resource.make[IO, Unit](permit.acquire)(_ => permit.release)
+      res <- lock.use(_ => ioa)
+    } yield res
 }
 
 object ObjectService {
   def apply(
+      permitsRef: Permits,
       config: ObjectServiceConfig,
       googleStorageAlg: GoogleStorageAlg,
       blockingEc: ExecutionContext,
@@ -300,7 +311,7 @@ object ObjectService {
       implicit cs: ContextShift[IO],
       timer: Timer[IO],
       logger: Logger[IO]
-  ): ObjectService = new ObjectService(config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
+  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
     Action.stringToAction.get(str).toRight("invalid action")

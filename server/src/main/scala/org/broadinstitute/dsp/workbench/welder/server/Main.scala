@@ -1,6 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
@@ -49,13 +50,14 @@ object Main extends IOApp {
   ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
       implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
+      permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
     } yield {
       val metadataCacheAlg = new MetadataCacheInterp(metadataCache)
       val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
       val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, appConfig.objectService.workingDirectory)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
-      val objectService = ObjectService(appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCacheAlg)
+      val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCacheAlg)
       val cacheService = CacheService(
         CachedServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson),
         storageLinksCache,

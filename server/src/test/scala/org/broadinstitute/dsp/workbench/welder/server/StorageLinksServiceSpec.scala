@@ -2,6 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.nio.file.{Path, Paths}
+import java.util.UUID
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
@@ -38,7 +39,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
-    val addResult = storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    val addResult = storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
     assert(addResult equals linkToAdd)
   }
 
@@ -48,7 +49,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     val listResult = storageLinksService.getStorageLinks.unsafeRunSync()
 
@@ -69,7 +70,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
       .map(dir => if (dir.exists()) dir.delete())
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
-    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     dirsToCreate
       .map(path => assert(path.toFile.exists))
@@ -86,7 +87,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     val finalListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(finalListResult.storageLinks equals Set(linkToAdd))
@@ -101,7 +102,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
 
     val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAddAndRemove).unsafeRunSync()
+    storageLinksService.createStorageLink(linkToAddAndRemove).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     val intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(intermediateListResult.storageLinks equals Set(linkToAddAndRemove))
