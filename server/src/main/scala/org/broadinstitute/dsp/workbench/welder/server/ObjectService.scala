@@ -272,7 +272,12 @@ class ObjectService(
   private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock], traceId: TraceId): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
-      delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId)
+      delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId).recoverWith {
+        case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+          // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
+          // Thhis assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
+          googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush, traceId)
+      }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState(lock, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
   }
