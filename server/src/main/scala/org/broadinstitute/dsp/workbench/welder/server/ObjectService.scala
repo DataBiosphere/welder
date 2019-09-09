@@ -276,6 +276,7 @@ class ObjectService(
         case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
           // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
           // Thhis assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
+          // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
           googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush, traceId)
       }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState(lock, delocalizeResp.crc32c), delocalizeResp.generation)
