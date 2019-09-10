@@ -22,7 +22,7 @@ class MetadataCacheInterp(metadataCache: MetadataCache) extends MetadataCacheAlg
     metadataCache.modify { mp =>
       val newCache = mp + (localPath -> AdaptedGcsMetadataCache(
         localPath,
-        RemoteState(adaptedGcsMetadata.lock, adaptedGcsMetadata.crc32c),
+        RemoteState.Found(adaptedGcsMetadata.lock, adaptedGcsMetadata.crc32c),
         Some(adaptedGcsMetadata.generation)
       ))
       (newCache, ())

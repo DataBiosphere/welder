@@ -107,10 +107,10 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
           else {
             val res = for {
               metadata <- adaptMetadata(Crc32(blob.getCrc32c), Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty), blob.getGeneration)
-              metadataCache = AdaptedGcsMetadataCache(localPath, RemoteState(metadata.lock, metadata.crc32c), Some(metadata.generation))
+              metadataCache = AdaptedGcsMetadataCache(localPath, RemoteState.Found(metadata.lock, metadata.crc32c), Some(metadata.generation))
               _ <- mkdirIfNotExist(localAbsolutePath.getParent)
               _ <- IO(blob.downloadTo(localAbsolutePath))
-            } yield Some(AdaptedGcsMetadataCache(localPath, RemoteState(metadata.lock, metadata.crc32c), Some(metadata.generation)))
+            } yield Some(AdaptedGcsMetadataCache(localPath, RemoteState.Found(metadata.lock, metadata.crc32c), Some(metadata.generation)))
             Stream.eval(res)
           }
         } yield result

@@ -7,6 +7,7 @@ import cats.implicits._
 import cats.effect.IO
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
+import io.circe.syntax._
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -92,14 +93,24 @@ object JsonCodec {
     "lastLockedBy",
     "lockExpiresAt"
   )(Lock.apply)
-  implicit val remoteStateEncoder: Encoder[RemoteState] = Encoder.forProduct2(
+  implicit val remoteStateExistEncoder: Encoder[RemoteState.Found] = Encoder.forProduct2(
     "lock",
     "crc32c"
-  )(x => RemoteState.unapply(x).get)
-  implicit val remoteStateDecoder: Decoder[RemoteState] = Decoder.forProduct2(
+  )(x => RemoteState.Found.unapply(x).get)
+  implicit val remoteStateExistDecoder: Decoder[RemoteState.Found] = Decoder.forProduct2(
     "lock",
     "crc32c"
-  )(RemoteState.apply)
+  )(RemoteState.Found.apply)
+  implicit val remoteStateEncoder: Encoder[RemoteState] = Encoder.instance(
+    x =>
+      x match {
+        case RemoteState.NotFound => "NotFound".asJson
+        case e: RemoteState.Found => e.asJson
+      }
+  )
+  implicit val remoteStateDecoder: Decoder[RemoteState] = Decoder.instance(
+    x => x.as[RemoteState.Found].orElse(Right(RemoteState.NotFound))
+  )
   implicit val gcsMetadataEncoder: Encoder[AdaptedGcsMetadataCache] = Encoder.forProduct3(
     "localPath",
     "remoteState",

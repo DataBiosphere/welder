@@ -108,7 +108,7 @@ class ObjectService(
       res <- meta match {
         case Some(m) =>
           for {
-            _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState(m.lock, m.crc32c))
+            _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(m.lock, m.crc32c))
             res <- m.lock match {
               case Some(lock) =>
                 if (lock.hashedLockedBy == hashedLockedByCurrentUser)
@@ -135,7 +135,7 @@ class ObjectService(
           updateMetadataResponse match {
             case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
             case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
-              metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState(Some(lock), crc32c), generation)
+              metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState.Found(Some(lock), crc32c), generation)
           }
       )
 
@@ -159,12 +159,13 @@ class ObjectService(
             .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.bucketName, fullBlobName), traceId)
           result <- metadata match {
             case None =>
-              IO.pure(MetadataResponse.RemoteNotFound(context.storageLink))
+              metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
             case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               for {
                 calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
-                syncStatus <- if (calculatedCrc32c == crc32c) IO.pure(SyncStatus.Live)
+                syncStatus <- if (calculatedCrc32c == crc32c)
+                  IO.pure(SyncStatus.Live)
                 else {
                   for {
                     metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
@@ -192,7 +193,7 @@ class ObjectService(
                     }
                   } yield status
                 }
-                _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState(lock, crc32c))
+                _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(lock, crc32c))
               } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
           }
         } yield result
@@ -219,15 +220,20 @@ class ObjectService(
           // Hence, we should be able to rely on cache for checking lock
           _ <- previousMeta match {
             case Some(meta) =>
-              if (calculatedCrc32c == meta.remoteState.crc32c)
-                IO.unit
-              else
-                for {
-                  _ <- meta.remoteState.lock.traverse(l => checkLock(l, now, gsPath.bucketName))
-                  //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
-                  //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
-                  _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), meta.remoteState.lock, traceId)
-                } yield ()
+              meta.remoteState match {
+                case RemoteState.NotFound =>
+                  delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, None, traceId)
+                case RemoteState.Found(lock, crc32c) =>
+                  if (calculatedCrc32c == crc32c)
+                    IO.unit
+                  else
+                    for {
+                      _ <- lock.traverse(l => checkLock(l, now, gsPath.bucketName))
+                      //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
+                      //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
+                      _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), lock, traceId)
+                    } yield ()
+              }
             case None =>
               // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
               for {
@@ -256,9 +262,13 @@ class ObjectService(
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           generation <- previousMeta match {
             case Some(meta) =>
-              meta.remoteState.lock
-                .traverse(l => checkLock(l, now, gsPath.bucketName)) //check if user owns the lock before deleting
-                .as(meta.localFileGeneration.getOrElse(0L))
+              meta.remoteState match {
+                case RemoteState.NotFound => IO.pure(0L)
+                case RemoteState.Found(lock, _) =>
+                  lock
+                    .traverse(l => checkLock(l, now, gsPath.bucketName)) //check if user owns the lock before deleting
+                    .as(meta.localFileGeneration.getOrElse(0L))
+              }
             case None =>
               IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
@@ -272,8 +282,18 @@ class ObjectService(
   private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock], traceId: TraceId): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
-      delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId)
-      _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState(lock, delocalizeResp.crc32c), delocalizeResp.generation)
+      delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId).recoverWith {
+        case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+          if (generation == 0L)
+            IO.raiseError(e)
+          else {
+            // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
+            // Thhis assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
+            // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
+            googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush, traceId)
+          }
+      }
+      _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(lock, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
   }
 
@@ -283,7 +303,7 @@ class ObjectService(
   private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName): IO[Unit] =
     for {
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
-      res <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
+      _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
       else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()
