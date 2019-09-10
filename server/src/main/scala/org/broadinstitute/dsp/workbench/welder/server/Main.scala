@@ -55,7 +55,8 @@ object Main extends IOApp {
     } yield {
       val metadataCacheAlg = new MetadataCacheInterp(metadataCache)
       val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
-      val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, appConfig.objectService.workingDirectory)
+      val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
+      val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCacheAlg)
       val cacheService = CacheService(
