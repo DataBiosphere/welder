@@ -92,11 +92,16 @@ final case class Lock(hashedLockedBy: HashedLockedBy, lockExpiresAt: Instant) {
   */
 final case class AdaptedGcsMetadata(lock: Option[Lock], crc32c: Crc32, generation: Long)
 
-/**
-  * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
-  * @param crc32c latest crc32c we know in GCS
-  */
-final case class RemoteState(lock: Option[Lock], crc32c: Crc32)
+sealed abstract class RemoteState
+object RemoteState {
+
+  /**
+    * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
+    * @param crc32c latest crc32c we know in GCS
+    */
+  final case class Found(lock: Option[Lock], crc32c: Crc32) extends RemoteState
+  final case object NotFound extends RemoteState
+}
 
 /**
   * @param localPath local relative path to a file

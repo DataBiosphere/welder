@@ -20,7 +20,7 @@ class CacheServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
   "CacheService" should "return flush cache" in {
     forAll {
       (localPath: RelativePath, storageLink: StorageLink) =>
-        val metadata = AdaptedGcsMetadataCache(localPath, RemoteState(None, Crc32("sfds")), None)
+        val metadata = AdaptedGcsMetadataCache(localPath, RemoteState.Found(None, Crc32("sfds")), None)
         val cacheService = CacheService (
           config,
           Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localPath -> storageLink)),
