@@ -531,7 +531,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val res = for {
           _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
-          metadata <- metaCache.get
         } yield {
           resp.get.status shouldBe Status.NoContent
         }

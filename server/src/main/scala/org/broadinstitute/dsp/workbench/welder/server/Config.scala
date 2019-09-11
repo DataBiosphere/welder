@@ -28,14 +28,14 @@ object Config {
 }
 
 final case class AppConfig(
-                            serverPort: Int,
-                            cleanUpLockInterval: FiniteDuration,
-                            flushCacheInterval: FiniteDuration,
-                            syncCloudStorageDirectoryInterval: FiniteDuration,
-                            pathToStorageLinksJson: Path,
-                            pathToGcsMetadataJson: Path,
-                            workspaceBucketNameFileName: Path,
-                            objectService: ObjectServiceConfig
+    serverPort: Int,
+    cleanUpLockInterval: FiniteDuration,
+    flushCacheInterval: FiniteDuration,
+    syncCloudStorageDirectoryInterval: FiniteDuration,
+    pathToStorageLinksJson: Path,
+    pathToGcsMetadataJson: Path,
+    workspaceBucketNameFileName: Path,
+    objectService: ObjectServiceConfig
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)

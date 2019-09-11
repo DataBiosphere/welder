@@ -20,7 +20,12 @@ import _root_.io.chrisdavenport.linebacker.Linebacker
 import _root_.io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.model.TraceId
 
-class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, config: StorageLinksServiceConfig)(
+class StorageLinksService(
+    storageLinks: StorageLinksCache,
+    googleStorageAlg: GoogleStorageAlg,
+    metadataCacheAlg: MetadataCacheAlg,
+    config: StorageLinksServiceConfig
+)(
     implicit logger: Logger[IO],
     linerBacker: Linebacker[IO],
     contextShift: ContextShift[IO]
@@ -55,8 +60,8 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
         val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
         (links ++ toAdd, storageLink)
       }
-      _ <-  persistWorkspaceBucket(link.localBaseDirectory, link.cloudStorageDirectory)
       _ <- initializeDirectories(storageLink)
+      _ <- persistWorkspaceBucket(link.localBaseDirectory, link.cloudStorageDirectory)
       _ <- (googleStorageAlg
         .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
@@ -73,10 +78,14 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
   }
 
   private def persistWorkspaceBucket(baseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory): IO[Unit] = {
-    val fileBody = RuntimeVariables("gs://"+cloudStorageDirectory.bucketName.value).asJson.pretty(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
-    val destinationPath = config.workingDirectory.resolve(baseDirectory.path.asPath).resolve(config.workspaceBucketNameFileName)
+    val fileBody =
+      RuntimeVariables(s"gs://${cloudStorageDirectory.bucketName.value}/notebooks") //appending notebooks to mimick old jupyter image until we start using new images.
+      .asJson.pretty(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
+    val destinationPath = config.workingDirectory
+      .resolve(baseDirectory.path.asPath)
+      .resolve(config.workspaceBucketNameFileName)
     ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, linerBacker.blockingContext, List(StandardOpenOption.CREATE_NEW))).compile.drain)
-      .recoverWith{ case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists")} // If file already exists, ignore the failure
+      .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists") } // If file already exists, ignore the failure
   }
 
   //returns whether the directories exist at the end of execution
@@ -86,16 +95,14 @@ class StorageLinksService(storageLinks: StorageLinksCache, googleStorageAlg: Goo
 
     val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](localSafeAbsolutePath, localEditAbsolutePath)
 
-    val files = dirsToCreate
-      .map(path => new java.io.File(path.toUri))
-
     //creates all dirs and logs any errors
-    files.traverse { file =>
+    dirsToCreate.traverse { dir =>
+      val file = dir.toFile()
       for {
         exists <- IO(file.exists())
         _ <- if (exists) IO.unit
         else {
-          IO(file.mkdir()).flatMap(r => {
+          IO(file.mkdirs()).flatMap(r => {
             if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
             else IO.unit
           })
