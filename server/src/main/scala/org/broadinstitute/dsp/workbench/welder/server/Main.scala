@@ -2,10 +2,9 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
-import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
@@ -21,18 +20,19 @@ object Main extends IOApp {
 
     val app: Stream[IO, Unit] = for {
       blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
+      blocker = Blocker.liftExecutionContext(blockingEc)
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         appConfig.pathToStorageLinksJson,
-        blockingEc,
+        blocker,
         storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink)
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         appConfig.pathToGcsMetadataJson,
-        blockingEc,
+        blocker,
         metadata => List(metadata.localPath -> metadata)
       )
-      streams <- initStreams(appConfig, blockingEc, storageLinksCache, metadataCache)
+      streams <- initStreams(appConfig, blocker, storageLinksCache, metadataCache)
       _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)
     } yield ()
 
@@ -45,25 +45,26 @@ object Main extends IOApp {
       .as(ExitCode.Success)
   }
 
-  def initStreams(appConfig: AppConfig, blockingEc: ExecutionContext, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
+  def initStreams(appConfig: AppConfig, blocker: Blocker, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
       implicit logger: Logger[IO]
   ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
-      implicit0(it: Linebacker[IO]) <- Stream.eval(Linebacker.bounded(Linebacker.fromExecutionContext[IO](blockingEc), 255))
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
-      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault())
+      blockerBound <- Stream.eval(Semaphore[IO](255))
+      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault(blocker, Some(blockerBound)))
     } yield {
       val metadataCacheAlg = new MetadataCacheInterp(metadataCache)
-      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
+      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), blocker, googleStorageService)
       val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
-      val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig)
+      val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig, blocker)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
-      val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blockingEc, storageLinkAlg, metadataCacheAlg)
-      val cacheService = CacheService(
-        CachedServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson),
+      val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
+      val cacheService = PreshutdownService(
+        PreshutdownServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson, appConfig.pathToLogFile, appConfig.stagingBucketName),
         storageLinksCache,
         metadataCache,
-        blockingEc
+        googleStorageAlg,
+        blocker
       )
       val welderApp = WelderApp(objectService, storageLinksService, cacheService)
       val serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
@@ -78,7 +79,7 @@ object Main extends IOApp {
       val flushCache = backGroundTask.flushBothCache(
         appConfig.pathToStorageLinksJson,
         appConfig.pathToGcsMetadataJson,
-        blockingEc
+        blocker
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, serverStream.drain)
     }

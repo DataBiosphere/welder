@@ -12,7 +12,7 @@ import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
 import cats.effect.concurrent.Semaphore
-import cats.effect.{ContextShift, IO, Resource, Timer}
+import cats.effect.{Blocker, ContextShift, IO, Resource, Timer}
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
@@ -24,16 +24,15 @@ import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class ObjectService(
-    permitsRef: Permits,
-    config: ObjectServiceConfig,
-    googleStorageAlg: GoogleStorageAlg,
-    blockingEc: ExecutionContext,
-    storageLinksAlg: StorageLinksAlg,
-    metadataCacheAlg: MetadataCacheAlg
+                     permitsRef: Permits,
+                     config: ObjectServiceConfig,
+                     googleStorageAlg: GoogleStorageAlg,
+                     blocker: Blocker,
+                     storageLinksAlg: StorageLinksAlg,
+                     metadataCacheAlg: MetadataCacheAlg
 )(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
     extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
@@ -70,7 +69,7 @@ class ObjectService(
         val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath.asPath)
 
         val localizeFile = entry.sourceUri match {
-          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blockingEc, writeFileOptions))
+          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
@@ -163,7 +162,7 @@ class ObjectService(
             case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               for {
-                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
+                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
                 syncStatus <- if (calculatedCrc32c == crc32c)
                   IO.pure(SyncStatus.Live)
                 else {
@@ -213,7 +212,7 @@ class ObjectService(
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           gsPath = getGsPath(req.localObjectPath, context)
           now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-          calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blockingEc)
+          calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
 
           // If we have lock info in local cache, we check cache to see if we hold a valid lock.
           // local cache should be updated pretty frequently since acquireLock is called much more often than lock expires.
@@ -324,14 +323,14 @@ object ObjectService {
       permitsRef: Permits,
       config: ObjectServiceConfig,
       googleStorageAlg: GoogleStorageAlg,
-      blockingEc: ExecutionContext,
+      blocker: Blocker,
       storageLinksAlg: StorageLinksAlg,
       metadataCacheAlg: MetadataCacheAlg
   )(
       implicit cs: ContextShift[IO],
       timer: Timer[IO],
       logger: Logger[IO]
-  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blockingEc, storageLinksAlg, metadataCacheAlg)
+  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blocker, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
     Action.stringToAction.get(str).toRight("invalid action")

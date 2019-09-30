@@ -8,7 +8,7 @@ import java.util.Base64
 
 import cats.Eq
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, IO, Resource, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
 import io.chrisdavenport.log4cats.Logger
@@ -21,17 +21,15 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContext.global
 import scala.language.implicitConversions
 
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
 
-  def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blockingExecutionContext: Option[ExecutionContext] = None): Stream[F, A] =
+  def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blocker: Blocker): Stream[F, A] =
     fs2.io.file
-      .readAll[F](path, blockingExecutionContext.getOrElse(global), 4096)
+      .readAll[F](path, blocker,4096)
       .through(fs2.text.utf8Decode)
       .through(_root_.io.circe.fs2.stringParser(AsyncParser.SingleValue))
       .through(decoder)
@@ -123,29 +121,29 @@ package object welder {
     } else IO.unit
   }
 
-  private[welder] def cachedResource[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, toTuple: B => List[(A, B)])(
+  private[welder] def cachedResource[A, B: Decoder: Encoder](path: Path, blocker: Blocker, toTuple: B => List[(A, B)])(
       implicit logger: Logger[IO],
       cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       _ <- Option(path.getParent).traverse_(parentDir => Stream.eval(mkdirIfNotExist(parentDir)))
-      cached <- readJsonFileToA[IO, List[B]](path).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
+      cached <- readJsonFileToA[IO, List[B]](path, blocker).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
         Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
       }
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(
-          ref => flushCache(path, blockingEc, ref).compile.drain
+          ref => flushCache(path, blocker, ref).compile.drain
         )
       )
     } yield ref
 
-  def flushCache[A, B: Decoder: Encoder](path: Path, blockingEc: ExecutionContext, ref: Ref[IO, Map[A, B]])(
+  def flushCache[A, B: Decoder: Encoder](path: Path, blocker: Blocker, ref: Ref[IO, Map[A, B]])(
       implicit cs: ContextShift[IO]
   ): Stream[IO, Unit] =
     Stream
       .eval(ref.get)
-      .flatMap(x => Stream.emits(x.values.toSet.asJson.pretty(Printer.noSpaces).getBytes("UTF-8")))
-      .through(fs2.io.file.writeAll[IO](path, blockingEc, writeFileOptions))
+      .flatMap(x => Stream.emits(x.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")))
+      .through(fs2.io.file.writeAll[IO](path, blocker, writeFileOptions))
 
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 

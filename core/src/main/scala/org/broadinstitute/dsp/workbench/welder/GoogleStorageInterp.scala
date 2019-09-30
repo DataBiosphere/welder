@@ -4,10 +4,10 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-import _root_.io.chrisdavenport.linebacker.Linebacker
 import _root_.io.chrisdavenport.log4cats.Logger
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
+import cats.mtl.ApplicativeAsk
 import fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
@@ -17,10 +17,9 @@ import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 
-class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
+class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, googleStorageService: GoogleStorageService[IO])(
     implicit logger: Logger[IO],
     timer: Timer[IO],
-    linerBacker: Linebacker[IO],
     cs: ContextShift[IO]
 ) extends GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
@@ -58,12 +57,12 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       _ <- (Stream
         .emits(blob.getContent())
         .covary[IO]
-        .through(io.file.writeAll[IO](localAbsolutePath, linerBacker.blockingContext, writeFileOptions))) ++ Stream.eval(IO.unit)
+        .through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
       userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
 
-  def delocalize(
+  override def delocalize(
       localObjectPath: RelativePath,
       gsPath: GsPath,
       generation: Long,
@@ -71,7 +70,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       traceId: TraceId
   ): IO[DelocalizeResponse] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    io.file.readAll[IO](localAbsolutePath, linerBacker.blockingContext, 4096).compile.to[Array].flatMap { body =>
+    io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to[Array].flatMap { body =>
       googleStorageService
         .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, userDefinedMeta, Some(generation), Some(traceId))
         .map(x => DelocalizeResponse(x.getGeneration, Crc32(x.getCrc32c)))
@@ -81,6 +80,18 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
             GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
         }
+    }
+  }
+
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
+    val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
+    logger.info(s"flushing log file ${localAbsolutePath}") >>
+    io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to[Array].flatMap { body =>
+      googleStorageService
+        .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
+        .void
+        .compile
+        .lastOrError
     }
   }
 

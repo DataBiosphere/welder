@@ -11,6 +11,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import io.circe.{Json, parser}
 import _root_.fs2.{Stream, io, text}
+import cats.mtl.ApplicativeAsk
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GetMetadataResponse, GoogleStorageService, RemoveObjectResult}
@@ -23,7 +24,6 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.FlatSpec
 
-import scala.concurrent.ExecutionContext.global
 import scala.concurrent.duration._
 import scala.util.matching.Regex
 
@@ -58,7 +58,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         _ <- FakeGoogleStorageInterpreter.removeObject(bucketName, blobName).compile.drain
         _ <- FakeGoogleStorageInterpreter.createBlob(bucketName, blobName, body, "text/plain", Map.empty, None, None).compile.drain
         resp <- objectService.service.run(request).value
-        localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, global, 4096)
+        localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, blocker, 4096)
           .compile
           .toList
         _ <- IO((new File(localFileDestination.toString)).delete())
@@ -97,7 +97,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val localAbsoluteFilePath = Paths.get(s"/tmp/${localFileDestination}")
     val res = for {
       resp <- objectService.service.run(request).value
-      localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, global, 4096).through(fs2.text.utf8Decode).compile.foldMonoid
+      localFileBody <- io.file.readAll[IO](localAbsoluteFilePath, blocker, 4096).through(fs2.text.utf8Decode).compile.foldMonoid
       _ <- IO((new File(localAbsoluteFilePath.toString)).delete())
     } yield {
       resp.get.status shouldBe (Status.NoContent)
@@ -234,7 +234,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -259,11 +259,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val bodyBytes = "this is great! Okay".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 111L) //This crc32c is from gsutil
         val storageService = FakeGoogleStorageService(metadataResp)
-        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), storageService)
+        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, storageService)
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "localPath": "$localPath"
@@ -278,7 +278,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -300,11 +300,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val bodyBytes = "this is great! Okay".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 1L) //This crc32c is from gsutil
         val storageService = FakeGoogleStorageService(metadataResp)
-        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), storageService)
+        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, storageService)
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "localPath": "$localPath"
@@ -319,7 +319,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -355,7 +355,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -391,7 +391,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -426,7 +426,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
           _ <- IO((new File(localPath.toString)).delete())
@@ -461,10 +461,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
             IO(DelocalizeResponse(112L, Crc32("newHash")))
           }
           override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "action": "safeDelocalize",
@@ -478,7 +479,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           metadata <- metaCache.get
         } yield {
@@ -512,10 +513,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
             IO(DelocalizeResponse(112L, Crc32("newHash")))
           }
           override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "action": "safeDelocalize",
@@ -529,7 +531,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
         } yield {
           resp.get.status shouldBe Status.NoContent
@@ -558,10 +560,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = {
             IO.raiseError(new Exception("delocalize shouldn't happen when crc32c hasn't changed"))
           }
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "action": "safeDelocalize",
@@ -575,7 +578,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
           metadata <- metaCache.get
         } yield {
@@ -604,6 +607,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
               IO(generation shouldBe(0L)) >>
               IO(DelocalizeResponse(112L, Crc32("newHash")))
           }
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val objectService = initObjectServiceWithGoogleStorageAlg(Map(localBaseDirectory.path -> storageLink), Map.empty, storageAlg)
         val requestBody = s"""
@@ -619,7 +623,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value
         } yield {
           resp.get.status shouldBe(Status.NoContent)
@@ -648,7 +652,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getBlobBody(cloudStorageDirectory.bucketName, getFullBlobName(localSafeDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
@@ -668,11 +672,11 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(RelativePath(Paths.get(localPath)), RemoteState.Found(None, Crc32("asdf")), Some(111L))))
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, GoogleStorageServiceWithFailures)
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
-        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+        val objectService = ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
         val requestBody = s"""
                              |{
                              |  "action": "safeDelocalize",
@@ -686,7 +690,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath.toString)).delete())
         } yield {
@@ -737,7 +741,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getBlobBody(cloudStorageDirectory.bucketName, getFullBlobName(localSafeDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
@@ -771,7 +775,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         }
         val fullBlobName = getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker)).compile.drain //write to local file
           _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, fullBlobName, bodyBytes, "text/plain").compile.drain
           fileExisted <- FakeGoogleStorageInterpreter.getBlobBody(cloudStorageDirectory.bucketName, fullBlobName).compile.toList
           _ <- objectService.service.run(request).value.attempt
@@ -868,6 +872,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
           override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
         val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)
@@ -911,6 +916,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
           override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val objectService = initObjectServiceWithGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, googleStorageAlg)
         val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
@@ -953,6 +959,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
           override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
         val objectService = initObjectServiceWithMetadataCacheAndGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), metaCache, googleStorageAlg)
@@ -1010,19 +1017,19 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
-    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
-    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
 
   private def initObjectServiceWithMetadataCache(storageLinks: Map[RelativePath, StorageLink], metadata: Ref[IO, Map[RelativePath, AdaptedGcsMetadataCache]], googleStorageService: Option[GoogleStorageService[IO]]): ObjectService = {
     val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
-    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     val metadataCacheAlg = new MetadataCacheInterp(metadata)
-    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
 
   private def initObjectServiceWithMetadataCacheAndGoogleStorageAlg(storageLinks: Map[RelativePath, StorageLink], metadata: Ref[IO, Map[RelativePath, AdaptedGcsMetadataCache]], googleStorageAlg: GoogleStorageAlg): ObjectService = {
@@ -1030,7 +1037,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     val metadataCacheAlg = new MetadataCacheInterp(metadata)
-    ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+    ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
 
   private def initObjectServiceWithGoogleStorageAlg(storageLinks: Map[RelativePath, StorageLink], metadata: Map[RelativePath, AdaptedGcsMetadataCache], googleStorageAlg: GoogleStorageAlg): ObjectService = {
@@ -1039,17 +1046,17 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
-    ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+    ObjectService(permitsRef, objectServiceConfig, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
 
   private def initObjectServiceWithPermits(permits: Map[RelativePath, Semaphore[IO]]): ObjectService = {
     val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
-    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+    val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
     val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
-    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metadataCacheAlg)
+    ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
 }
 

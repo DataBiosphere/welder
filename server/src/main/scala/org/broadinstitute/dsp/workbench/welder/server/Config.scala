@@ -6,6 +6,7 @@ import java.nio.file.Paths
 
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
 import pureconfig.ConfigReader
 import pureconfig.generic.auto._
@@ -20,8 +21,12 @@ object Config {
   implicit val pathConfigReader: ConfigReader[Path] = ConfigReader.fromString(
     s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err))
   )
+  implicit val relativePathConfigReader: ConfigReader[RelativePath] = pathConfigReader.map(RelativePath)
   implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.fromString(
     s => Right(WorkbenchEmail(s))
+  )
+  implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.fromString(
+    s => Right(GcsBucketName(s))
   )
 
   val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
@@ -34,8 +39,10 @@ final case class AppConfig(
     syncCloudStorageDirectoryInterval: FiniteDuration,
     pathToStorageLinksJson: Path,
     pathToGcsMetadataJson: Path,
+    pathToLogFile: RelativePath,
     workspaceBucketNameFileName: Path,
-    objectService: ObjectServiceConfig
+    objectService: ObjectServiceConfig,
+    stagingBucketName: GcsBucketName
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
