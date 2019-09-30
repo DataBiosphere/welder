@@ -1,8 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.Eq
-import cats.effect.{ContextShift, IO, Timer}
-import io.chrisdavenport.linebacker.Linebacker
+import cats.effect.{Blocker, ContextShift, IO, Timer}
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.scalatest.Matchers
@@ -17,9 +16,9 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
   implicit val timer: Timer[IO] = IO.timer(executionContext)
-  implicit val lineBacker = Linebacker.fromExecutionContext[IO](global)
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
+  val blocker: Blocker = Blocker.liftExecutionContext(global)
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
 
   // Regex's equals doesn't compare Regex as expected. Hence, we define Eq[StorageLink] when we need to check equality of two StorageLink

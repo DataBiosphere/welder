@@ -4,14 +4,13 @@ import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.implicits._
 import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
-import JsonCodec._
-import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 class BackgroundTask(
@@ -45,12 +44,12 @@ class BackgroundTask(
   def flushBothCache(
       storageLinksPath: Path,
       metadataCachePath: Path,
-      blockingEc: ExecutionContext
+      blocker: Blocker
   ): Stream[IO, Unit] = {
-    val flushStorageLinks = flushCache(storageLinksPath, blockingEc, storageLinksCache).handleErrorWith { t =>
+    val flushStorageLinks = flushCache(storageLinksPath, blocker, storageLinksCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush storagelinks cache to disk"))
     }
-    val flushMetadataCache = flushCache(metadataCachePath, blockingEc, metadataCache).handleErrorWith { t =>
+    val flushMetadataCache = flushCache(metadataCachePath, blocker, metadataCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush metadata cache to disk"))
     }
     (Stream.sleep[IO](config.flushCacheInterval) ++ flushStorageLinks ++ flushMetadataCache).repeat

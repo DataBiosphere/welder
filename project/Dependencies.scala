@@ -5,7 +5,7 @@ object Dependencies {
   val http4sVersion = "0.20.9"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.8"
-  val workbenchGoogle2V = "0.6-976eab3-SNAP"
+  val workbenchGoogle2V = "0.6-78fb796-SNAP"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",
@@ -23,7 +23,6 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "org.scalacheck" %% "scalacheck" % "1.14.0" % "test",
     "ca.mrvisser" %% "sealerate" % "0.0.5",
-    "io.chrisdavenport" %% "linebacker" % "0.2.1",
     "com.google.cloud" % "google-cloud-nio" % "0.101.0-alpha" % "test"
   )
 

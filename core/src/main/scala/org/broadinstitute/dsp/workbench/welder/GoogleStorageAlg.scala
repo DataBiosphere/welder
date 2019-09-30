@@ -2,9 +2,9 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.mtl.ApplicativeAsk
 import fs2.Stream
-import io.chrisdavenport.linebacker.Linebacker
 import io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -21,6 +21,10 @@ trait GoogleStorageAlg {
     * Overwrites the file if it already exists locally
     */
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
+
+  /**
+    * Delocalize user's files to GCS
+    */
   def delocalize(
       localObjectPath: RelativePath,
       gsPath: GsPath,
@@ -28,6 +32,9 @@ trait GoogleStorageAlg {
       userDefinedMeta: Map[String, String],
       traceId: TraceId
   ): IO[DelocalizeResponse]
+
+  def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)
+               (implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
 
   /**
     * Recursively download files in cloudStorageDirectory to local directory.
@@ -48,9 +55,10 @@ trait GoogleStorageAlg {
 object GoogleStorageAlg {
   def fromGoogle(
       config: GoogleStorageAlgConfig,
+      blocker: Blocker,
       googleStorageService: GoogleStorageService[IO]
-  )(implicit logger: Logger[IO], timer: Timer[IO], linerBacker: Linebacker[IO], cs: ContextShift[IO]): GoogleStorageAlg =
-    new GoogleStorageInterp(config, googleStorageService)
+  )(implicit logger: Logger[IO], timer: Timer[IO], cs: ContextShift[IO]): GoogleStorageAlg =
+    new GoogleStorageInterp(config, blocker, googleStorageService)
 }
 
 final case class GoogleStorageAlgConfig(workingDirectory: Path)

@@ -23,8 +23,6 @@ import org.scalacheck.Gen
 import org.scalatest.FlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import scala.concurrent.ExecutionContext.global
-
 class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   //if one day java emulator supports metadata, we shouldn't ignore this test
   ignore should "be able to set metadata when 403 happens" in {
@@ -38,7 +36,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
             Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))
           }
         }
-        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorage)
+        val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, googleStorage)
         val res = for {
           _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
           _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID().toString), Map("lastLockedBy" -> "me"))
@@ -54,7 +52,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
     forAll {
       (localObjectPath: RelativePath, gsPath: GsPath) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, GoogleStorageServiceWithFailures)
         val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
         // Create the local base directory
         val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -62,7 +60,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           directory.mkdirs
         }
         val res = for {
-          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](localAbsolutePath, global)).compile.drain //write to local file
+          _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](localAbsolutePath, blocker)).compile.drain //write to local file
           resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, TraceId(randomUUID().toString)).attempt
           _ <- IO((new File(localAbsolutePath.toString)).delete())
         } yield {
@@ -76,7 +74,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
     forAll {
       (localObjectPath: RelativePath, gsPath: GsPath) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
         val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
         // Create the local base directory
         val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -99,7 +97,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
     forAll {
       (localObjectPath: RelativePath, gsPath: GsPath) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
         val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
         // Create the local base directory
         val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -108,9 +106,9 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
         }
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
-          _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through fs2.io.file.writeAll[IO](localAbsolutePath, global)) ++ Stream.eval(IO.unit)
+          _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through fs2.io.file.writeAll[IO](localAbsolutePath, blocker)) ++ Stream.eval(IO.unit)
           resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID().toString))
-          newFileContent <- fs2.io.file.readAll[IO](localAbsolutePath, global, 4086).map(x => List(x)).foldMonoid
+          newFileContent <- fs2.io.file.readAll[IO](localAbsolutePath, blocker, 4086).map(x => List(x)).foldMonoid
           _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
         } yield {
           val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
@@ -132,7 +130,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
             }
         }
         val objectBody = genGcsObjectBody.sample.get
-        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
         val workingDir = Paths.get("/tmp")
         val localBaseDir = RelativePath(Paths.get("edit"))
 
@@ -165,7 +163,7 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           case None => GcsBlobName(s"test.suffix")
         }
         val objectBody = genGcsObjectBody.sample.get
-        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
         val workingDir = Paths.get("/tmp")
         val localBaseDir = RelativePath(Paths.get("edit"))
 

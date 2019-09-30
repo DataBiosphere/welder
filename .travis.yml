@@ -3,7 +3,7 @@ jdk:
 language: scala
 sudo: required
 scala:
-- 2.12.8
+- 2.12.10
 cache:
  directories:
  - "$HOME/.ivy2/cache/"
@@ -14,15 +14,10 @@ env:
  global:
 before_install:
 install:
-#- ./google-cloud-sdk/bin/gcloud config set project ${GOOGLE_PROJECT}
-#- ./google-cloud-sdk/bin/gcloud config set container/cluster $CLUSTER_NAME_PRD --quiet
-#- ./google-cloud-sdk/bin/gcloud config set compute/zone ${ZONE}
-##- ./google-cloud-sdk/bin/gcloud auth activate-service-account --key-file ${GOOGLE_PROJECT}-ccm-ci.json
-#- ./google-cloud-sdk/bin/gcloud auth configure-docker --quiet
-#- sbt server/docker:publish
 script:
 - export COVERALLS_REPO_TOKEN=$coverall_token
 - export OWNER_EMAIL="fake@gmail.com"
+- export STAGING_BUCKET="fakeBucket"
 - sbt clean coverage test coverageReport && sbt coverageAggregate
 after_success:
 - sbt coveralls

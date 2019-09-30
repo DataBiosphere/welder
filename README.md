@@ -41,6 +41,7 @@ Make sure all builds are green after you merge PR. Look for `welder-update-hash`
 Set up environment variables
 ```
 export OWNER_EMAIL="fake@gmail.com"
+export STAGING_BUCKET="fakeBucket"
 ```
 Run tests
 ```

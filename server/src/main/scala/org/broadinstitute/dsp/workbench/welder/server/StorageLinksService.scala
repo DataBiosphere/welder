@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.{Blocker, ContextShift, IO}
 import io.circe.{Decoder, Encoder}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
@@ -16,7 +16,6 @@ import cats.implicits._
 import _root_.io.circe.Encoder.encodeString
 import _root_.io.circe.Printer
 import _root_.io.circe.syntax._
-import _root_.io.chrisdavenport.linebacker.Linebacker
 import _root_.io.chrisdavenport.log4cats.Logger
 import org.broadinstitute.dsde.workbench.model.TraceId
 
@@ -24,10 +23,10 @@ class StorageLinksService(
     storageLinks: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
     metadataCacheAlg: MetadataCacheAlg,
+    blocker: Blocker,
     config: StorageLinksServiceConfig
 )(
     implicit logger: Logger[IO],
-    linerBacker: Linebacker[IO],
     contextShift: ContextShift[IO]
 ) extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
@@ -80,11 +79,11 @@ class StorageLinksService(
   private def persistWorkspaceBucket(baseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory): IO[Unit] = {
     val fileBody =
       RuntimeVariables(s"gs://${cloudStorageDirectory.bucketName.value}/notebooks") //appending notebooks to mimick old jupyter image until we start using new images.
-      .asJson.pretty(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
+      .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
     val destinationPath = config.workingDirectory
       .resolve(baseDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
-    ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, linerBacker.blockingContext, List(StandardOpenOption.CREATE_NEW))).compile.drain)
+    ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
       .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists") } // If file already exists, ignore the failure
   }
 
@@ -93,7 +92,7 @@ class StorageLinksService(
     val localSafeAbsolutePath = config.workingDirectory.resolve(storageLink.localSafeModeBaseDirectory.path.asPath)
     val localEditAbsolutePath = config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)
 
-    val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](localSafeAbsolutePath, localEditAbsolutePath)
+    val dirsToCreate: List[java.nio.file.Path] = List(localSafeAbsolutePath, localEditAbsolutePath)
 
     //creates all dirs and logs any errors
     dirsToCreate.traverse { dir =>
@@ -127,12 +126,11 @@ final case class RuntimeVariables(workspaceBucket: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 final case class StorageLinksServiceConfig(workingDirectory: Path, workspaceBucketNameFileName: Path)
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, config: StorageLinksServiceConfig)(
+  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, config: StorageLinksServiceConfig, blocker: Blocker)(
       implicit logger: Logger[IO],
-      linebacker: Linebacker[IO],
       contextShift: ContextShift[IO]
   ): StorageLinksService =
-    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, config)
+    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, blocker, config)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"
