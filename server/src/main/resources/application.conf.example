@@ -1,4 +1,0 @@
-server-port = 8080
-path-to-storage-links-json = "storage_links.json"
-path-to-gcs-metadata-json = "gcs_metadata.json"
-object-service.working-directory = "/tmp"
