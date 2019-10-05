@@ -5,6 +5,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
+import fs2.concurrent.SignallingRef
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
@@ -33,7 +34,7 @@ object Main extends IOApp {
         metadata => List(metadata.localPath -> metadata)
       )
       streams <- initStreams(appConfig, blocker, storageLinksCache, metadataCache)
-      _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)
+      _ <- Stream.emits(streams).covary[IO].parJoin(6)
     } yield ()
 
     app
@@ -42,7 +43,7 @@ object Main extends IOApp {
       }
       .compile
       .drain
-      .as(ExitCode.Success)
+      .as(ExitCode.Error)
   }
 
   def initStreams(appConfig: AppConfig, blocker: Blocker, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
@@ -52,6 +53,7 @@ object Main extends IOApp {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
       googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault(blocker, Some(blockerBound)))
+      shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
     } yield {
       val metadataCacheAlg = new MetadataCacheInterp(metadataCache)
       val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), blocker, googleStorageService)
@@ -59,15 +61,24 @@ object Main extends IOApp {
       val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig, blocker)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
-      val cacheService = PreshutdownService(
-        PreshutdownServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson, appConfig.pathToLogFile, appConfig.stagingBucketName),
+      val shutdownService = ShutdownService(
+        PreshutdownServiceConfig(
+          appConfig.pathToStorageLinksJson,
+          appConfig.pathToGcsMetadataJson,
+          appConfig.pathToLogFile,
+          appConfig.stagingBucketName),
+        shutDownSignal,
         storageLinksCache,
         metadataCache,
         googleStorageAlg,
         blocker
       )
-      val welderApp = WelderApp(objectService, storageLinksService, cacheService)
-      val serverStream = BlazeServerBuilder[IO].bindHttp(appConfig.serverPort, "0.0.0.0").withHttpApp(welderApp.service).serve
+
+      val welderApp = WelderApp(objectService, storageLinksService, shutdownService)
+      val serverStream = BlazeServerBuilder[IO]
+        .bindHttp(appConfig.serverPort, "0.0.0.0")
+        .withHttpApp(welderApp.service)
+        .serveWhile(shutDownSignal, Ref.unsafe(ExitCode.Success))
 
       val backGroundTaskConfig = BackgroundTaskConfig(
         appConfig.objectService.workingDirectory,

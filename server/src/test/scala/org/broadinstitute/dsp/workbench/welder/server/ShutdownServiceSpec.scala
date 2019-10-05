@@ -19,7 +19,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.matching.Regex
 
-class PreshutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
+class ShutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
   val config = PreshutdownServiceConfig(Paths.get("/tmp/storagelinks.json"), Paths.get("/tmp/metadata.json"), RelativePath(Paths.get("welder.log")), GcsBucketName("fakeStagingBucket"))
   val fakeGoogleStorageAlg = new GoogleStorageAlg {
     override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
@@ -35,7 +35,7 @@ class PreshutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite
     forAll {
       (localPath: RelativePath, storageLink: StorageLink) =>
         val metadata = AdaptedGcsMetadataCache(localPath, RemoteState.Found(None, Crc32("sfds")), None)
-        val cacheService = PreshutdownService (
+        val cacheService = ShutdownService (
           config,
           Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localPath -> storageLink)),
           Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(localPath -> metadata)),
