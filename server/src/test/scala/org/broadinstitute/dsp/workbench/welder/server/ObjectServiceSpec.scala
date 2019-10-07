@@ -134,7 +134,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
       val res = for {
         resp <- objectService.service.run(request).value.attempt
       } yield {
-        resp shouldBe Left(NotFoundException(s"gs://${bucketName.value}/${blobName.value} not found"))
+        resp shouldBe Left(NotFoundException(fakeTraceId, s"gs://${bucketName.value}/${blobName.value} not found"))
       }
 
       res.unsafeRunSync()
@@ -154,7 +154,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val res = for {
           resp <- objectService.service.run(request).value
         } yield ()
-        res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
+        res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(fakeTraceId, s"No storage link found for ${localFileDestination.toString}")))
     }
   }
 
@@ -657,7 +657,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getBlobBody(cloudStorageDirectory.bucketName, getFullBlobName(localSafeDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
         } yield {
-          resp shouldBe Left(SafeDelocalizeSafeModeFileError(s"${localPath} can't be delocalized since it's in safe mode"))
+          resp shouldBe Left(SafeDelocalizeSafeModeFileError(fakeTraceId, s"${localPath} can't be delocalized since it's in safe mode"))
           remoteFile.isEmpty shouldBe(true)
         }
         res.unsafeRunSync()
@@ -694,7 +694,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath.toString)).delete())
         } yield {
-          resp shouldBe Left(GenerationMismatch(s"Remote version has changed for /tmp/${localPath}. Generation mismatch"))
+          resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for /tmp/${localPath}. Generation mismatch"))
         }
         res.unsafeRunSync()
     }
@@ -717,7 +717,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         } yield {
           resp.get.status shouldBe Status.Ok
         }
-        res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
+        res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(fakeTraceId, s"No storage link found for ${localFileDestination.toString}")))
     }
   }
 
@@ -746,7 +746,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
           _ <- IO((new File(localPath.toString)).delete())
           remoteFile <- FakeGoogleStorageInterpreter.getBlobBody(cloudStorageDirectory.bucketName, getFullBlobName(localSafeDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath)).compile.toList
         } yield {
-          resp shouldBe Left(DeleteSafeModeFileError(s"${localPath} can't be deleted since it's in safe mode"))
+          resp shouldBe Left(DeleteSafeModeFileError(fakeTraceId, s"${localPath} can't be deleted since it's in safe mode"))
           remoteFile.isEmpty shouldBe(true)
         }
         res.unsafeRunSync()
@@ -817,7 +817,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         } yield {
           val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
           val gsPath = GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
-          r shouldBe Left(NotFoundException(s"${gsPath} not found in Google Storage"))
+          r shouldBe Left(NotFoundException(fakeTraceId, s"${gsPath} not found in Google Storage"))
         }
         res.unsafeRunSync()
     }
@@ -936,7 +936,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
         val res = for {
           res <- objectService.service.run(request).value.attempt
         } yield {
-          res shouldBe(Left(LockedByOther(s"lock is already acquired by someone else")))
+          res shouldBe(Left(LockedByOther(fakeTraceId, s"lock is already acquired by someone else")))
         }
         res.unsafeRunSync()
     }

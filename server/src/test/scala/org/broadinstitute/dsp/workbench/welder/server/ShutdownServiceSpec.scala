@@ -8,6 +8,7 @@ import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.mtl.ApplicativeAsk
 import fs2.Stream
+import fs2.concurrent.SignallingRef
 import org.broadinstitute.dsde.workbench.google2.{Crc32, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -35,8 +36,10 @@ class ShutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
     forAll {
       (localPath: RelativePath, storageLink: StorageLink) =>
         val metadata = AdaptedGcsMetadataCache(localPath, RemoteState.Found(None, Crc32("sfds")), None)
+        val signal = SignallingRef[IO, Boolean](false).unsafeRunSync()
         val cacheService = ShutdownService (
           config,
+          signal,
           Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localPath -> storageLink)),
           Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(localPath -> metadata)),
           fakeGoogleStorageAlg,

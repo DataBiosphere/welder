@@ -2,8 +2,10 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.Eq
 import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.mtl.ApplicativeAsk
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.scalatest.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -17,6 +19,8 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   implicit val cs: ContextShift[IO] = IO.contextShift(executionContext)
   implicit val timer: Timer[IO] = IO.timer(executionContext)
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
+  val fakeTraceId = TraceId("fakeTraceId")
+  implicit val traceId: ApplicativeAsk[IO, TraceId] = ApplicativeAsk.const[IO, TraceId](fakeTraceId)
 
   val blocker: Blocker = Blocker.liftExecutionContext(global)
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)
