@@ -14,6 +14,7 @@ import cats.data.Kleisli
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Blocker, ContextShift, IO, Resource, Timer}
 import cats.implicits._
+import cats.mtl.ApplicativeAsk
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
@@ -38,26 +39,30 @@ class ObjectService(
   val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
       traceId =>
+        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
+
         for {
           metadataReq <- req.as[GetMetadataRequest]
-          res <- checkMetadata(metadataReq).run(traceId)
+          res <- checkMetadata(metadataReq)
           resp <- Ok(res)
         } yield resp
     case req @ POST -> Root / "lock" =>
       traceId =>
+        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
         for {
           request <- req.as[AcquireLockRequest]
-          res <- acquireLock(request, traceId)
+          _ <- acquireLock(request)
           resp <- NoContent()
         } yield resp
     case req @ POST -> Root =>
       traceId =>
+        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
         for {
           localizeReq <- req.as[PostObjectRequest]
           res <- localizeReq match {
             case x: Localize => localize(x).run(traceId) >> NoContent()
-            case x: SafeDelocalize => safeDelocalize(x).run(traceId) >> NoContent()
-            case x: Delete => delete(x).run(traceId) >> NoContent()
+            case x: SafeDelocalize => safeDelocalize(x) >> NoContent()
+            case x: Delete => delete(x)>> NoContent()
           }
         } yield res
   }
@@ -73,7 +78,7 @@ class ObjectService(
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
-              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(s"${gsPath} not found")))(
+              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${gsPath} not found")))(
                 m => Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
               )
             } yield ()
@@ -96,8 +101,9 @@ class ObjectService(
   // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
   //       bucket policy only enabled, which will allow step 1 to succeed.
   //
-  def acquireLock(req: AcquireLockRequest, traceId: TraceId): IO[Unit] = {
+  def acquireLock(req: AcquireLockRequest)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
     val actionToLock = for {
+      traceId <- ev.ask
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
       gsPath = getGsPath(req.localObjectPath, context)
@@ -113,13 +119,13 @@ class ObjectService(
                 if (lock.hashedLockedBy == hashedLockedByCurrentUser)
                   updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
                 else
-                  IO.raiseError(LockedByOther(s"lock is already acquired by someone else"))
+                  IO.raiseError(LockedByOther(traceId, s"lock is already acquired by someone else"))
               case None =>
                 updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
             }
           } yield res
         case None =>
-          IO.raiseError(NotFoundException(s"${gsPath} not found in Google Storage"))
+          IO.raiseError(NotFoundException(traceId, s"${gsPath} not found in Google Storage"))
       }
     } yield res
 
@@ -145,12 +151,12 @@ class ObjectService(
     * Even though you don't see many Kleisli used explicitly in welder, it's actually used extensively, because it's a fundamental data type
     * used by http4s, the web library welder depends on.
     */
-  def checkMetadata(req: GetMetadataRequest): Kleisli[IO, TraceId, MetadataResponse] =
-    for {
-      traceId <- Kleisli.ask[IO, TraceId]
-      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
+  def checkMetadata(req: GetMetadataRequest)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[MetadataResponse] =
+  for {
+      traceId <- ev.ask
+      context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       res <- if (context.isSafeMode)
-        Kleisli.pure[IO, TraceId, MetadataResponse](MetadataResponse.SafeMode(context.storageLink))
+        IO.pure(MetadataResponse.SafeMode(context.storageLink))
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         val actionToLock = for {
@@ -196,16 +202,16 @@ class ObjectService(
               } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
           }
         } yield result
-        Kleisli.liftF[IO, TraceId, MetadataResponse](preventConcurrentAction(actionToLock, req.localObjectPath))
+        preventConcurrentAction(actionToLock, req.localObjectPath)
       }
     } yield res
 
-  def safeDelocalize(req: SafeDelocalize): Kleisli[IO, TraceId, Unit] =
+  def safeDelocalize(req: SafeDelocalize)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
     for {
-      traceId <- Kleisli.ask[IO, TraceId]
-      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
+      traceId <- ev.ask
+      context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       _ <- if (context.isSafeMode)
-        Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(SafeDelocalizeSafeModeFileError(s"${req.localObjectPath} can't be delocalized since it's in safe mode")))
+        IO.raiseError(SafeDelocalizeSafeModeFileError(traceId, s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
       else {
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
         val actionToLock: IO[Unit] = for {
@@ -244,16 +250,16 @@ class ObjectService(
           }
         } yield ()
 
-        Kleisli.liftF(preventConcurrentAction(actionToLock, req.localObjectPath))
+        preventConcurrentAction(actionToLock, req.localObjectPath)
       }
     } yield ()
 
-  def delete(req: Delete): Kleisli[IO, TraceId, Unit] =
+  def delete(req: Delete)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
     for {
-      traceId <- Kleisli.ask[IO, TraceId]
-      context <- Kleisli.liftF(storageLinksAlg.findStorageLink(req.localObjectPath))
+      traceId <- ev.ask
+      context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       _ <- if (context.isSafeMode)
-        Kleisli.liftF[IO, TraceId, Unit](IO.raiseError(DeleteSafeModeFileError(s"${req.localObjectPath} can't be deleted since it's in safe mode")))
+        IO.raiseError(DeleteSafeModeFileError(traceId, s"${req.localObjectPath} can't be deleted since it's in safe mode"))
       else {
         val gsPath = getGsPath(req.localObjectPath, context)
         val actionToLock = for {
@@ -269,12 +275,12 @@ class ObjectService(
                     .as(meta.localFileGeneration.getOrElse(0L))
               }
             case None =>
-              IO.raiseError(InvalidLock(s"Local GCS metadata for ${req.localObjectPath} not found"))
+              IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
           _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
           _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
-        Kleisli.liftF(preventConcurrentAction(actionToLock, req.localObjectPath))
+        preventConcurrentAction(actionToLock, req.localObjectPath)
       }
     } yield ()
 
@@ -299,12 +305,13 @@ class ObjectService(
   /**
     * If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
     */
-  private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName): IO[Unit] =
+  private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
     for {
+      traceId <- ev.ask
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
-      else IO.raiseError(InvalidLock("Fail to delocalize due to lock expiration or lock held by someone else"))
+      else IO.raiseError(InvalidLock(traceId, "Fail to delocalize due to lock expiration or lock held by someone else"))
     } yield ()
 
   private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =

@@ -14,7 +14,7 @@ class StorageLinksInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with
       val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
       val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
       val res = storageLinksAlg.findStorageLink(localFileDestination)
-      res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(s"No storage link found for ${localFileDestination.toString}")))
+      res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(fakeTraceId, s"No storage link found for ${localFileDestination.toString}")))
     }
   }
 

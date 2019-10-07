@@ -78,7 +78,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
         .lastOrError
         .adaptError {
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            GenerationMismatch(s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
+            GenerationMismatch(traceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch")
         }
     }
   }

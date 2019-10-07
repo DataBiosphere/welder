@@ -1,10 +1,13 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
+import cats.mtl.ApplicativeAsk
+import org.broadinstitute.dsde.workbench.model.TraceId
 
 class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLinksAlg {
-  def findStorageLink[A](localPath: RelativePath): IO[CommonContext] =
+  def findStorageLink[A](localPath: RelativePath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[CommonContext] =
     for {
+      traceId <- ev.ask
       storageLinks <- storageLinksCache.get
       baseDirectories = getPossibleBaseDirectory(localPath.asPath)
       context = baseDirectories.collectFirst {
@@ -14,6 +17,6 @@ class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLi
           val isSafeMode = sl.localSafeModeBaseDirectory.path == relativePath
           CommonContext(isSafeMode, relativePath, sl)
       }
-      res <- context.fold[IO[CommonContext]](IO.raiseError(StorageLinkNotFoundException(s"No storage link found for ${localPath}")))(IO.pure)
+      res <- context.fold[IO[CommonContext]](IO.raiseError(StorageLinkNotFoundException(traceId, s"No storage link found for ${localPath}")))(IO.pure)
     } yield res
 }

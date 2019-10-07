@@ -29,16 +29,16 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
         res match {
           case Left(error) =>
             val resp = error match {
-              case BadRequestException(message) => BadRequest(ErrorReport(message))
+              case BadRequestException(_, message) => BadRequest(ErrorReport(message))
               case e: org.http4s.InvalidMessageBodyFailure => BadRequest(ErrorReport(e.getCause().toString))
-              case NotFoundException(message) => NotFound(ErrorReport(message))
-              case GenerationMismatch(x) => PreconditionFailed(ErrorReport(x, Some(0)))
-              case StorageLinkNotFoundException(x) => PreconditionFailed(ErrorReport(x, Some(1)))
-              case SafeDelocalizeSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(2)))
-              case DeleteSafeModeFileError(x) => PreconditionFailed(ErrorReport(x, Some(3)))
-              case InvalidLock(x) => PreconditionFailed(ErrorReport(x, Some(4)))
-              case InternalException(x) => InternalServerError(ErrorReport(x))
-              case LockedByOther(x) => Conflict(x)
+              case NotFoundException(_, message) => NotFound(ErrorReport(message))
+              case GenerationMismatch(_, x) => PreconditionFailed(ErrorReport(x, Some(0)))
+              case StorageLinkNotFoundException(_, x) => PreconditionFailed(ErrorReport(x, Some(1)))
+              case SafeDelocalizeSafeModeFileError(_, x) => PreconditionFailed(ErrorReport(x, Some(2)))
+              case DeleteSafeModeFileError(_, x) => PreconditionFailed(ErrorReport(x, Some(3)))
+              case InvalidLock(_, x) => PreconditionFailed(ErrorReport(x, Some(4)))
+              case InternalException(_, x) => InternalServerError(ErrorReport(x))
+              case LockedByOther(_, x) => Conflict(x)
               case e =>
                 val errorMessage = if (e.getCause != null) e.getCause.toString else e.toString
                 InternalServerError(ErrorReport(errorMessage))
