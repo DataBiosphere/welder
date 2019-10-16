@@ -6,6 +6,7 @@ import cats.mtl.ApplicativeAsk
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.http4s.{Header, Headers}
 import org.scalatest.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -20,6 +21,7 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   implicit val timer: Timer[IO] = IO.timer(executionContext)
   implicit val unsafeLogger: Logger[IO] = Slf4jLogger.getLogger[IO]
   val fakeTraceId = TraceId("fakeTraceId")
+  val fakeTraceIdHeader = Headers.of(Header("X-Cloud-Trace-Context", fakeTraceId.asString))
   implicit val traceId: ApplicativeAsk[IO, TraceId] = ApplicativeAsk.const[IO, TraceId](fakeTraceId)
 
   val blocker: Blocker = Blocker.liftExecutionContext(global)

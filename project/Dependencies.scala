@@ -1,11 +1,11 @@
 import sbt._
 
 object Dependencies {
-  val circeVersion = "0.11.0"
+  val circeVersion = "0.12.2"
   val http4sVersion = "0.21.0-M5"
   val grpcCoreVersion = "1.17.1"
   val scalaTestVersion = "3.0.8"
-  val workbenchGoogle2V = "0.6-78fb796-SNAP"
+  val workbenchGoogle2V = "0.6-8bae8e8"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.11.0",

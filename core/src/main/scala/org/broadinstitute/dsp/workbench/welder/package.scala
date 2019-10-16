@@ -8,31 +8,23 @@ import java.util.Base64
 
 import cats.Eq
 import cats.effect.concurrent.Ref
-import cats.effect.{Blocker, Concurrent, ContextShift, IO, Resource, Sync}
+import cats.effect.{Blocker, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
 import io.chrisdavenport.log4cats.Logger
-import io.circe.fs2._
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
-import org.typelevel.jawn.AsyncParser
 
 import scala.language.implicitConversions
 
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
-
-  def readJsonFileToA[F[_]: Sync: ContextShift: Concurrent, A: Decoder](path: Path, blocker: Blocker): Stream[F, A] =
-    fs2.io.file
-      .readAll[F](path, blocker,4096)
-      .through(fs2.text.utf8Decode)
-      .through(_root_.io.circe.fs2.stringParser(AsyncParser.SingleValue))
-      .through(decoder)
 
   val gsDirectoryReg = "gs:\\/\\/.*".r
 
@@ -127,7 +119,7 @@ package object welder {
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       _ <- Option(path.getParent).traverse_(parentDir => Stream.eval(mkdirIfNotExist(parentDir)))
-      cached <- readJsonFileToA[IO, List[B]](path, blocker).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
+      cached <- util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
         Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
       }
       ref <- Stream.resource(
