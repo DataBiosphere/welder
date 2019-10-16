@@ -12,6 +12,7 @@ import fs2.concurrent.SignallingRef
 import org.broadinstitute.dsde.workbench.google2.{Crc32, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -49,8 +50,8 @@ class ShutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
 
         val res = for {
           resp <- cacheService.service.run(request).value
-          storageLinkResult <- readJsonFileToA[IO, List[StorageLink]](config.storageLinksPath, blocker).compile.lastOrError
-          metadataResult <- readJsonFileToA[IO, List[AdaptedGcsMetadataCache]](config.metadataCachePath, blocker).compile.lastOrError
+          storageLinkResult <- util2.readJsonFileToA[IO, List[StorageLink]](config.storageLinksPath, Some(blocker)).compile.lastOrError
+          metadataResult <- util2.readJsonFileToA[IO, List[AdaptedGcsMetadataCache]](config.metadataCachePath, Some(blocker)).compile.lastOrError
           _ <- IO((new File(config.storageLinksPath.toString)).delete())
           _ <- IO((new File(config.metadataCachePath.toString)).delete())
         } yield {

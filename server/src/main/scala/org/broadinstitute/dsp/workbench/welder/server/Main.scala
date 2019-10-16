@@ -9,7 +9,7 @@ import fs2.concurrent.SignallingRef
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
-import org.broadinstitute.dsde.workbench.util.ExecutionContexts
+import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.http4s.server.blaze.BlazeServerBuilder
 

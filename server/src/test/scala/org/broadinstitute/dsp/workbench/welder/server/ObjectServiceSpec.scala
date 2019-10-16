@@ -102,7 +102,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     } yield {
       resp.get.status shouldBe (Status.NoContent)
       localFileBody shouldBe(expectedBody)
-      val localPath = RelativePath(localFileDestination)
     }
 
     res.unsafeRunSync()
@@ -125,9 +124,8 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
            |}
       """.stripMargin
       val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-      val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+      val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
 
-      val localAbsoluteFilePath = Paths.get(s"/tmp/${localFileDestination}")
       val metadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
       val objectService = initObjectServiceWithMetadataCache(Map.empty, metadataCache, None)
 
@@ -149,7 +147,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
              |  "localPath": "${localFileDestination.toString}"
              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
 
         val res = for {
           resp <- objectService.service.run(request).value
@@ -645,7 +643,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "$localPath"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
         // Create the local base directory
         val directory = new File(s"/tmp/${localSafeDirectory.path.toString}")
         if (!directory.exists) {
@@ -683,7 +681,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "$localPath"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -709,11 +707,10 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "${localFileDestination.toString}"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
 
         val res = for {
           resp <- objectService.service.run(request).value
-          body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
         } yield {
           resp.get.status shouldBe Status.Ok
         }
@@ -734,7 +731,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "$localPath"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
         // Create the local base directory
         val directory = new File(s"/tmp/${localSafeDirectory.path.toString}")
         if (!directory.exists) {
@@ -805,7 +802,7 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
 
         // Create the local base directory
         val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -925,14 +922,13 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
                              |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
                              |}""".stripMargin
         val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock")).withEntity[Json](requestBodyJson)
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
 
         // Create the local base directory
         val directory = new File(s"${localAbsolutePath.getParent.toString}")
         if (!directory.exists) {
           directory.mkdirs
         }
-        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
         val res = for {
           res <- objectService.service.run(request).value.attempt
         } yield {
