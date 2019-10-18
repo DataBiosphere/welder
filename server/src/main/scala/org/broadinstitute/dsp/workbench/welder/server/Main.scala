@@ -34,7 +34,7 @@ object Main extends IOApp {
         metadata => List(metadata.localPath -> metadata)
       )
       streams <- initStreams(appConfig, blocker, storageLinksCache, metadataCache)
-      _ <- Stream.emits(streams).covary[IO].parJoin(6)
+      _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)
     } yield ()
 
     app

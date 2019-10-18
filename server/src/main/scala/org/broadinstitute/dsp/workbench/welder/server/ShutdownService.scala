@@ -41,10 +41,8 @@ class ShutdownService(config: PreshutdownServiceConfig,
       _ <- googleStorageAlg.fileToGcs(config.logFilePath, GsPath(config.stagingBucketName, blobName))
     } yield ()
 
-    Logger[IO].info("Shutting down welder") >> Stream(
-      flushMetadataCache,
-      flushStorageLinks,
-      Stream.eval(flushLogFile))
+    val streams = flushStorageLinks ++ flushMetadataCache ++ Stream.eval(flushLogFile)
+    Logger[IO].info("Shutting down welder") >> Stream(streams)
       .parJoin(3)
       .compile
       .drain >> IO(shutDownSignal.update(_ => true)).void //shut down http server

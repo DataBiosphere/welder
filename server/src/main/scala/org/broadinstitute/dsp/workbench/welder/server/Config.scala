@@ -8,7 +8,7 @@ import cats.implicits._
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
-import pureconfig.ConfigReader
+import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
 
@@ -29,7 +29,7 @@ object Config {
     s => Right(GcsBucketName(s))
   )
 
-  val appConfig = pureconfig.loadConfig[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
+  val appConfig = ConfigSource.default.load[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 }
 
 final case class AppConfig(
