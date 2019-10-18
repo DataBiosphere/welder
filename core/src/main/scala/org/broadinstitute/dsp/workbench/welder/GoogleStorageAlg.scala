@@ -23,7 +23,7 @@ trait GoogleStorageAlg {
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
 
   /**
-    * Delocalize user's files to GCS
+    * Delocalize user's files to GCS.
     */
   def delocalize(
       localObjectPath: RelativePath,
@@ -33,6 +33,9 @@ trait GoogleStorageAlg {
       traceId: TraceId
   ): IO[DelocalizeResponse]
 
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
+    */
   def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)
                (implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
 

@@ -8,7 +8,7 @@ object Dependencies {
   val workbenchGoogle2V = "0.6-8bae8e8"
 
   val common = List(
-    "com.github.pureconfig" %% "pureconfig" % "0.11.0",
+    "com.github.pureconfig" %% "pureconfig" % "0.12.1",
     "co.fs2" %% "fs2-io" % "2.0.1",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
