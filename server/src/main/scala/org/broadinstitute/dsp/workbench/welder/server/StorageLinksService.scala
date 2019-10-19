@@ -126,7 +126,13 @@ final case class RuntimeVariables(workspaceBucket: String)
 final case class StorageLinks(storageLinks: Set[StorageLink])
 final case class StorageLinksServiceConfig(workingDirectory: Path, workspaceBucketNameFileName: Path)
 object StorageLinksService {
-  def apply(storageLinks: StorageLinksCache, googleStorageAlg: GoogleStorageAlg, metadataCacheAlg: MetadataCacheAlg, config: StorageLinksServiceConfig, blocker: Blocker)(
+  def apply(
+      storageLinks: StorageLinksCache,
+      googleStorageAlg: GoogleStorageAlg,
+      metadataCacheAlg: MetadataCacheAlg,
+      config: StorageLinksServiceConfig,
+      blocker: Blocker
+  )(
       implicit logger: Logger[IO],
       contextShift: ContextShift[IO]
   ): StorageLinksService =
