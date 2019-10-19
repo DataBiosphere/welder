@@ -19,12 +19,15 @@ import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 
 // This endpoint is called by leonardo before it tells dataproc to shut down user's vm.
-class ShutdownService(config: PreshutdownServiceConfig,
-                      shutDownSignal: SignallingRef[IO, Boolean],
-                      storageLinksCache: StorageLinksCache,
-                      metadataCache: MetadataCache,
-                      googleStorageAlg: GoogleStorageAlg,
-                      blocker: Blocker)(implicit cs: ContextShift[IO], logger: Logger[IO]) extends Http4sDsl[IO] {
+class ShutdownService(
+    config: PreshutdownServiceConfig,
+    shutDownSignal: SignallingRef[IO, Boolean],
+    storageLinksCache: StorageLinksCache,
+    metadataCache: MetadataCache,
+    googleStorageAlg: GoogleStorageAlg,
+    blocker: Blocker
+)(implicit cs: ContextShift[IO], logger: Logger[IO])
+    extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
     case POST -> Root / "flush" =>
@@ -51,12 +54,14 @@ class ShutdownService(config: PreshutdownServiceConfig,
 }
 
 object ShutdownService {
-  def apply(config: PreshutdownServiceConfig,
-            shutDownSignal: SignallingRef[IO, Boolean],
-            storageLinksCache: StorageLinksCache,
-            metadataCache: MetadataCache,
-            googleStorageAlg: GoogleStorageAlg,
-            blocker: Blocker)(
+  def apply(
+      config: PreshutdownServiceConfig,
+      shutDownSignal: SignallingRef[IO, Boolean],
+      storageLinksCache: StorageLinksCache,
+      metadataCache: MetadataCache,
+      googleStorageAlg: GoogleStorageAlg,
+      blocker: Blocker
+  )(
       implicit cs: ContextShift[IO],
       logger: Logger[IO]
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg, blocker)

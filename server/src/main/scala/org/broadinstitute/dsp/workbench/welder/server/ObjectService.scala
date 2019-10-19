@@ -28,12 +28,12 @@ import org.http4s.circe.CirceEntityEncoder._
 import scala.concurrent.duration._
 
 class ObjectService(
-                     permitsRef: Permits,
-                     config: ObjectServiceConfig,
-                     googleStorageAlg: GoogleStorageAlg,
-                     blocker: Blocker,
-                     storageLinksAlg: StorageLinksAlg,
-                     metadataCacheAlg: MetadataCacheAlg
+    permitsRef: Permits,
+    config: ObjectServiceConfig,
+    googleStorageAlg: GoogleStorageAlg,
+    blocker: Blocker,
+    storageLinksAlg: StorageLinksAlg,
+    metadataCacheAlg: MetadataCacheAlg
 )(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
     extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
@@ -62,7 +62,7 @@ class ObjectService(
           res <- localizeReq match {
             case x: Localize => localize(x).run(traceId) >> NoContent()
             case x: SafeDelocalize => safeDelocalize(x) >> NoContent()
-            case x: Delete => delete(x)>> NoContent()
+            case x: Delete => delete(x) >> NoContent()
           }
         } yield res
   }
@@ -152,7 +152,7 @@ class ObjectService(
     * used by http4s, the web library welder depends on.
     */
   def checkMetadata(req: GetMetadataRequest)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[MetadataResponse] =
-  for {
+    for {
       traceId <- ev.ask
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       res <- if (context.isSafeMode)
