@@ -30,6 +30,7 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
     override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
   }
   val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
   val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)

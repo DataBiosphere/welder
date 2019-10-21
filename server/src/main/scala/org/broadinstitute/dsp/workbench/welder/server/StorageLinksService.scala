@@ -87,10 +87,10 @@ class StorageLinksService(
       .resolve(safeModeDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
 
-    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath => ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
+    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath => logger.info(s"writing ${destinationPath}") >> ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
       .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists in ${destinationPath}") } // If file already exists, ignore the failure
 
-    (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parSequence_
+    (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parTupled.void
   }
 
   //returns whether the directories exist at the end of execution
@@ -109,7 +109,7 @@ class StorageLinksService(
         else {
           IO(file.mkdirs()).flatMap(r => {
             if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
-            else IO.unit
+            else logger.info(s"Successfully created ${file}")
           })
         }
       } yield ()
