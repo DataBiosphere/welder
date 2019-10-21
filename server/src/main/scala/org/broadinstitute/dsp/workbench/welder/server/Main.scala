@@ -62,7 +62,7 @@ object Main extends IOApp {
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
       val shutdownService = ShutdownService(
-        PreshutdownServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson, appConfig.pathToLogFile, appConfig.stagingBucketName),
+        PreshutdownServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson, appConfig.objectService.workingDirectory, appConfig.stagingBucketName),
         shutDownSignal,
         storageLinksCache,
         metadataCache,

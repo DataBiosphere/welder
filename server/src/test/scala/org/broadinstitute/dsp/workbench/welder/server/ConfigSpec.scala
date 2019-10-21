@@ -19,7 +19,6 @@ class ConfigSpec extends FlatSpec with Matchers {
       15 minutes,
       Paths.get("/work/.welder/storage_links.json"),
       Paths.get("/work/.welder/gcs_metadata.json"),
-      RelativePath(Paths.get("welder.log")),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
       GcsBucketName("fakeBucket")
