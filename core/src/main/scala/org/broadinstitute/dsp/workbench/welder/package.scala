@@ -137,6 +137,15 @@ package object welder {
       .flatMap(x => Stream.emits(x.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")))
       .through(fs2.io.file.writeAll[IO](path, blocker, writeFileOptions))
 
+  /**
+    * Example:
+    * scala> findFilesWithSuffix(res1, ".log")
+    * res5: List[java.io.File] = List(/tmp/d.log, /tmp/f.log)
+    */
+  def findFilesWithSuffix(parent: Path, suffix: String): List[File] = {
+    parent.toFile.listFiles().filter(f => f.isFile && f.getName.endsWith(suffix)).toList
+  }
+
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)

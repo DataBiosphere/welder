@@ -38,13 +38,17 @@ class ShutdownService(
     val flushStorageLinks = flushCache(config.storageLinksPath, blocker, storageLinksCache)
     val flushMetadataCache = flushCache(config.metadataCachePath, blocker, metadataCache)
 
-    val flushLogFile = for {
+    // Copy all welder log files and jupyter log file to staging bucket
+    val flushLogFiles = for {
       implicit0(ev: ApplicativeAsk[IO, TraceId]) <- IO(ApplicativeAsk.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
-      blobName = GcsBlobName("welder/welder.log")
-      _ <- googleStorageAlg.fileToGcs(config.logFilePath, GsPath(config.stagingBucketName, blobName))
+      _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ {
+        file =>
+          val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
+          googleStorageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
+      }
     } yield ()
 
-    val streams = flushStorageLinks ++ flushMetadataCache ++ Stream.eval(flushLogFile)
+    val streams = flushStorageLinks ++ flushMetadataCache ++ Stream.eval(flushLogFiles)
     Logger[IO].info("Shutting down welder") >> Stream(streams)
       .parJoin(3)
       .compile
@@ -67,4 +71,4 @@ object ShutdownService {
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg, blocker)
 }
 
-final case class PreshutdownServiceConfig(storageLinksPath: Path, metadataCachePath: Path, logFilePath: RelativePath, stagingBucketName: GcsBucketName)
+final case class PreshutdownServiceConfig(storageLinksPath: Path, metadataCachePath: Path, workingDirectory: Path, stagingBucketName: GcsBucketName)

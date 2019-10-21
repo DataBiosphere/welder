@@ -85,8 +85,12 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
 
   override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    logger.info(s"flushing file ${localAbsolutePath}") >>
-      io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to[Array].flatMap { body =>
+    fileToGcsAbsolutePath(localAbsolutePath, gsPath)
+  }
+
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
+    logger.info(s"flushing file ${localFile}") >>
+      io.file.readAll[IO](localFile, blocker, 4096).compile.to[Array].flatMap { body =>
         googleStorageService
           .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
           .void

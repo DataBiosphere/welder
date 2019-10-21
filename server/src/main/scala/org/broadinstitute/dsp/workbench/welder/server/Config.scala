@@ -39,7 +39,6 @@ final case class AppConfig(
     syncCloudStorageDirectoryInterval: FiniteDuration,
     pathToStorageLinksJson: Path,
     pathToGcsMetadataJson: Path,
-    pathToLogFile: RelativePath,
     workspaceBucketNameFileName: Path,
     objectService: ObjectServiceConfig,
     stagingBucketName: GcsBucketName

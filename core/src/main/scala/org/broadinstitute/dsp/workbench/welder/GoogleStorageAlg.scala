@@ -39,6 +39,11 @@ trait GoogleStorageAlg {
   def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
 
   /**
+    * Copy file to GCS without checking generation, and adding user metadata
+    */
+  def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
+
+  /**
     * Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     * @param localBaseDirectory: base directory where remote files will be download to
