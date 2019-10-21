@@ -60,7 +60,7 @@ class StorageLinksService(
         (links ++ toAdd, storageLink)
       }
       _ <- initializeDirectories(storageLink)
-      _ <- persistWorkspaceBucket(link.localBaseDirectory, link.cloudStorageDirectory)
+      _ <- persistWorkspaceBucket(link.localBaseDirectory, link.localSafeModeBaseDirectory, link.cloudStorageDirectory)
       _ <- (googleStorageAlg
         .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
@@ -76,15 +76,21 @@ class StorageLinksService(
     } yield link
   }
 
-  private def persistWorkspaceBucket(baseDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory): IO[Unit] = {
+  private def persistWorkspaceBucket(baseDirectory: LocalDirectory, safeModeDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory): IO[Unit] = {
     val fileBody =
       RuntimeVariables(s"gs://${cloudStorageDirectory.bucketName.value}/notebooks") //appending notebooks to mimick old jupyter image until we start using new images.
       .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
-    val destinationPath = config.workingDirectory
+    val editModeDestinationPath = config.workingDirectory
       .resolve(baseDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
-    ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
-      .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists") } // If file already exists, ignore the failure
+    val safeModeDestinationPath = config.workingDirectory
+      .resolve(safeModeDirectory.path.asPath)
+      .resolve(config.workspaceBucketNameFileName)
+
+    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath => ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
+      .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists in ${destinationPath}") } // If file already exists, ignore the failure
+
+    (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parSequence_
   }
 
   //returns whether the directories exist at the end of execution
