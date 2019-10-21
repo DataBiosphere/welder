@@ -32,6 +32,7 @@ class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
     override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
     override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, patter: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
   }
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
   val storageLinksService = StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, StorageLinksServiceConfig(workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")), blocker)
