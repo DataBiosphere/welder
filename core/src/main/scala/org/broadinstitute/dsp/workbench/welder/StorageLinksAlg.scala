@@ -11,4 +11,13 @@ trait StorageLinksAlg {
 object StorageLinksAlg {
   def fromCache(storageLinksCache: StorageLinksCache): StorageLinksAlg = new StorageLinksInterp(storageLinksCache)
 }
-final case class CommonContext(isSafeMode: Boolean, basePath: RelativePath, storageLink: StorageLink)
+final case class CommonContext(isSafeMode: Boolean, basePath: RelativePath, storageLink: StorageLink) extends LoggingContext {
+  override def toMap: Map[String, String] = Map(
+    "isSafeMode" -> isSafeMode.toString,
+    "basePath" -> basePath.asPath.toString,
+    "storageLink.localBaseDirectory" -> storageLink.localBaseDirectory.path.toString,
+    "storageLink.localSafeModeBaseDirectory" -> storageLink.localSafeModeBaseDirectory.path.toString,
+    "storageLink.cloudStorageDirectory" -> storageLink.cloudStorageDirectory.toString,
+    "storageLink.pattern" -> storageLink.pattern.toString,
+  )
+}

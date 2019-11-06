@@ -20,8 +20,6 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
-import scala.language.implicitConversions
-
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
@@ -149,5 +147,4 @@ package object welder {
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
-  implicit def loggerToContextLogger[F[_]](logger: Logger[F]): ContextLogger[F] = ContextLogger(logger)
 }

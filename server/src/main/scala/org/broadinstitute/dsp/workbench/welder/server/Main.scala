@@ -6,7 +6,7 @@ import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import io.chrisdavenport.log4cats.Logger
+import io.chrisdavenport.log4cats.{Logger, StructuredLogger}
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
@@ -47,7 +47,7 @@ object Main extends IOApp {
   }
 
   def initStreams(appConfig: AppConfig, blocker: Blocker, storageLinksCache: StorageLinksCache, metadataCache: MetadataCache)(
-      implicit logger: Logger[IO]
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))

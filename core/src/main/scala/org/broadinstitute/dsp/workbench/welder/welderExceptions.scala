@@ -18,3 +18,7 @@ final case class InvalidLock(traceId: TraceId, message: String) extends WelderEx
 final case class DeleteSafeModeFileError(traceId: TraceId, message: String) extends WelderException
 final case class NotFoundException(traceId: TraceId, message: String) extends WelderException
 final case class LockedByOther(traceId: TraceId, message: String) extends WelderException
+
+trait LoggingContext {
+  def toMap: Map[String, String]
+}

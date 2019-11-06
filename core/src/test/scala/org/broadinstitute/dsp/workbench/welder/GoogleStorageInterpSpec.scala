@@ -162,6 +162,10 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
           case Some(bp) => GcsBlobName(s"${bp.asString}/test.suffix")
           case None => GcsBlobName(s"test.suffix")
         }
+        val blobNonExist = cloudStorageDirectory.blobPath match {
+          case Some(bp) => GcsBlobName(s"${bp.asString}/random.txt")
+          case None => GcsBlobName(s"random.txt")
+        }
         val objectBody = genGcsObjectBody.sample.get
         val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
         val workingDir = Paths.get("/tmp")
@@ -169,18 +173,27 @@ class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks wit
 
         val res = for {
           _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, blob, objectBody, objectType).compile.drain
+          _ <- FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, blobNonExist, objectBody, objectType).compile.drain
           _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "suffix".r, TraceId(UUID.randomUUID().toString)).compile.drain
         } yield {
           val prefix = (workingDir.resolve(localBaseDir.asPath))
-          val file = cloudStorageDirectory.blobPath match {
+          val fileExist = cloudStorageDirectory.blobPath match {
               case Some(bp) =>
-                prefix.resolve(Paths.get(bp.asString).relativize(Paths.get("test.suffix")))
+                prefix.resolve(Paths.get("test.suffix"))
               case None =>
                 prefix.resolve(Paths.get("test.suffix"))
             }
 
-          assert(!file.toFile.exists())
-          file.toFile.delete()
+          val fileNotExist = cloudStorageDirectory.blobPath match {
+              case Some(bp) =>
+                prefix.resolve(Paths.get("random.txt"))
+              case None =>
+                prefix.resolve(Paths.get("random.txt"))
+            }
+
+          assert(fileExist.toFile.exists())
+          assert(!fileNotExist.toFile.exists())
+          fileExist.toFile.delete()
         }
         res.unsafeRunSync()
     }
