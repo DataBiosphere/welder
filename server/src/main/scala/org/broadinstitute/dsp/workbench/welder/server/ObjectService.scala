@@ -6,7 +6,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
-import _root_.io.chrisdavenport.log4cats.Logger
+import _root_.io.chrisdavenport.log4cats.StructuredLogger
 import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
@@ -34,7 +34,7 @@ class ObjectService(
     blocker: Blocker,
     storageLinksAlg: StorageLinksAlg,
     metadataCacheAlg: MetadataCacheAlg
-)(implicit cs: ContextShift[IO], timer: Timer[IO], logger: Logger[IO])
+)(implicit cs: ContextShift[IO], timer: Timer[IO], logger: StructuredLogger[IO])
     extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
@@ -174,27 +174,20 @@ class ObjectService(
                 else {
                   for {
                     metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
-                    loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation)
+                    loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation).toMap
                     status <- metaOpt match {
                       case Some(meta) =>
                         meta.localFileGeneration match { //TODO: shall we check the file has been localized before calculating crc32c
                           case Some(previousGeneration) =>
                             if (previousGeneration == generation)
-                              IO.pure(SyncStatus.LocalChanged) <* logger
-                                .ctxWarn[MetaLoggingContext, String](
-                                  s"local file has changed, but it hasn't been delocalized yet"
-                                )
-                                .run(loggingContext)
-                            else IO.pure(SyncStatus.RemoteChanged) <* logger.ctxWarn[MetaLoggingContext, String]("remote has changed").run(loggingContext)
+                              IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
+                            else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
                           case None =>
-                            IO.pure(SyncStatus.Desynchronized) <* logger
-                              .ctxError[MetaLoggingContext, String]("We don't find local generation for a localized file. Was this file localized manually?")
-                              .run(loggingContext)
+                            IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)("We don't find local generation for a localized file. Was this file localized manually?")
                         }
                       case None =>
-                        IO.pure(SyncStatus.Desynchronized) <* logger
-                          .ctxError[MetaLoggingContext, String]("We don't find local cache for a localized file. Did you update metadata cache file directly?")
-                          .run(loggingContext) //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
+                        IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)("We don't find local cache for a localized file. Did you update metadata cache file directly?")
+                         //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                     }
                   } yield status
                 }
@@ -336,7 +329,7 @@ object ObjectService {
   )(
       implicit cs: ContextShift[IO],
       timer: Timer[IO],
-      logger: Logger[IO]
+      logger: StructuredLogger[IO]
   ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blocker, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
@@ -485,4 +478,11 @@ final case class GsPathAndMetadata(gsPath: GsPath, metadata: AdaptedGcsMetadata)
 final case class AcquireLockRequest(localObjectPath: RelativePath)
 
 final case class PostContext(traceId: TraceId, action: String, commonContext: CommonContext)
-final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long)
+final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long) extends LoggingContext {
+  override def toMap: Map[String, String] = Map(
+    "traceId" -> traceId.asString,
+    "action" -> action,
+    "oldGeneration" -> oldGeneration.getOrElse(-1).toString,
+    "newGeneration" -> newGeneration.toString
+  ) ++ commonContext.toMap
+}
