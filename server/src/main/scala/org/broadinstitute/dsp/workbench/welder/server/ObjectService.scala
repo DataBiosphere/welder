@@ -110,11 +110,11 @@ class ObjectService(
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
       newLock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current + config.lockExpiration.toMillis))
       meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
-      res <- meta match {
+      _ <- meta match {
         case Some(m) =>
           for {
             _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(m.lock, m.crc32c))
-            res <- m.lock match {
+            _ <- m.lock match {
               case Some(lock) =>
                 if (lock.hashedLockedBy == hashedLockedByCurrentUser)
                   updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
@@ -123,11 +123,11 @@ class ObjectService(
               case None =>
                 updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
             }
-          } yield res
+          } yield ()
         case None =>
           IO.raiseError(NotFoundException(traceId, s"${gsPath} not found in Google Storage"))
       }
-    } yield res
+    } yield ()
 
     preventConcurrentAction(actionToLock, req.localObjectPath)
   }
@@ -138,7 +138,8 @@ class ObjectService(
       .flatMap(
         updateMetadataResponse =>
           updateMetadataResponse match {
-            case UpdateMetadataResponse.DirectMetadataUpdate => IO.unit
+            case UpdateMetadataResponse.DirectMetadataUpdate =>
+              metadataCacheAlg.updateLock(localPath,lock)
             case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
               metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState.Found(Some(lock), crc32c), generation)
           }
@@ -304,7 +305,8 @@ class ObjectService(
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
-      else IO.raiseError(InvalidLock(traceId, "Fail to delocalize due to lock expiration or lock held by someone else"))
+      else IO.raiseError(
+        InvalidLock(traceId, s"Fail to delocalize due to lock expiration or lock held by someone else. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}"))
     } yield ()
 
   private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =

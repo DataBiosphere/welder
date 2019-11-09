@@ -18,6 +18,17 @@ class MetadataCacheInterp(metadataCache: MetadataCache) extends MetadataCacheAlg
       (newCache, ())
     }
 
+  def updateLock(localPath: RelativePath, lock: Lock): IO[Unit] =
+    metadataCache.modify { mp =>
+      val previousMeta = mp.get(localPath).getOrElse(throw new Exception("this should never happen because we shouldn't try to update a non-existent lock"))
+      val oldCrc32 = previousMeta.remoteState match {
+        case RemoteState.Found(_, crc32c) => crc32c
+        case RemoteState.NotFound => throw new Exception("this should never happen because crc32c should exist in this case")
+      }
+      val newCache = mp + (localPath -> AdaptedGcsMetadataCache(localPath, RemoteState.Found(Some(lock), oldCrc32), previousMeta.localFileGeneration))
+      (newCache, ())
+    }
+
   def updateCache(localPath: RelativePath, adaptedGcsMetadata: AdaptedGcsMetadata): IO[Unit] =
     metadataCache.modify { mp =>
       val newCache = mp + (localPath -> AdaptedGcsMetadataCache(

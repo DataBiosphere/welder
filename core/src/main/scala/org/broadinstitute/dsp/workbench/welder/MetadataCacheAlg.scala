@@ -12,6 +12,8 @@ trait MetadataCacheAlg {
 
   def updateCache(localPath: RelativePath, adaptedGcsMetadata: AdaptedGcsMetadata): IO[Unit]
 
+  def updateLock(localPath: RelativePath, lock: Lock): IO[Unit]
+
   def getCache(localPath: RelativePath): IO[Option[AdaptedGcsMetadataCache]]
 
   def removeCache(localPath: RelativePath): IO[Unit]
