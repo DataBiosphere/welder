@@ -793,12 +793,9 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
-  "acquireLock" should "should be able to acquire lock object doesn't exist in GCS" in {
+  "acquireLock" should "should not be able to acquire lock object doesn't exist in GCS" in {
     forAll {
       (storageLink: StorageLink) =>
-        val bodyBytes = "this is great!".getBytes("UTF-8")
-//        val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
-
         val objectService = initObjectService(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None)//ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metaCache)
         val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
         val requestBody = s"""
@@ -824,14 +821,47 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
     }
   }
 
+  it should "update metadata cache when lock is updated" in {
+    forAll {
+      (storageLink: StorageLink) =>
+        val metadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
+        val objectService = initObjectServiceWithMetadataCache(Map(storageLink.localBaseDirectory.path -> storageLink), metadataCache, None)
+        val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
+        val requestBody = s"""
+                             |{
+                             |  "localPath": "${storageLink.localBaseDirectory.path.toString}/test.ipynb"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/lock"), headers = fakeTraceIdHeader).withEntity[Json](requestBodyJson)
+
+        // Create the local base directory
+        val directory = new File(s"${localAbsolutePath.getParent.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val fullBlobPath = getFullBlobName(storageLink.localBaseDirectory.path, storageLink.localBaseDirectory.path.asPath.resolve("test.ipynb"), storageLink.cloudStorageDirectory.blobPath)
+
+        val res = for {
+          _ <- FakeGoogleStorageInterpreter.createBlob(storageLink.cloudStorageDirectory.bucketName, fullBlobPath, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
+          now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+          _ <- objectService.service.run(request).value
+          metadata <- metadataCache.get
+        } yield {
+          val cache = metadata.get(RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))).get
+          val remoteState = cache.remoteState.asInstanceOf[RemoteState.Found]
+          (remoteState.lock.get.lockExpiresAt.toEpochMilli - now > 0) shouldBe(true)
+        }
+        res.unsafeRunSync()
+    }
+  }
+
   it should "should be able to acquire lock when no one holds the lock" in {
     forAll {
       (storageLink: StorageLink) =>
         val bodyBytes = "this is great!".getBytes("UTF-8")
 
-        val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(storageLink.localBaseDirectory.path -> storageLink))
-        val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
-        val objectService = initObjectService(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None)//ObjectService(objectServiceConfig, defaultGoogleStorageAlg, global, storageLinkAlg, metaCache)
+        val objectService = initObjectService(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None)
         val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
         val requestBody = s"""
                              |{
