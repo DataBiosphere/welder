@@ -23,7 +23,8 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "org.scalacheck" %% "scalacheck" % "1.14.0" % "test",
     "ca.mrvisser" %% "sealerate" % "0.0.5",
-    "com.google.cloud" % "google-cloud-nio" % "0.101.0-alpha" % "test"
+    "com.google.cloud" % "google-cloud-nio" % "0.101.0-alpha" % "test",
+    "net.logstash.logback" % "logstash-logback-encoder" % "6.2" // for structured logging in logback
   )
 
   val server = common ++ List(

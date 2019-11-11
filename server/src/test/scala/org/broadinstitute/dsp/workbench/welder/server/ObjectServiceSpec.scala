@@ -978,7 +978,6 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   it should "should be able to acquire lock when lock is owned by another user and it can't update metadata directly" in {
     forAll {
       (storageLink: StorageLink) =>
-        val bodyBytes = "this is great!".getBytes("UTF-8")
         val googleStorageAlg = new GoogleStorageAlg {
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.ReUploadObject(1L, Crc32("newcrc32")))
           override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = {
