@@ -35,14 +35,9 @@
 
   <appender class="ch.qos.logback.core.ConsoleAppender" name="CONSOLE">
     <param name="Threshold" value="INFO"/>
-      <encoder>
-        <pattern>%d{dd/MM/yyyy HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern>
-      </encoder>
-<!--    <encoder class="net.logstash.logback.encoder.LogstashEncoder">-->
-<!--      <fieldNames>-->
-<!--        <level>severity</level>-->
-<!--      </fieldNames>-->
-<!--    </encoder>-->
+    <encoder>
+      <pattern>%d{dd/MM/yyyy HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern>
+    </encoder>
   </appender>
 
   <root level="INFO">
