@@ -16,7 +16,7 @@ import cats.implicits._
 import _root_.io.circe.Encoder.encodeString
 import _root_.io.circe.Printer
 import _root_.io.circe.syntax._
-import _root_.io.chrisdavenport.log4cats.Logger
+import _root_.io.chrisdavenport.log4cats.StructuredLogger
 import org.broadinstitute.dsde.workbench.model.TraceId
 
 class StorageLinksService(
@@ -26,8 +26,8 @@ class StorageLinksService(
     blocker: Blocker,
     config: StorageLinksServiceConfig
 )(
-    implicit logger: Logger[IO],
-    contextShift: ContextShift[IO]
+                           implicit logger: StructuredLogger[IO],
+                           contextShift: ContextShift[IO]
 ) extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
     case GET -> Root =>
@@ -68,7 +68,7 @@ class StorageLinksService(
         .drain
         .runAsync { cb =>
           cb match {
-            case Left(r) => logger.warn(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
+            case Left(e) => logger.warn(Map("traceId" -> traceId.asString), e)(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
             case Right(()) => IO.unit
           }
         }
@@ -139,7 +139,7 @@ object StorageLinksService {
       config: StorageLinksServiceConfig,
       blocker: Blocker
   )(
-      implicit logger: Logger[IO],
+      implicit logger: StructuredLogger[IO],
       contextShift: ContextShift[IO]
   ): StorageLinksService =
     new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, blocker, config)
