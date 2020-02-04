@@ -38,12 +38,10 @@ lazy val core =
       }.taskValue
     )
 
-enablePlugins(NewRelic)
-
 lazy val server =
   project
     .in(file("server"))
-    .enablePlugins(JavaAppPackaging, BuildInfoPlugin, NewRelic)
+    .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
     .settings(
       libraryDependencies ++= Dependencies.server,
       Settings.serverSettings

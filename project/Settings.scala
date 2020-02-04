@@ -9,7 +9,6 @@ import sbt._
 import com.typesafe.sbt.GitPlugin.autoImport._
 import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
-import com.gilt.sbt.newrelic.NewRelic.autoImport._
 
 object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
@@ -98,6 +97,7 @@ object Settings {
     dockerBaseImage := "oracle/graalvm-ce:1.0.0-rc16",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
+    dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),
     dockerUpdateLatest := true,
     // See https://www.scala-sbt.org/sbt-native-packager/formats/docker.html#add-commands
     dockerCommands ++= List(
