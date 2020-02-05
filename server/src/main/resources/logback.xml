@@ -20,7 +20,7 @@
         <!-- or whenever the file size reaches 50MB -->
         <maxFileSize>50MB</maxFileSize>
       </timeBasedFileNamingAndTriggeringPolicy>
-      <!-- keep 30 days' worth of history -->
+      <!-- keep 3 days' worth of history -->
       <maxHistory>3</maxHistory>
     </rollingPolicy>
   </appender>
