@@ -13,7 +13,8 @@ class ConfigSpec extends FlatSpec with Matchers {
   "Config" should "read configuration correctly" in {
     val config = Config.appConfig
     val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes)
-    val expectedConfig = AppConfig(8080,
+    val expectedConfig = AppConfig(
+      8080,
       7 minutes,
       10 minutes,
       15 minutes,

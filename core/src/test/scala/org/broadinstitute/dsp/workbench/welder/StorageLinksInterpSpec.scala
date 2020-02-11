@@ -14,7 +14,7 @@ class StorageLinksInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with
       val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
       val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
       val res = storageLinksAlg.findStorageLink(localFileDestination)
-      res.attempt.unsafeRunSync() shouldBe(Left(StorageLinkNotFoundException(fakeTraceId, s"No storage link found for ${localFileDestination.toString}")))
+      res.attempt.unsafeRunSync() shouldBe (Left(StorageLinkNotFoundException(fakeTraceId, s"No storage link found for ${localFileDestination.toString}")))
     }
   }
 
@@ -25,7 +25,7 @@ class StorageLinksInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with
       val localPath = RelativePath(Paths.get(s"${storageLink.localSafeModeBaseDirectory.path.toString}/test.ipynb"))
       val res = storageLinksAlg.findStorageLink(localPath)
       val expectedResult = CommonContext(true, storageLink.localSafeModeBaseDirectory.path, storageLink)
-      res.unsafeRunSync() shouldBe(expectedResult)
+      res.unsafeRunSync() shouldBe (expectedResult)
     }
   }
 
@@ -36,7 +36,7 @@ class StorageLinksInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with
       val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
       val res = storageLinksAlg.findStorageLink(localPath)
       val expectedResult = CommonContext(false, storageLink.localBaseDirectory.path, storageLink)
-      res.unsafeRunSync() shouldBe(expectedResult)
+      res.unsafeRunSync() shouldBe (expectedResult)
     }
   }
 }

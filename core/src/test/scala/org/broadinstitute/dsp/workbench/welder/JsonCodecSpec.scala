@@ -11,22 +11,20 @@ import scala.util.matching.Regex
 
 class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "cloudStorageDirectoryDecoder" should "be able to parse cloudStorageDirectory correctly" in {
-    forAll {
-      (bucketName: GcsBucketName) =>
-        val inputString = s"gs://${bucketName.value}/notebooks/sub"
+    forAll { (bucketName: GcsBucketName) =>
+      val inputString = s"gs://${bucketName.value}/notebooks/sub"
 
-        val res = Json.fromString(inputString).as[CloudStorageDirectory]
-        res shouldBe(Right(CloudStorageDirectory(bucketName, Some(BlobPath("notebooks/sub")))))
+      val res = Json.fromString(inputString).as[CloudStorageDirectory]
+      res shouldBe (Right(CloudStorageDirectory(bucketName, Some(BlobPath("notebooks/sub")))))
     }
   }
 
   it should "be able to parse cloudStorageDirectory correctly when blobPath is empty" in {
-    forAll {
-      (bucketName: GcsBucketName) =>
-        val inputString = s"gs://${bucketName.value}"
+    forAll { (bucketName: GcsBucketName) =>
+      val inputString = s"gs://${bucketName.value}"
 
-        val res = Json.fromString(inputString).as[CloudStorageDirectory]
-        res shouldBe(Right(CloudStorageDirectory(bucketName, None)))
+      val res = Json.fromString(inputString).as[CloudStorageDirectory]
+      res shouldBe (Right(CloudStorageDirectory(bucketName, None)))
     }
   }
 
