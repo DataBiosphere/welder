@@ -56,7 +56,7 @@ object JsonCodec {
     if (s.startsWith("data:application/json;base64,")) {
       val res = for {
         encodedData <- Either.catchNonFatal(s.split(",")(1))
-        data <- Either.catchNonFatal(Stream.emit(encodedData).through(base64DecoderPipe[IO]).compile.to[Array].unsafeRunSync())
+        data <- Either.catchNonFatal(Stream.emit(encodedData).through(base64DecoderPipe[IO]).compile.to(Array).unsafeRunSync())
       } yield DataUri(data)
 
       res.leftMap(_.getMessage)

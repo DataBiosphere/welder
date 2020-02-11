@@ -139,7 +139,7 @@ class ObjectService(
         updateMetadataResponse =>
           updateMetadataResponse match {
             case UpdateMetadataResponse.DirectMetadataUpdate =>
-              metadataCacheAlg.updateLock(localPath,lock)
+              metadataCacheAlg.updateLock(localPath, lock)
             case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
               metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState.Found(Some(lock), crc32c), generation)
           }
@@ -184,11 +184,15 @@ class ObjectService(
                               IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
                             else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
                           case None =>
-                            IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)("We don't find local generation for a localized file. Was this file localized manually?")
+                            IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
+                              "We don't find local generation for a localized file. Was this file localized manually?"
+                            )
                         }
                       case None =>
-                        IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)("We don't find local cache for a localized file. Did you update metadata cache file directly?")
-                         //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
+                        IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
+                          "We don't find local cache for a localized file. Did you update metadata cache file directly?"
+                        )
+                      //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                     }
                   } yield status
                 }
@@ -305,8 +309,13 @@ class ObjectService(
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
-      else IO.raiseError(
-        InvalidLock(traceId, s"Fail to delocalize due to lock expiration or lock held by someone else. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}"))
+      else
+        IO.raiseError(
+          InvalidLock(
+            traceId,
+            s"Fail to delocalize due to lock expiration or lock held by someone else. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}"
+          )
+        )
     } yield ()
 
   private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =
@@ -480,11 +489,13 @@ final case class GsPathAndMetadata(gsPath: GsPath, metadata: AdaptedGcsMetadata)
 final case class AcquireLockRequest(localObjectPath: RelativePath)
 
 final case class PostContext(traceId: TraceId, action: String, commonContext: CommonContext)
-final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long) extends LoggingContext {
-  override def toMap: Map[String, String] = Map(
-    "traceId" -> traceId.asString,
-    "action" -> action,
-    "oldGeneration" -> oldGeneration.getOrElse(-1).toString,
-    "newGeneration" -> newGeneration.toString
-  ) ++ commonContext.toMap
+final case class MetaLoggingContext(traceId: TraceId, action: String, commonContext: CommonContext, oldGeneration: Option[Long], newGeneration: Long)
+    extends LoggingContext {
+  override def toMap: Map[String, String] =
+    Map(
+      "traceId" -> traceId.asString,
+      "action" -> action,
+      "oldGeneration" -> oldGeneration.getOrElse(-1).toString,
+      "newGeneration" -> newGeneration.toString
+    ) ++ commonContext.toMap
 }

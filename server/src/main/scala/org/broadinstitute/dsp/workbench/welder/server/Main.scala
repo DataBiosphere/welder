@@ -20,7 +20,7 @@ object Main extends IOApp {
     implicit val logger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
-      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool)
+      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool[IO])
       blocker = Blocker.liftExecutionContext(blockingEc)
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
@@ -62,7 +62,12 @@ object Main extends IOApp {
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
       val shutdownService = ShutdownService(
-        PreshutdownServiceConfig(appConfig.pathToStorageLinksJson, appConfig.pathToGcsMetadataJson, appConfig.objectService.workingDirectory, appConfig.stagingBucketName),
+        PreshutdownServiceConfig(
+          appConfig.pathToStorageLinksJson,
+          appConfig.pathToGcsMetadataJson,
+          appConfig.objectService.workingDirectory,
+          appConfig.stagingBucketName
+        ),
         shutDownSignal,
         storageLinksCache,
         metadataCache,

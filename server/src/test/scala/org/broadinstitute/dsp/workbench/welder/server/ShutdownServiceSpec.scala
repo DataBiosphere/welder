@@ -35,7 +35,7 @@ class ShutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
     override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
-      io.file.readAll[IO](localFile, blocker, 4096).compile.to[Array].flatMap { body =>
+      io.file.readAll[IO](localFile, blocker, 4096).compile.to(Array).flatMap { body =>
         FakeGoogleStorageInterpreter
           .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
           .void
