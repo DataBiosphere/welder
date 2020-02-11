@@ -30,11 +30,10 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   // Regex's equals doesn't compare Regex as expected. Hence, we define Eq[StorageLink] when we need to check equality of two StorageLink
   implicit val regexEq: Eq[Regex] = Eq.instance((r1, r2) => r1.pattern.pattern == r2.pattern.pattern)
 
-  implicit val storageLinkEq: Eq[StorageLink] = Eq.instance{ (s1, s2) =>
+  implicit val storageLinkEq: Eq[StorageLink] = Eq.instance { (s1, s2) =>
     s1.pattern.pattern.pattern == s2.pattern.pattern.pattern &&
     s1.localBaseDirectory == s2.localBaseDirectory &&
     s1.localSafeModeBaseDirectory == s2.localSafeModeBaseDirectory &&
     s1.cloudStorageDirectory == s2.cloudStorageDirectory
   }
 }
-

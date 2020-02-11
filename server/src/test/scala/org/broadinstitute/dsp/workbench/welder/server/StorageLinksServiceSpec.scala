@@ -23,12 +23,25 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
 
   val googleStorageAlg = new GoogleStorageAlg {
-    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
+    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
+      IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
     override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
     override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
-    override def delocalize(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, userDefinedMeta: Map[String, String], traceId: TraceId): IO[DelocalizeResponse] = ???
-    override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex, traceId: TraceId): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
+    override def delocalize(
+        localObjectPath: RelativePath,
+        gsPath: GsPath,
+        generation: Long,
+        userDefinedMeta: Map[String, String],
+        traceId: TraceId
+    ): IO[DelocalizeResponse] = ???
+    override def localizeCloudDirectory(
+        localBaseDirectory: RelativePath,
+        cloudStorageDirectory: CloudStorageDirectory,
+        workingDir: Path,
+        pattern: Regex,
+        traceId: TraceId
+    ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
   }
@@ -77,7 +90,6 @@ class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
     dirsToCreate
       .map(path => assert(path.toFile.exists))
   }
-
 
 //  initializeDirectories
   it should "list storage links" in {
