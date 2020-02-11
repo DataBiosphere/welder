@@ -26,8 +26,8 @@ class StorageLinksService(
     blocker: Blocker,
     config: StorageLinksServiceConfig
 )(
-                           implicit logger: StructuredLogger[IO],
-                           contextShift: ContextShift[IO]
+    implicit logger: StructuredLogger[IO],
+    contextShift: ContextShift[IO]
 ) extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
     case GET -> Root =>
@@ -68,7 +68,8 @@ class StorageLinksService(
         .drain
         .runAsync { cb =>
           cb match {
-            case Left(e) => logger.warn(Map("traceId" -> traceId.asString), e)(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
+            case Left(e) =>
+              logger.warn(Map("traceId" -> traceId.asString), e)(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
             case Right(()) => IO.unit
           }
         }
@@ -76,7 +77,11 @@ class StorageLinksService(
     } yield link
   }
 
-  private def persistWorkspaceBucket(baseDirectory: LocalDirectory, safeModeDirectory: LocalDirectory, cloudStorageDirectory: CloudStorageDirectory): IO[Unit] = {
+  private def persistWorkspaceBucket(
+      baseDirectory: LocalDirectory,
+      safeModeDirectory: LocalDirectory,
+      cloudStorageDirectory: CloudStorageDirectory
+  ): IO[Unit] = {
     val fileBody =
       RuntimeVariables(s"gs://${cloudStorageDirectory.bucketName.value}/notebooks") //appending notebooks to mimick old jupyter image until we start using new images.
       .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())

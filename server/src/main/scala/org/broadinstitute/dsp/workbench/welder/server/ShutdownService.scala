@@ -41,10 +41,9 @@ class ShutdownService(
     // Copy all welder log files and jupyter log file to staging bucket
     val flushLogFiles = for {
       implicit0(ev: ApplicativeAsk[IO, TraceId]) <- IO(ApplicativeAsk.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
-      _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ {
-        file =>
-          val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
-          googleStorageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
+      _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
+        val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
+        googleStorageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
       }
     } yield ()
 

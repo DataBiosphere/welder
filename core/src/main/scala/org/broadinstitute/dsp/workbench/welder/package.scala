@@ -140,9 +140,8 @@ package object welder {
     * scala> findFilesWithSuffix(res1, ".log")
     * res5: List[java.io.File] = List(/tmp/d.log, /tmp/f.log)
     */
-  def findFilesWithSuffix(parent: Path, suffix: String): List[File] = {
+  def findFilesWithSuffix(parent: Path, suffix: String): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && f.getName.endsWith(suffix)).toList
-  }
 
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 

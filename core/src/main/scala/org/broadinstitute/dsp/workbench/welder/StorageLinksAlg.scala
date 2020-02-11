@@ -18,6 +18,6 @@ final case class CommonContext(isSafeMode: Boolean, basePath: RelativePath, stor
     "storageLink.localBaseDirectory" -> storageLink.localBaseDirectory.path.toString,
     "storageLink.localSafeModeBaseDirectory" -> storageLink.localSafeModeBaseDirectory.path.toString,
     "storageLink.cloudStorageDirectory" -> storageLink.cloudStorageDirectory.toString,
-    "storageLink.pattern" -> storageLink.pattern.toString,
+    "storageLink.pattern" -> storageLink.pattern.toString
   )
 }

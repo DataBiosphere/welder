@@ -32,7 +32,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
         case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
           for {
             _ <- logger.info(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
-            bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to[Array]
+            bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
             blob <- googleStorageService.createBlob(gsPath.bucketName, gsPath.blobName, bytes, "text/plain", metadata, None, Some(traceId)).compile.lastOrError
           } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
       }
@@ -70,7 +70,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       traceId: TraceId
   ): IO[DelocalizeResponse] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to[Array].flatMap { body =>
+    io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to(Array).flatMap { body =>
       googleStorageService
         .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, userDefinedMeta, Some(generation), Some(traceId))
         .map(x => DelocalizeResponse(x.getGeneration, Crc32(x.getCrc32c)))
@@ -88,16 +88,15 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
     logger.info(s"flushing file ${localFile}") >>
-      io.file.readAll[IO](localFile, blocker, 4096).compile.to[Array].flatMap { body =>
+      io.file.readAll[IO](localFile, blocker, 4096).compile.to(Array).flatMap { body =>
         googleStorageService
           .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
           .void
           .compile
           .lastOrError
       }
-  }
 
   override def localizeCloudDirectory(
       localBaseDirectory: RelativePath,
