@@ -87,8 +87,12 @@ class StorageLinksService(
       .resolve(safeModeDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
 
-    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath => logger.info(s"writing ${destinationPath}") >> ((Stream.emits(fileBody) through io.file.writeAll[IO](destinationPath, blocker, List(StandardOpenOption.CREATE_NEW))).compile.drain)
-      .recoverWith { case _ => logger.info(s"${config.workspaceBucketNameFileName} already exists in ${destinationPath}") } // If file already exists, ignore the failure
+    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath =>
+      logger.info(s"writing ${destinationPath}") >> (Stream.emits(fileBody) through io.file.writeAll[IO](
+        destinationPath,
+        blocker,
+        List(StandardOpenOption.TRUNCATE_EXISTING)
+      )).compile.drain // overwrite the file everytime storagelink is called since workspace bucket can be updated
 
     (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parTupled.void
   }
