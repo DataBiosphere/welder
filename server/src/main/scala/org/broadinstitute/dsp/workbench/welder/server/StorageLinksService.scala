@@ -91,7 +91,7 @@ class StorageLinksService(
       logger.info(s"writing ${destinationPath}") >> (Stream.emits(fileBody) through io.file.writeAll[IO](
         destinationPath,
         blocker,
-        List(StandardOpenOption.TRUNCATE_EXISTING)
+        List(StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
       )).compile.drain // overwrite the file everytime storagelink is called since workspace bucket can be updated
 
     (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parTupled.void
