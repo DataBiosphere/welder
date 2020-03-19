@@ -3,12 +3,13 @@ package server
 
 import io.circe.Decoder
 import org.http4s.{Method, Request, Status, Uri}
-import org.scalatest.{FlatSpec, Matchers}
 import org.http4s.circe.CirceEntityDecoder._
 import StatusServiceSpec._
 import cats.effect.IO
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class StatusServiceSpec extends FlatSpec with Matchers {
+class StatusServiceSpec extends AnyFlatSpec with Matchers {
   "StatusService" should "return service status" in {
     val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/"))
     val resp = StatusService.service.run(request).value.unsafeRunSync().get

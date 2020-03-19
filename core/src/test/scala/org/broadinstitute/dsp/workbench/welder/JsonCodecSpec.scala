@@ -4,12 +4,12 @@ import io.circe.Json
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.util.matching.Regex
 
-class JsonCodecSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
+class JsonCodecSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "cloudStorageDirectoryDecoder" should "be able to parse cloudStorageDirectory correctly" in {
     forAll { (bucketName: GcsBucketName) =>
       val inputString = s"gs://${bucketName.value}/notebooks/sub"

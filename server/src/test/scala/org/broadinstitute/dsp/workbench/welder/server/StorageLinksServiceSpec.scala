@@ -13,11 +13,11 @@ import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.util.matching.Regex
 
-class StorageLinksServiceSpec extends FlatSpec with WelderTestSuite {
+class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar/baz.zip")))
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))

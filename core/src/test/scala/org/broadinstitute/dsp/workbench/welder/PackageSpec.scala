@@ -7,10 +7,10 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class PackageSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
+class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "parseGsPath" should "be able to parse gs path correctly" in {
     forAll { (bucketName: GcsBucketName) =>
       val gsPath = s"gs://${bucketName.value}/notebooks/sub/1.ipynb"

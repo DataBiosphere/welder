@@ -17,11 +17,11 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.util.matching.Regex
 
-class StorageLinksApiServiceSpec extends FlatSpec with WelderTestSuite {
+class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
   val googleStorageAlg = new GoogleStorageAlg {
