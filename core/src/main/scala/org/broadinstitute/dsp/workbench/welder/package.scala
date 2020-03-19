@@ -117,8 +117,11 @@ package object welder {
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       _ <- Option(path.getParent).traverse_(parentDir => Stream.eval(mkdirIfNotExist(parentDir)))
-      cached <- util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).map(ls => ls.flatMap(b => toTuple(b)).toMap).handleErrorWith { error =>
-        Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
+      cached <- (util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).map(ls => ls.flatMap(b => toTuple(b)).toMap)).handleErrorWith { error =>
+        error match {
+          case _: java.nio.file.NoSuchFileException => Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
+          case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.emit(Map.empty[A, B]).covary[IO]
+        }
       }
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(

@@ -22,12 +22,12 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.concurrent.duration._
 import scala.util.matching.Regex
 
-class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
+class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes)
   val objectService = initObjectService(Map.empty, Map.empty, None)
 
@@ -1270,22 +1270,20 @@ class ObjectServiceSpec extends FlatSpec with WelderTestSuite {
   }
 
   "preventConcurrentAction" should "be able to prevent two IOs run concurrently" in {
-    forAll { (localPath: RelativePath) =>
-      val localPath = genRelativePath.sample.get
-      val objectService = initObjectServiceWithPermits(Map.empty)
-      val io1 = IO.sleep(3 seconds)
-      val io2 = IO.sleep(1 seconds)
-      val res = for {
-        start <- timer.clock.monotonic(TimeUnit.MICROSECONDS)
-        _ <- objectService.preventConcurrentAction(io1, localPath).runAsync(_ => IO.unit).toIO //start io1 asynchronously
-        _ <- objectService.preventConcurrentAction(io2, localPath)
-        end <- timer.clock.monotonic(TimeUnit.MICROSECONDS)
-      } yield {
-        val duration = end - start
-        duration should be > 3000L
-      }
-      res.unsafeRunSync()
+    val localPath = genRelativePath.sample.get
+    val objectService = initObjectServiceWithPermits(Map.empty)
+    val io1 = IO.sleep(3 seconds)
+    val io2 = IO.sleep(1 seconds)
+    val res = for {
+      start <- timer.clock.monotonic(TimeUnit.MICROSECONDS)
+      _ <- objectService.preventConcurrentAction(io1, localPath).runAsync(_ => IO.unit).toIO //start io1 asynchronously
+      _ <- objectService.preventConcurrentAction(io2, localPath)
+      end <- timer.clock.monotonic(TimeUnit.MICROSECONDS)
+    } yield {
+      val duration = end - start
+      duration should be > 3000L
     }
+    res.unsafeRunSync()
   }
 
   private def initObjectService(

@@ -20,10 +20,9 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalacheck.Gen
-import org.scalatest.FlatSpec
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalatest.flatspec.AnyFlatSpec
 
-class GoogleStorageInterpSpec extends FlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
+class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   //if one day java emulator supports metadata, we shouldn't ignore this test
   ignore should "be able to set metadata when 403 happens" in {
     forAll { (gsPath: GsPath) =>

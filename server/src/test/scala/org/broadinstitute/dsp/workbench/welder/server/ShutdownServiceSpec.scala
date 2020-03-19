@@ -20,11 +20,11 @@ import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.{Method, Request, Status, Uri}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.util.matching.Regex
 
-class ShutdownServiceSpec extends FlatSpec with Matchers with WelderTestSuite {
+class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val config =
     PreshutdownServiceConfig(Paths.get("/tmp/storagelinks.json"), Paths.get("/tmp/metadata.json"), Paths.get("/tmp"), GcsBucketName("fakeStagingBucket"))
   val fakeGoogleStorageAlg = new GoogleStorageAlg {
