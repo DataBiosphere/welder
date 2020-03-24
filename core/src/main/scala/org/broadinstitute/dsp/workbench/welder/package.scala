@@ -11,13 +11,11 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Blocker, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
-import io.chrisdavenport.log4cats.Logger
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 package object welder {
@@ -111,32 +109,35 @@ package object welder {
     } else IO.unit
   }
 
-  private[welder] def cachedResource[A, B: Decoder: Encoder](path: Path, blocker: Blocker, toTuple: B => List[(A, B)])(
-      implicit logger: Logger[IO],
-      cs: ContextShift[IO]
+  private[welder] def cachedResource[A, B: Decoder: Encoder](
+      googleStorageAlg: GoogleStorageAlg,
+      stagingBucketName: GcsBucketName,
+      blobName: GcsBlobName,
+      blocker: Blocker,
+      toTuple: B => List[(A, B)]
+  )(
+      implicit cs: ContextShift[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
-      _ <- Option(path.getParent).traverse_(parentDir => Stream.eval(mkdirIfNotExist(parentDir)))
-      cached <- (util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).map(ls => ls.flatMap(b => toTuple(b)).toMap)).handleErrorWith { error =>
-        error match {
-          case _: java.nio.file.NoSuchFileException => Stream.eval(logger.info(s"$path not found")) >> Stream.emit(Map.empty[A, B]).covary[IO]
-          case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.emit(Map.empty[A, B]).covary[IO]
-        }
-      }
+      cached <- googleStorageAlg.getBlob[List[B]](stagingBucketName, blobName).map(ls => ls.flatMap(b => toTuple(b)).toMap)
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(
-          ref => flushCache(path, blocker, ref).compile.drain
+          ref => flushCache(googleStorageAlg, stagingBucketName, blobName, blocker, ref).compile.drain
         )
       )
     } yield ref
 
-  def flushCache[A, B: Decoder: Encoder](path: Path, blocker: Blocker, ref: Ref[IO, Map[A, B]])(
-      implicit cs: ContextShift[IO]
+  def flushCache[A, B: Decoder: Encoder](
+      googleStorageAlg: GoogleStorageAlg,
+      stagingBucketName: GcsBucketName,
+      blobName: GcsBlobName,
+      blocker: Blocker,
+      ref: Ref[IO, Map[A, B]]
   ): Stream[IO, Unit] =
-    Stream
-      .eval(ref.get)
-      .flatMap(x => Stream.emits(x.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")))
-      .through(fs2.io.file.writeAll[IO](path, blocker, writeFileOptions))
+    for {
+      data <- Stream.eval(ref.get)
+      _ <- googleStorageAlg.uploadBlob(stagingBucketName, blobName, data.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8"))
+    } yield ()
 
   /**
     * Example:

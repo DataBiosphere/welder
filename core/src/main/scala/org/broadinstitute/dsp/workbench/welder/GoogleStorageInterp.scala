@@ -5,14 +5,17 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 import _root_.io.chrisdavenport.log4cats.Logger
+import _root_.io.circe.Decoder
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
 import cats.mtl.ApplicativeAsk
 import fs2.{Stream, io}
 import org.broadinstitute.dsde.workbench.google2
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.typelevel.jawn.AsyncParser
 
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
@@ -131,6 +134,19 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     } yield r
     res.unNone
   }
+
+  def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] =
+    googleStorageService.createBlob(bucketName, blobName, objectContents, gcpObjectType, Map.empty, None).void
+
+  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
+    for {
+      blob <- googleStorageService.getBlob(bucketName, blobName, None)
+      a <- Stream
+        .emits(blob.getContent())
+        .through(fs2.text.utf8Decode)
+        .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+        .through(_root_.io.circe.fs2.decoder)
+    } yield a
 
   private def adaptMetadata(crc32c: Crc32, userDefinedMetadata: Map[String, String], generation: Long): IO[AdaptedGcsMetadata] =
     for {

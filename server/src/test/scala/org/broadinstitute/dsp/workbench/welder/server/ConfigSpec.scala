@@ -3,6 +3,7 @@ package server
 
 import java.nio.file.Paths
 
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.scalatest.flatspec.AnyFlatSpec
@@ -19,8 +20,8 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       7 minutes,
       10 minutes,
       15 minutes,
-      Paths.get("/work/.welder/storage_links.json"),
-      Paths.get("/work/.welder/gcs_metadata.json"),
+      GcsBlobName("welder-metadata/storage_links.json"),
+      GcsBlobName("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
       GcsBucketName("fakeBucket")

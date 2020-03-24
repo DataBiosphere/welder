@@ -5,6 +5,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 import cats.implicits._
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
@@ -22,12 +23,9 @@ object Config {
     s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err))
   )
   implicit val relativePathConfigReader: ConfigReader[RelativePath] = pathConfigReader.map(RelativePath)
-  implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.fromString(
-    s => Right(WorkbenchEmail(s))
-  )
-  implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.fromString(
-    s => Right(GcsBucketName(s))
-  )
+  implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.stringConfigReader.map(WorkbenchEmail)
+  implicit val gcsBlobNameReader: ConfigReader[GcsBlobName] = ConfigReader.stringConfigReader.map(GcsBlobName)
+  implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.stringConfigReader.map(GcsBucketName)
 
   val appConfig = ConfigSource.default.load[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 }
@@ -37,8 +35,8 @@ final case class AppConfig(
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
-    pathToStorageLinksJson: Path,
-    pathToGcsMetadataJson: Path,
+    storageLinksJsonBlobName: GcsBlobName,
+    gcsMetadataJsonBlobName: GcsBlobName,
     workspaceBucketNameFileName: Path,
     objectService: ObjectServiceConfig,
     stagingBucketName: GcsBucketName

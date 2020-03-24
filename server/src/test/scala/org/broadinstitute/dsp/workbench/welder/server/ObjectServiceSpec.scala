@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import cats.effect.IO
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
-import io.circe.{Json, parser}
+import io.circe.{Decoder, Json, parser}
 import _root_.fs2.{Stream, io, text}
 import cats.mtl.ApplicativeAsk
 import org.broadinstitute.dsde.workbench.RetryConfig
@@ -484,12 +484,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         ) //this crc32c just needs to be something different from the real file on disk so that we are faking there's some local change
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
 
-        val storageAlg = new GoogleStorageAlg {
+        val storageAlg = new MockGoogleStorageAlg {
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
             IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(
               localObjectPath: RelativePath,
               gsPath: GsPath,
@@ -564,12 +561,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         ) //this crc32c just needs to be something different from the real file on disk so that we are faking there's some local change
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
 
-        val storageAlg = new GoogleStorageAlg {
+        val storageAlg = new MockGoogleStorageAlg {
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
             IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(
               localObjectPath: RelativePath,
               gsPath: GsPath,
@@ -639,7 +633,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         )
         val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
 
-        val storageAlg = new GoogleStorageAlg {
+        val storageAlg = new MockGoogleStorageAlg {
           override def localizeCloudDirectory(
               localBaseDirectory: RelativePath,
               cloudStorageDirectory: CloudStorageDirectory,
@@ -649,9 +643,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
             IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(
               localObjectPath: RelativePath,
               gsPath: GsPath,
@@ -705,7 +696,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
-        val storageAlg = new GoogleStorageAlg {
+        val storageAlg = new MockGoogleStorageAlg {
           override def localizeCloudDirectory(
               localBaseDirectory: RelativePath,
               cloudStorageDirectory: CloudStorageDirectory,
@@ -715,9 +706,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
           override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
             IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-          override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-          override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-          override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
           override def delocalize(
               localObjectPath: RelativePath,
               gsPath: GsPath,
@@ -1096,7 +1084,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "should be able to acquire lock when lock is owned by current user" in {
     forAll { (storageLink: StorageLink) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorageAlg = new GoogleStorageAlg {
+      val googleStorageAlg = new MockGoogleStorageAlg {
         override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
           IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
         override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] =
@@ -1104,15 +1092,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
             hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail)))
           } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
-        override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-        override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
-        override def delocalize(
-            localObjectPath: RelativePath,
-            gsPath: GsPath,
-            generation: Long,
-            userDefinedMeta: Map[String, String],
-            traceId: TraceId
-        ): IO[DelocalizeResponse] = ???
         override def localizeCloudDirectory(
             localBaseDirectory: RelativePath,
             cloudStorageDirectory: CloudStorageDirectory,
@@ -1157,7 +1136,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "not be able to acquire lock when lock is owned by some other user and it hasn't expired" in {
     forAll { (storageLink: StorageLink) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorageAlg = new GoogleStorageAlg {
+      val googleStorageAlg = new MockGoogleStorageAlg {
         override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
           IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
         override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] =
@@ -1165,15 +1144,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, WorkbenchEmail("someoneElse@gmail.com"))))
             now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
           } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
-        override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-        override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
-        override def delocalize(
-            localObjectPath: RelativePath,
-            gsPath: GsPath,
-            generation: Long,
-            userDefinedMeta: Map[String, String],
-            traceId: TraceId
-        ): IO[DelocalizeResponse] = ???
         override def localizeCloudDirectory(
             localBaseDirectory: RelativePath,
             cloudStorageDirectory: CloudStorageDirectory,
@@ -1209,7 +1179,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "should be able to acquire lock when lock is owned by another user and it can't update metadata directly" in {
     forAll { (storageLink: StorageLink) =>
-      val googleStorageAlg = new GoogleStorageAlg {
+      val googleStorageAlg = new MockGoogleStorageAlg {
         override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
           IO.pure(UpdateMetadataResponse.ReUploadObject(1L, Crc32("newcrc32")))
         override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] =
@@ -1217,15 +1187,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
             hashedLockedBy <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, objectServiceConfig.ownerEmail)))
           } yield Some(AdaptedGcsMetadata(Some(Lock(hashedLockedBy, Instant.ofEpochMilli(now + 5.minutes.toMillis))), Crc32("fakecrc32"), 0L))
-        override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-        override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
-        override def delocalize(
-            localObjectPath: RelativePath,
-            gsPath: GsPath,
-            generation: Long,
-            userDefinedMeta: Map[String, String],
-            traceId: TraceId
-        ): IO[DelocalizeResponse] = ???
         override def localizeCloudDirectory(
             localBaseDirectory: RelativePath,
             cloudStorageDirectory: CloudStorageDirectory,
@@ -1362,4 +1323,29 @@ class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends Ba
 
 object FakeGoogleStorageService {
   def apply(metadata: GetMetadataResponse): FakeGoogleStorageService = new FakeGoogleStorageService(metadata)
+}
+
+class MockGoogleStorageAlg extends GoogleStorageAlg {
+  override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = ???
+  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
+  override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
+  override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+  override def delocalize(
+      localObjectPath: RelativePath,
+      gsPath: GsPath,
+      generation: Long,
+      userDefinedMeta: Map[String, String],
+      traceId: TraceId
+  ): IO[DelocalizeResponse] = ???
+  override def localizeCloudDirectory(
+      localBaseDirectory: RelativePath,
+      cloudStorageDirectory: CloudStorageDirectory,
+      workingDir: Path,
+      pattern: Regex,
+      traceId: TraceId
+  ): Stream[IO, AdaptedGcsMetadataCache] = ???
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
+  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] = ???
+  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] = ???
 }
