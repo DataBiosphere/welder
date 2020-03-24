@@ -22,7 +22,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
 
-  val googleStorageAlg = new GoogleStorageAlg {
+  val googleStorageAlg = new MockGoogleStorageAlg {
     override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???

@@ -10,7 +10,6 @@ import cats.implicits._
 import cats.mtl.ApplicativeAsk
 import fs2.{Stream, text}
 import io.circe.{Json, parser}
-import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
@@ -24,19 +23,9 @@ import scala.util.matching.Regex
 class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
-  val googleStorageAlg = new GoogleStorageAlg {
+  val googleStorageAlg = new MockGoogleStorageAlg {
     override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-    override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-    override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-    override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
-    override def delocalize(
-        localObjectPath: RelativePath,
-        gsPath: GsPath,
-        generation: Long,
-        userDefinedMeta: Map[String, String],
-        traceId: TraceId
-    ): IO[DelocalizeResponse] = ???
     override def localizeCloudDirectory(
         localBaseDirectory: RelativePath,
         cloudStorageDirectory: CloudStorageDirectory,

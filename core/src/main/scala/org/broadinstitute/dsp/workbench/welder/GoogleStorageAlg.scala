@@ -6,8 +6,10 @@ import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.mtl.ApplicativeAsk
 import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
+import io.circe.Decoder
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 import scala.util.matching.Regex
@@ -57,6 +59,10 @@ trait GoogleStorageAlg {
       pattern: Regex,
       traceId: TraceId
   ): Stream[IO, AdaptedGcsMetadataCache]
+
+  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit]
+
+  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A]
 }
 
 object GoogleStorageAlg {

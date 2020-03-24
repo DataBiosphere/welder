@@ -8,7 +8,9 @@ import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 
 import scala.concurrent.duration.FiniteDuration
@@ -42,15 +44,15 @@ class BackgroundTask(
   }
 
   def flushBothCache(
-      storageLinksPath: Path,
-      metadataCachePath: Path,
+      storageLinksJsonBlobName: GcsBlobName,
+      gcsMetadataJsonBlobName: GcsBlobName,
       blocker: Blocker
   ): Stream[IO, Unit] = {
-    val flushStorageLinks = flushCache(storageLinksPath, blocker, storageLinksCache).handleErrorWith { t =>
-      Stream.eval(logger.info(t)("failed to flush storagelinks cache to disk"))
+    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, blocker, storageLinksCache).handleErrorWith { t =>
+      Stream.eval(logger.info(t)("failed to flush storagelinks cache to GCS"))
     }
-    val flushMetadataCache = flushCache(metadataCachePath, blocker, metadataCache).handleErrorWith { t =>
-      Stream.eval(logger.info(t)("failed to flush metadata cache to disk"))
+    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucket, gcsMetadataJsonBlobName, blocker, metadataCache).handleErrorWith { t =>
+      Stream.eval(logger.info(t)("failed to flush metadata cache to GCS"))
     }
     (Stream.sleep[IO](config.flushCacheInterval) ++ flushStorageLinks ++ flushMetadataCache).repeat
   }
@@ -81,6 +83,7 @@ class BackgroundTask(
 
 final case class BackgroundTaskConfig(
     workingDirectory: Path,
+    stagingBucket: GcsBucketName,
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration

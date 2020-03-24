@@ -35,8 +35,8 @@ class ShutdownService(
   }
 
   val flush: IO[Unit] = {
-    val flushStorageLinks = flushCache(config.storageLinksPath, blocker, storageLinksCache)
-    val flushMetadataCache = flushCache(config.metadataCachePath, blocker, metadataCache)
+    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucketName, config.storageLinksJsonBlobName, blocker, storageLinksCache)
+    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucketName, config.gcsMetadataJsonBlobName, blocker, metadataCache)
 
     // Copy all welder log files and jupyter log file to staging bucket
     val flushLogFiles = for {
@@ -70,4 +70,9 @@ object ShutdownService {
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg, blocker)
 }
 
-final case class PreshutdownServiceConfig(storageLinksPath: Path, metadataCachePath: Path, workingDirectory: Path, stagingBucketName: GcsBucketName)
+final case class PreshutdownServiceConfig(
+    storageLinksJsonBlobName: GcsBlobName,
+    gcsMetadataJsonBlobName: GcsBlobName,
+    workingDirectory: Path,
+    stagingBucketName: GcsBucketName
+)
