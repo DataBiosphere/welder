@@ -23,6 +23,7 @@ import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
+import org.typelevel.jawn.AsyncParser
 
 import scala.concurrent.duration._
 import scala.util.matching.Regex
@@ -1347,5 +1348,12 @@ class MockGoogleStorageAlg extends GoogleStorageAlg {
   override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
   def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] = ???
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] = ???
+  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] = for {
+    blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
+    a <- Stream
+      .emits(blob.getContent())
+      .through(fs2.text.utf8Decode)
+      .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+      .through(_root_.io.circe.fs2.decoder[IO, A])
+  } yield a
 }

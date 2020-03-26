@@ -11,12 +11,16 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Blocker, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
+import io.chrisdavenport.log4cats.Logger
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+
+import scala.reflect.io.Directory
 
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
@@ -116,16 +120,45 @@ package object welder {
       blocker: Blocker,
       toTuple: B => List[(A, B)]
   )(
-      implicit cs: ContextShift[IO]
-  ): Stream[IO, Ref[IO, Map[A, B]]] =
+      implicit cs: ContextShift[IO],
+      logger: Logger[IO]
+  ): Stream[IO, Ref[IO, Map[A, B]]] = {
     for {
-      cached <- googleStorageAlg.getBlob[List[B]](stagingBucketName, blobName).map(ls => ls.flatMap(b => toTuple(b)).toMap)
+    // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
+    // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
+    // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
+    // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
+    // This change is made on 3/26/2020
+      cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"), blocker)
+      loadedCache <- cacheFromDisk.fold{
+        googleStorageAlg.getBlob[List[B]](stagingBucketName, blobName).last.map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
+      }(x => Stream.eval(IO.pure(x)))
+
+      cached = loadedCache.flatMap(b => toTuple(b)).toMap
       ref <- Stream.resource(
         Resource.make(Ref.of[IO, Map[A, B]](cached))(
           ref => flushCache(googleStorageAlg, stagingBucketName, blobName, blocker, ref).compile.drain
         )
       )
     } yield ref
+  }
+
+  private def localCache[B: Decoder](path: Path, blocker: Blocker)(
+    implicit logger: Logger[IO],
+    cs: ContextShift[IO]
+  ): Stream[IO, Option[List[B]]] =
+    for {
+      res <- if(path.toFile.exists()){
+          for {
+            cached <- util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).handleErrorWith { error =>
+              error match {
+                case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.raiseError[IO](e)
+              }
+            }
+          } yield Some(cached)
+      } else Stream.eval(IO.pure(none[List[B]]))
+    } yield res
+
 
   def flushCache[A, B: Decoder: Encoder](
       googleStorageAlg: GoogleStorageAlg,
@@ -137,6 +170,13 @@ package object welder {
     for {
       data <- Stream.eval(ref.get)
       _ <- googleStorageAlg.uploadBlob(stagingBucketName, blobName, data.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8"))
+      // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
+      // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
+      // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
+      // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
+      // This change is made on 3/26/2020
+      legacyCacheDir = new Directory(new File(s"/work/.welder"))
+      _ <- Stream.eval(IO(legacyCacheDir.deleteRecursively()))
     } yield ()
 
   /**
