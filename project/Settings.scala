@@ -101,7 +101,7 @@ object Settings {
        |done""".stripMargin
 
   lazy val entrypointTestCmd =
-    s"""'#!/bin/bash\\numask 002;\\necho 'This is coming from entrypoint' >> entrypoint.out\\nuntil /opt/docker/bin/server; do\\n\\techo 'Welder crashed. Respawning..' >> entrypoint.out\\n\\tsleep 1\\ndone'""".stripMargin
+    s"""'#!/bin/bash\\numask 002;\\necho 'This is coming from entrypoint' >> /work/entrypoint.out\\nuntil /opt/docker/bin/server; do\\n\\techo 'Welder crashed. Respawning..' >> /work/entrypoint.out\\n\\tsleep 1\\ndone'""".stripMargin
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
