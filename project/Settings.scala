@@ -91,6 +91,10 @@ object Settings {
     )
 
   lazy val entrypoint = "/opt/docker/bin/entrypoint.sh"
+  lazy val entrypointLog = "/work/entrypoint.out"
+
+  lazy val entrypointCmd =
+    s"""'#!/bin/bash\\numask 002;\\necho '[$$(date -u)] Starting welder java process' >> $entrypointLog\\nuntil /opt/docker/bin/server; do\\n\\techo '[$$(date -u)] Welder crashed. Respawning..' >> $entrypointLog\\n\\tsleep 1\\ndone'""".stripMargin
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
@@ -103,7 +107,7 @@ object Settings {
     dockerCommands ++= List(
       // Change the default umask for welder to support R/W access to the shared volume
       Cmd("USER", "root"),
-      ExecCmd("RUN", "/bin/bash", "-c", s"echo '#!/bin/bash\\numask 002; /opt/docker/bin/server' > $entrypoint"),
+      ExecCmd("RUN", "/bin/bash", "-c", s"echo $entrypointCmd > $entrypoint"),
       Cmd("RUN", s"chown -R welder-user:users /opt/docker && chmod u+x,g+x $entrypoint"),
       Cmd("USER", (daemonUser in Docker).value)
     )
