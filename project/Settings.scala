@@ -84,6 +84,7 @@ object Settings {
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
       scalaVersion := "2.12.10",
+      resolvers -= DefaultMavenRepository,
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
