@@ -16,7 +16,7 @@ object Settings {
   lazy val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
     "artifactory-snapshots" at artifactory + "libs-snapshot",
-    DefaultMavenRepository
+    JavaNet2Repository
   )
 
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
