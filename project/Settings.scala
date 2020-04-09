@@ -17,7 +17,8 @@ object Settings {
     "artifactory-releases" at artifactory + "libs-release",
     "artifactory-snapshots" at artifactory + "libs-snapshot",
     Resolver.typesafeRepo("releases"),
-    Resolver.typesafeIvyRepo("releases")
+    Resolver.typesafeIvyRepo("releases"),
+    Resolver.DefaultMavenRepository
   ////    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
 //    DefaultMavenRepository.allowInsecureProtocol
   )
@@ -48,7 +49,6 @@ object Settings {
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
-    "-Dsbt.repository.config="
     "-feature", // Emit warning and location for usages of features that should be imported explicitly.
     "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
     "-unchecked", // Enable additional warnings where generated code depends on assumptions.
