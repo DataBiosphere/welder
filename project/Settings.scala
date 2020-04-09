@@ -14,10 +14,12 @@ object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
 
   lazy val commonResolvers = List(
-    ("artifactory-releases" at artifactory).allowInsecureProtocol + "libs-release",
-  ("artifactory-snapshots" at artifactory).allowInsecureProtocol + "libs-snapshot",
-//    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
-    DefaultMavenRepository.allowInsecureProtocol
+    "artifactory-releases" at artifactory + "libs-release",
+    "artifactory-snapshots" at artifactory + "libs-snapshot",
+    Resolver.typesafeRepo("releases"),
+    Resolver.typesafeIvyRepo("releases")
+  ////    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
+//    DefaultMavenRepository.allowInsecureProtocol
   )
 
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
@@ -46,6 +48,7 @@ object Settings {
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
+    "-Dsbt.repository.config="
     "-feature", // Emit warning and location for usages of features that should be imported explicitly.
     "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
     "-unchecked", // Enable additional warnings where generated code depends on assumptions.
