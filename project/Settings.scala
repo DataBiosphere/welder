@@ -16,11 +16,6 @@ object Settings {
   lazy val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
     "artifactory-snapshots" at artifactory + "libs-snapshot"
-//    Resolver.typesafeRepo("releases"),
-//    Resolver.typesafeIvyRepo("releases"),
-//    Resolver.DefaultMavenRepository
-  ////    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
-//    DefaultMavenRepository.allowInsecureProtocol
   )
 
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
@@ -88,7 +83,7 @@ object Settings {
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
       scalaVersion := "2.12.10",
-      resolvers in ThisBuild ++= commonResolvers,
+      resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
       addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9"),
