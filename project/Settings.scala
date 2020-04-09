@@ -15,10 +15,10 @@ object Settings {
 
   lazy val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
-    "artifactory-snapshots" at artifactory + "libs-snapshot",
-    Resolver.typesafeRepo("releases"),
-    Resolver.typesafeIvyRepo("releases"),
-    Resolver.DefaultMavenRepository
+    "artifactory-snapshots" at artifactory + "libs-snapshot"
+//    Resolver.typesafeRepo("releases"),
+//    Resolver.typesafeIvyRepo("releases"),
+//    Resolver.DefaultMavenRepository
   ////    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
 //    DefaultMavenRepository.allowInsecureProtocol
   )
