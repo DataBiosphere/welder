@@ -88,7 +88,7 @@ object Settings {
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
       scalaVersion := "2.12.10",
-      resolvers ++= commonResolvers,
+      resolvers in ThisBuild ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
       addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9"),
