@@ -14,9 +14,10 @@ object Settings {
   lazy val artifactory = "https://artifactory.broadinstitute.org/artifactory/"
 
   lazy val commonResolvers = List(
-    "artifactory-releases" at artifactory + "libs-release",
-    "artifactory-snapshots" at artifactory + "libs-snapshot",
-    JavaNet2Repository
+//    "artifactory-releases" at artifactory + "libs-release",
+//    "artifactory-snapshots" at artifactory + "libs-snapshot",
+    "Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
+    DefaultMavenRepository
   )
 
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
