@@ -800,8 +800,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       (
           cloudStorageDirectory: CloudStorageDirectory,
           localBaseDirectory: LocalBaseDirectory,
-          localSafeDirectory: LocalSafeBaseDirectory,
-          lockedBy: WorkbenchEmail
+          localSafeDirectory: LocalSafeBaseDirectory
       ) =>
         val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
@@ -841,9 +840,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             .compile
             .drain //write to local file
           resp <- objectService.service.run(request).value.attempt
-          _ <- IO((new File(localPath.toString)).delete())
+          _ <- IO((new File(localPath)).delete())
         } yield {
-          resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for /tmp/${localPath}. Generation mismatch"))
+          resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for /tmp/${localPath}. Generation mismatch (local generation: 111). null"))
         }
         res.unsafeRunSync()
     }
