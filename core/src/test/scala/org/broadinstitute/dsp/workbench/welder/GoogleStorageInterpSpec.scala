@@ -67,7 +67,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, fakeTraceId).attempt
         _ <- IO((new File(localAbsolutePath.toString)).delete())
       } yield {
-        resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch"))
+        resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null"))
       }
       res.unsafeRunSync()
     }
