@@ -47,7 +47,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
               logger.error(e.ctx)(s"Error response: ${e.getMessage}") >> resp
             case e =>
               val errorMessage = if (e.getCause != null) e.getCause.toString else e.toString
-              logger.error(s"Unkonwn error: ${e.getMessage}") >> InternalServerError(ErrorReport(errorMessage, None, None))
+              logger.error(s"Unknown error: ${e.getMessage}") >> InternalServerError(ErrorReport(errorMessage, None, None))
           }
         case Right(value) =>
           IO.pure(value)
