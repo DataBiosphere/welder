@@ -3,7 +3,6 @@ package server
 
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Blocker, ExitCode, IO, IOApp}
-import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import io.chrisdavenport.log4cats.{Logger, StructuredLogger}
