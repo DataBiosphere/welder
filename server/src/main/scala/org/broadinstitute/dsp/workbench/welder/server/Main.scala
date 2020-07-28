@@ -79,10 +79,10 @@ object Main extends IOApp {
       )
 
       val welderApp = WelderApp(objectService, storageLinksService, shutdownService)
-      val serverStream = BlazeServerBuilder[IO]
+      val serverStream = BlazeServerBuilder[IO](ExecutionContext.global)
         .bindHttp(appConfig.serverPort, "0.0.0.0")
         .withHttpApp(welderApp.service)
-        .serveWhile(shutDownSignal, Ref.unsafe(ExitCode.Success))
+        .serveWhile(shutDownSignal, Ref.unsafe[IO, ExitCode](ExitCode.Success))
 
       val backGroundTaskConfig = BackgroundTaskConfig(
         appConfig.objectService.workingDirectory,
