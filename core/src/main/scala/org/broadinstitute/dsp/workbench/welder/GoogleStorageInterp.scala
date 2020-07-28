@@ -25,6 +25,8 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     timer: Timer[IO],
     cs: ContextShift[IO]
 ) extends GoogleStorageAlg {
+  private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
+
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
     googleStorageService
       .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
@@ -56,11 +58,18 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
 
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
     for {
-      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, Some(traceId))
-      _ <- (Stream
-        .emits(blob.getContent())
-        .covary[IO]
-        .through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
+      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, None, Some(traceId))
+      _ <- (fs2.io.readInputStream[IO](
+         IO(java.nio.channels.Channels
+           .newInputStream {
+             val reader = blob.reader()
+             reader.setChunkSize(chunkSize)
+             reader
+           }),
+         chunkSize,
+         blocker,
+         closeAfterUse = true
+       ).through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
       userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
