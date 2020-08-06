@@ -10,7 +10,7 @@ import cats.effect.IO
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import io.circe.{Decoder, Json, parser}
-import _root_.fs2.{Stream, io, text}
+import _root_.fs2.{Pipe, Stream, io, text}
 import cats.mtl.ApplicativeAsk
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
@@ -842,7 +842,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           resp <- objectService.service.run(request).value.attempt
           _ <- IO((new File(localPath)).delete())
         } yield {
-          resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for /tmp/${localPath}. Generation mismatch (local generation: 111). null"))
+          resp shouldBe Left(
+            GenerationMismatch(fakeTraceId, s"Remote version has changed for /tmp/${localPath}. Generation mismatch (local generation: 111). null")
+          )
         }
         res.unsafeRunSync()
     }
@@ -1346,13 +1348,14 @@ class MockGoogleStorageAlg extends GoogleStorageAlg {
   ): Stream[IO, AdaptedGcsMetadataCache] = ???
   override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
-  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] = ???
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] = for {
-    blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
-    a <- Stream
-      .emits(blob.getContent())
-      .through(fs2.text.utf8Decode)
-      .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
-      .through(_root_.io.circe.fs2.decoder[IO, A])
-  } yield a
+  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName): Pipe[IO, Byte, Unit] = ???
+  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
+    for {
+      blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
+      a <- Stream
+        .emits(blob.getContent())
+        .through(fs2.text.utf8Decode)
+        .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+        .through(_root_.io.circe.fs2.decoder[IO, A])
+    } yield a
 }

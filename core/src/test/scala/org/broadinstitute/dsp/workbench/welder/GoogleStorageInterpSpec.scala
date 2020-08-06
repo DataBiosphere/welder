@@ -8,8 +8,7 @@ import java.util.UUID.randomUUID
 import cats.effect.IO
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonError
-import com.google.cloud.storage.Blob
-import fs2.Stream
+import fs2.{Pipe, Stream}
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.Generators.{genGcsBlobName, genGcsObjectBody}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageInterpreterSpec.objectType
@@ -67,7 +66,9 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, fakeTraceId).attempt
         _ <- IO((new File(localAbsolutePath.toString)).delete())
       } yield {
-        resp shouldBe Left(GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null"))
+        resp shouldBe Left(
+          GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null")
+        )
       }
       res.unsafeRunSync()
     }
@@ -202,16 +203,14 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
 }
 
 object GoogleStorageServiceWithFailures extends BaseFakeGoogleStorage {
-  override def createBlob(
+  override def streamUploadBlob(
       bucketName: GcsBucketName,
       objectName: GcsBlobName,
-      objectContents: Array[Byte],
-      objectType: String,
       metadata: Map[String, String],
       generation: Option[Long],
+      overwrite: Boolean = true,
       traceId: Option[TraceId],
-      retryConfig: RetryConfig
-  ): Stream[IO, Blob] = {
+  ): Pipe[IO, Byte, Unit] = in => {
     val errors = new GoogleJsonError()
     errors.setCode(412)
     Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))

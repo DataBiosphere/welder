@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.mtl.ApplicativeAsk
-import fs2.Stream
+import fs2.{Pipe, Stream}
 import io.chrisdavenport.log4cats.Logger
 import io.circe.Decoder
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
@@ -60,7 +60,7 @@ trait GoogleStorageAlg {
       traceId: TraceId
   ): Stream[IO, AdaptedGcsMetadataCache]
 
-  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit]
+  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName): Pipe[IO, Byte, Unit]
 
   def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A]
 }
