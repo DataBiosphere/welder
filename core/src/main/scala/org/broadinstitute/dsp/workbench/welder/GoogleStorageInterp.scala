@@ -9,7 +9,7 @@ import _root_.io.circe.Decoder
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
 import cats.mtl.ApplicativeAsk
-import fs2.{Stream, io}
+import fs2.{Pipe, Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -36,9 +36,12 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       .handleErrorWith {
         case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
           for {
-            _ <- logger.info(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
+            _ <- logger.warn(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
             bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
-            blob <- googleStorageService.createBlob(gsPath.bucketName, gsPath.blobName, bytes, "text/plain", metadata, None, Some(traceId)).compile.lastOrError
+            _ <- (Stream
+              .emits(bytes)
+              .covary[IO] through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId))).compile.drain
+            blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
           } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
       }
 
@@ -59,17 +62,21 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
     for {
       blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, None, Some(traceId))
-      _ <- (fs2.io.readInputStream[IO](
-         IO(java.nio.channels.Channels
-           .newInputStream {
-             val reader = blob.reader()
-             reader.setChunkSize(chunkSize)
-             reader
-           }),
-         chunkSize,
-         blocker,
-         closeAfterUse = true
-       ).through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
+      _ <- (fs2.io
+        .readInputStream[IO](
+          IO(
+            java.nio.channels.Channels
+              .newInputStream {
+                val reader = blob.reader()
+                reader.setChunkSize(chunkSize)
+                reader
+              }
+          ),
+          chunkSize,
+          blocker,
+          closeAfterUse = true
+        )
+        .through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
       userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
@@ -82,17 +89,24 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       traceId: TraceId
   ): IO[DelocalizeResponse] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    io.file.readAll[IO](localAbsolutePath, blocker, 4096).compile.to(Array).flatMap { body =>
-      googleStorageService
-        .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, userDefinedMeta, Some(generation), Some(traceId))
-        .map(x => DelocalizeResponse(x.getGeneration, Crc32(x.getCrc32c)))
-        .compile
-        .lastOrError
-        .adaptError {
-          case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            GenerationMismatch(traceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: ${generation}). ${e.getMessage}")
-        }
-    }
+
+    for {
+      _ <- (io.file.readAll[IO](localAbsolutePath, blocker, 4096) through googleStorageService.streamUploadBlob(
+        gsPath.bucketName,
+        gsPath.blobName,
+        userDefinedMeta,
+        Some(generation),
+        true,
+        Some(traceId)
+      )).compile.drain.handleErrorWith {
+        case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+          val msg = s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: ${generation}). ${e.getMessage}"
+          logger.info(e)(msg) >> IO.raiseError(GenerationMismatch(traceId, msg))
+        case e =>
+          IO.raiseError(e)
+      }
+      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
+    } yield DelocalizeResponse(blob.getGeneration, Crc32(blob.getCrc32c))
   }
 
   override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
@@ -102,13 +116,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
 
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
     logger.info(s"flushing file ${localFile}") >>
-      io.file.readAll[IO](localFile, blocker, 4096).compile.to(Array).flatMap { body =>
-        googleStorageService
-          .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
-          .void
-          .compile
-          .lastOrError
-      }
+      (io.file.readAll[IO](localFile, blocker, 4096) through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName)).compile.drain
 
   override def localizeCloudDirectory(
       localBaseDirectory: RelativePath,
@@ -144,8 +152,8 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     res.unNone
   }
 
-  def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] =
-    googleStorageService.createBlob(bucketName, blobName, objectContents, gcpObjectType, Map.empty, None).void
+  def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName): Pipe[IO, Byte, Unit] =
+    googleStorageService.streamUploadBlob(bucketName, blobName)
 
   def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
     for {

@@ -11,7 +11,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.ApplicativeAsk
 import fs2.concurrent.SignallingRef
-import fs2.{Stream, io}
+import fs2.{Pipe, Stream, io}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -52,10 +52,9 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
           .compile
           .lastOrError
       }
-    override def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName, objectContents: Array[Byte]): Stream[IO, Unit] =
+    override def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName): Pipe[IO, Byte, Unit] =
       FakeGoogleStorageInterpreter
-        .createBlob(bucketName, blobName, objectContents, gcpObjectType, Map.empty, None)
-        .void
+        .streamUploadBlob(bucketName, blobName)
 
     override def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
       for {

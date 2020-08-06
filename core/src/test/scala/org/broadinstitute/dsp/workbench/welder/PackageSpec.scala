@@ -67,10 +67,11 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
   }
 
   "cachedResource" should "load empty cache if it doesn't exist in both local disk and gcs" in {
-    forAll {
-      (gcsBucketName: GcsBucketName) =>
+    forAll { (gcsBucketName: GcsBucketName) =>
       val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
-      val res = cachedResource[String, String](googleStorageAlg, gcsBucketName, GcsBlobName("welder-metadata/storage_links.json"), blocker, s => List((s, s))).compile.lastOrError.unsafeRunSync()
+      val res =
+        cachedResource[String, String](googleStorageAlg, gcsBucketName, GcsBlobName("welder-metadata/storage_links.json"), blocker, s => List((s, s))).compile.lastOrError
+          .unsafeRunSync()
       res.get.unsafeRunSync() shouldBe Map.empty
     }
   }

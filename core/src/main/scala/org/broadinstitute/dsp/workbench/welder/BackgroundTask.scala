@@ -48,10 +48,10 @@ class BackgroundTask(
       gcsMetadataJsonBlobName: GcsBlobName,
       blocker: Blocker
   ): Stream[IO, Unit] = {
-    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, blocker, storageLinksCache).handleErrorWith { t =>
+    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush storagelinks cache to GCS"))
     }
-    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucket, gcsMetadataJsonBlobName, blocker, metadataCache).handleErrorWith { t =>
+    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucket, gcsMetadataJsonBlobName, metadataCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush metadata cache to GCS"))
     }
     (Stream.sleep[IO](config.flushCacheInterval) ++ flushStorageLinks ++ flushMetadataCache).repeat
