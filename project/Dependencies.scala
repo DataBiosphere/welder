@@ -2,13 +2,13 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.13.0"
-  val http4sVersion = "0.21.5"
+  val http4sVersion = "0.21.7"
   val grpcCoreVersion = "1.28.0"
-  val scalaTestVersion = "3.1.2"
-  val workbenchGoogle2V = "0.11-cac8af4"
+  val scalaTestVersion = "3.2.2"
+  val workbenchGoogle2V = "0.13-39c1b35"
 
   val common = List(
-    "com.github.pureconfig" %% "pureconfig" % "0.12.1",
+    "com.github.pureconfig" %% "pureconfig" % "0.14.0",
     "co.fs2" %% "fs2-io" % "2.4.2",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
@@ -17,7 +17,7 @@ object Dependencies {
     "org.http4s" %% "http4s-blaze-client" % http4sVersion,
     "org.http4s" %% "http4s-circe" % http4sVersion,
     "org.http4s" %% "http4s-dsl" % http4sVersion,
-    "org.log4s" %% "log4s" % "1.7.0",
+    "org.log4s" %% "log4s" % "1.8.2",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
     "org.scalatestplus" %% "scalacheck-1-14" % "3.2.0.0" % Test,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,

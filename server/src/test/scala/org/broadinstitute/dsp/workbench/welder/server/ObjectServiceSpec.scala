@@ -545,6 +545,67 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
     }
   }
 
+  it should "not delocalize a file if it doesn't satisfy storagelink's pattern" in {
+    forAll {
+      (
+          cloudStorageDirectory: CloudStorageDirectory,
+          localBaseDirectory: LocalBaseDirectory,
+          localSafeDirectory: LocalSafeBaseDirectory
+      ) =>
+        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
+        val localPath = s"${localBaseDirectory.path.toString}/test.txt"
+        val bodyBytes = "this is great!".getBytes("UTF-8")
+        val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](
+          Map(
+            RelativePath(Paths.get(localPath)) -> AdaptedGcsMetadataCache(
+              RelativePath(Paths.get(localPath)),
+              RemoteState.Found(None, Crc32("asdf")),
+              Some(111L)
+            )
+          )
+        ) //this crc32c just needs to be something different from the real file on disk so that we are faking there's some local change
+        val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
+
+        val storageAlg = new MockGoogleStorageAlg {
+          override def delocalize(
+              localObjectPath: RelativePath,
+              gsPath: GsPath,
+              generation: Long,
+              userDefinedMeta: Map[String, String],
+              traceId: TraceId
+          ): IO[DelocalizeResponse] = IO.raiseError(fail("delocalize shouldn't happen"))
+        }
+        val metadataCacheAlg = new MetadataCacheInterp(metaCache)
+        val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
+        val objectService = ObjectService(permitsRef, objectServiceConfig, storageAlg, blocker, storageLinkAlg, metadataCacheAlg)
+        val requestBody = s"""
+                             |{
+                             |  "action": "safeDelocalize",
+                             |  "localPath": "$localPath"
+                             |}""".stripMargin
+        val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
+        val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+        // Create the local base directory
+        val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
+        if (!directory.exists) {
+          directory.mkdirs
+        }
+        val res = for {
+          _ <- Stream
+            .emits(bodyBytes)
+            .covary[IO]
+            .through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/${localPath}"), blocker))
+            .compile
+            .drain //write to local file
+          resp <- objectService.service.run(request).value
+        } yield {
+          resp.get.status shouldBe Status.NoContent
+        }
+        res.unsafeRunSync()
+    }
+  }
+
   it should "delocalize a file even if remote copy is deleted" in {
     forAll {
       (
