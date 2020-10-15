@@ -17,7 +17,7 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
 class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, googleStorageService: GoogleStorageService[IO])(

@@ -3,7 +3,7 @@ jdk:
 language: scala
 sudo: required
 scala:
-- 2.12.10
+- 2.13.3
 cache:
  directories:
  - "$HOME/.ivy2/cache/"
