@@ -66,7 +66,6 @@ object Settings {
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
-//      addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.0"),
       addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
     )
 
@@ -78,7 +77,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
-    dockerBaseImage := "oracle/graalvm-ce:1.0.0-rc16",
+    dockerBaseImage := "oracle/graalvm-ce:20.2.0-java8",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),
