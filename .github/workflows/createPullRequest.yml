@@ -3,13 +3,13 @@ name: Create terra-helm Pull Request
 on:
   push:
     branches: [ master ]
-#  pull_request:
-#    branches:
-#      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
@@ -25,8 +25,8 @@ jobs:
           repository: databiosphere/leonardo
       - name: update welder hash
         run: |
-          FILE_NAME=\$(find . -name 'reference.conf' | grep -v 'automation' | grep -v 'test' | grep -v 'target')
-          sed -i "s/welderHash = .*/welderHash = \\"\${{ steps.setHash.outputs.git_short_sha }}\\"/" \${FILE_NAME}
+          FILE_NAME=$(find . -name 'reference.conf' | grep -v 'automation' | grep -v 'test' | grep -v 'target')
+          sed -i "s/welderHash = .*/welderHash = \"${{ steps.setHash.outputs.git_short_sha }}\"/g" ${FILE_NAME}
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v3
