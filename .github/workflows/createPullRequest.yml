@@ -3,9 +3,9 @@ name: Create terra-helm Pull Request
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches:
-      - master
+#  pull_request:
+#    branches:
+#      - master
 
 jobs:
   build:
