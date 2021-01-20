@@ -77,7 +77,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
-    dockerBaseImage := "oracle/graalvm-ce:20.2.0-java8",
+    dockerBaseImage := "oracle/graalvm-ce:20.3.0-java11",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),
