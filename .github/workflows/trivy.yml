@@ -20,9 +20,8 @@ jobs:
             ~/.coursier/cache
             ~/.ivy2/cache
             ~/.sbt
-          key: sbt-${{ matrix.project }}-${{ hashFiles('**/*.sbt') }}
+          key: sbt-${{ hashFiles('**/*.sbt') }}
           restore-keys: |
-            sbt-${{ matrix.project }}-
             sbt-
 
       # build the image
