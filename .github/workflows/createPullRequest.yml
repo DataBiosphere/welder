@@ -1,0 +1,47 @@
+name: Create terra-helm Pull Request
+
+on:
+  push:
+    branches: [ master ]
+#  pull_request:
+#    branches:
+#      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: '10'
+      - name: Set commit short hash
+        id: setHash
+        run: |
+          git_short_sha=$(git rev-parse --short HEAD)
+          echo $git_short_sha
+          echo "::set-output name=git_short_sha::${git_short_sha}"
+      - uses: actions/checkout@v2
+        with:
+          repository: databiosphere/leonardo
+      - name: update welder hash
+        run: |
+          FILE_NAME=\$(find . -name 'reference.conf' | grep -v 'automation' | grep -v 'test' | grep -v 'target')
+          sed -i "s/welderHash = .*/welderHash = \\"\${{ steps.setHash.outputs.git_short_sha }}\\"/" \${FILE_NAME}
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.BROADBOT_GITHUB_TOKEN }}
+          commit-message: Update welder hash
+          committer: broadbot <broadbot@broadinstitute.org>
+          author: broadbot <broadbot@broadinstitute.org>
+          branch: welder-version-bump
+          delete-branch: true
+          title: 'Bump welder version'
+          body: |
+            Update welder version.
+
+            *This PR was opened by the [${{ github.workflow }} GitHub Actions workflow](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).*
+      - name: Check output
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
