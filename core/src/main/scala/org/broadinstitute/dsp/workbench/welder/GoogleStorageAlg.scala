@@ -3,9 +3,9 @@ package org.broadinstitute.dsp.workbench.welder
 import java.nio.file.Path
 
 import cats.effect.{Blocker, ContextShift, IO, Timer}
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import fs2.{Pipe, Stream}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import io.circe.Decoder
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -38,12 +38,12 @@ trait GoogleStorageAlg {
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
+  def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit]
+  def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
 
   /**
     * Recursively download files in cloudStorageDirectory to local directory.

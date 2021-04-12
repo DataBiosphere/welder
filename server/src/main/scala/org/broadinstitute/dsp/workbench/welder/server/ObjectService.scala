@@ -6,7 +6,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 import _root_.fs2.{Stream, io}
-import _root_.io.chrisdavenport.log4cats.StructuredLogger
+import _root_.org.typelevel.log4cats.StructuredLogger
 import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
 import ca.mrvisser.sealerate
@@ -14,7 +14,7 @@ import cats.data.Kleisli
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Blocker, ContextShift, IO, Resource, Timer}
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
@@ -39,7 +39,7 @@ class ObjectService(
   val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
       traceId =>
-        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
+        implicit val traceIdImplicit = Ask.const[IO, TraceId](traceId)
 
         for {
           metadataReq <- req.as[GetMetadataRequest]
@@ -48,7 +48,7 @@ class ObjectService(
         } yield resp
     case req @ POST -> Root / "lock" =>
       traceId =>
-        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
+        implicit val traceIdImplicit = Ask.const[IO, TraceId](traceId)
         for {
           request <- req.as[AcquireLockRequest]
           _ <- acquireLock(request)
@@ -56,7 +56,7 @@ class ObjectService(
         } yield resp
     case req @ POST -> Root =>
       traceId =>
-        implicit val traceIdImplicit = ApplicativeAsk.const[IO, TraceId](traceId)
+        implicit val traceIdImplicit = Ask.const[IO, TraceId](traceId)
         for {
           localizeReq <- req.as[PostObjectRequest]
           res <- localizeReq match {
@@ -78,8 +78,8 @@ class ObjectService(
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
-              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${gsPath} not found")))(
-                m => Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
+              _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${gsPath} not found")))(m =>
+                Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
               )
             } yield ()
         }
@@ -101,9 +101,9 @@ class ObjectService(
   // Note: Step 2 should only occur if we're operating in a workspace bucket that was created with legacy ACLs. New buckets use modern ACLs and have
   //       bucket policy only enabled, which will allow step 1 to succeed.
   //
-  def acquireLock(req: AcquireLockRequest)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
+  def acquireLock(req: AcquireLockRequest)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val actionToLock = for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
       gsPath = getGsPath(req.localObjectPath, context)
@@ -135,14 +135,13 @@ class ObjectService(
   private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
     googleStorageAlg
       .updateMetadata(gsPath, traceId, lock.toMetadataMap)
-      .flatMap(
-        updateMetadataResponse =>
-          updateMetadataResponse match {
-            case UpdateMetadataResponse.DirectMetadataUpdate =>
-              metadataCacheAlg.updateLock(localPath, lock)
-            case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
-              metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState.Found(Some(lock), crc32c), generation)
-          }
+      .flatMap(updateMetadataResponse =>
+        updateMetadataResponse match {
+          case UpdateMetadataResponse.DirectMetadataUpdate =>
+            metadataCacheAlg.updateLock(localPath, lock)
+          case UpdateMetadataResponse.ReUploadObject(generation, crc32c) =>
+            metadataCacheAlg.updateLocalFileStateCache(localPath, RemoteState.Found(Some(lock), crc32c), generation)
+        }
       )
 
   /**
@@ -152,9 +151,9 @@ class ObjectService(
     * Even though you don't see many Kleisli used explicitly in welder, it's actually used extensively, because it's a fundamental data type
     * used by http4s, the web library welder depends on.
     */
-  def checkMetadata(req: GetMetadataRequest)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[MetadataResponse] =
+  def checkMetadata(req: GetMetadataRequest)(implicit ev: Ask[IO, TraceId]): IO[MetadataResponse] =
     for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       res <- if (context.isSafeMode)
         IO.pure(MetadataResponse.SafeMode(context.storageLink))
@@ -204,9 +203,9 @@ class ObjectService(
       }
     } yield res
 
-  def safeDelocalize(req: SafeDelocalize)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
+  def safeDelocalize(req: SafeDelocalize)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       _ <- if (context.isSafeMode)
         IO.raiseError(SafeDelocalizeSafeModeFileError(traceId, s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
@@ -254,9 +253,9 @@ class ObjectService(
       }
     } yield ()
 
-  def delete(req: Delete)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
+  def delete(req: Delete)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       _ <- if (context.isSafeMode)
         IO.raiseError(DeleteSafeModeFileError(traceId, s"${req.localObjectPath} can't be deleted since it's in safe mode"))
@@ -305,9 +304,9 @@ class ObjectService(
   /**
     * If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
     */
-  private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
+  private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
       _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
         IO.unit
@@ -345,9 +344,7 @@ object ObjectService {
       logger: StructuredLogger[IO]
   ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blocker, storageLinksAlg, metadataCacheAlg)
 
-  implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap { str =>
-    Action.stringToAction.get(str).toRight("invalid action")
-  }
+  implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap(str => Action.stringToAction.get(str).toRight("invalid action"))
 
   implicit val entryDecoder: Decoder[Entry] = Decoder.instance { cursor =>
     for {

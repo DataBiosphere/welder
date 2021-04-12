@@ -40,7 +40,7 @@ object Settings {
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
   lazy val commonCompilerSettings = Seq(
-    "-target:jvm-1.8",
+    "-target:jvm-11",
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
@@ -62,7 +62,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
-      scalaVersion := "2.13.3",
+      scalaVersion := "2.13.5",
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
@@ -77,7 +77,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
-    dockerBaseImage := "oracle/graalvm-ce:20.3.0-java11",
+    dockerBaseImage := "ghcr.io/graalvm/graalvm-ce:ol8-java11-21.0.0.2",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),

@@ -5,13 +5,12 @@ import java.math.BigInteger
 import java.nio.file.{Path, Paths, StandardOpenOption}
 import java.security.MessageDigest
 import java.util.Base64
-
 import cats.Eq
 import cats.effect.concurrent.Ref
 import cats.effect.{Blocker, ContextShift, IO, Resource, Sync}
 import cats.implicits._
 import fs2.{Pipe, Stream}
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -19,8 +18,6 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
-
-import scala.reflect.io.Directory
 
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
@@ -53,9 +50,7 @@ package object welder {
   def getPossibleBaseDirectory(localPath: Path): List[Path] =
     ((localPath.getNameCount - 1)
       .to(1, -1))
-      .map(
-        index => localPath.subpath(0, index)
-      )
+      .map(index => localPath.subpath(0, index))
       .toList
 
   def getFullBlobName(basePath: RelativePath, localPath: Path, blobPath: Option[BlobPath]): GcsBlobName = {
@@ -139,9 +134,7 @@ package object welder {
 
       cached = loadedCache.flatMap(b => toTuple(b)).toMap
       ref <- Stream.resource(
-        Resource.make(Ref.of[IO, Map[A, B]](cached))(
-          ref => flushCache(googleStorageAlg, stagingBucketName, blobName, ref).compile.drain
-        )
+        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(googleStorageAlg, stagingBucketName, blobName, ref).compile.drain)
       )
     } yield ref
 
@@ -176,8 +169,11 @@ package object welder {
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
       // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
       // This change is made on 3/26/2020
-      legacyCacheDir = new Directory(new File(s"/work/.welder"))
-      _ <- IO(legacyCacheDir.deleteRecursively())
+      legacyCacheDir = new File(s"/work/.welder")
+      files = legacyCacheDir.listFiles()
+      _ <- if (files != null)
+        IO(files.toList.foreach(_.delete()))
+      else IO.unit
     } yield ()
 
     Stream.eval(res)

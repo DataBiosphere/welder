@@ -11,7 +11,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import io.circe.{Decoder, Json, parser}
 import _root_.fs2.{Pipe, Stream, io, text}
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GetMetadataResponse, GoogleStorageService, RemoveObjectResult}
@@ -67,7 +67,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         localFileBody should contain theSameElementsAs (body)
         val relativePath = RelativePath(localFileDestination)
         val expectedCrc32 = Crc32c.calculateCrc32c(body)
-        metadata shouldBe Map(relativePath -> AdaptedGcsMetadataCache(relativePath, RemoteState.Found(None, expectedCrc32), Some(0L))) //generation is null from emulator. Somehow scala seems to translate that to 0L
+        metadata shouldBe Map(
+          relativePath -> AdaptedGcsMetadataCache(relativePath, RemoteState.Found(None, expectedCrc32), Some(0L))
+        ) //generation is null from emulator. Somehow scala seems to translate that to 0L
       }
 
       res.unsafeRunSync()
@@ -239,7 +241,9 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         resp.get.status shouldBe Status.Ok
         body shouldBe (expectedBody)
         val relativePath = RelativePath(Paths.get(localPath))
-        metadata shouldBe Map(relativePath -> AdaptedGcsMetadataCache(relativePath, RemoteState.Found(None, Crc32("aZKdIw==")), None)) //lock should be updated, but emulator doesn't support user defined metadata yet
+        metadata shouldBe Map(
+          relativePath -> AdaptedGcsMetadataCache(relativePath, RemoteState.Found(None, Crc32("aZKdIw==")), None)
+        ) //lock should be updated, but emulator doesn't support user defined metadata yet
       }
       res.unsafeRunSync()
     }
@@ -507,8 +511,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
               pattern: Regex,
               traceId: TraceId
           ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
@@ -642,8 +646,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
               pattern: Regex,
               traceId: TraceId
           ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
@@ -713,8 +717,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
               traceId: TraceId
           ): IO[DelocalizeResponse] =
             IO.raiseError(new Exception("delocalize shouldn't happen when crc32c hasn't changed"))
-          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
         }
         val metadataCacheAlg = new MetadataCacheInterp(metaCache)
         val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
@@ -780,8 +784,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
               IO(gsPath.blobName shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
               IO(generation shouldBe (0L)) >>
               IO(DelocalizeResponse(112L, Crc32("newHash")))
-          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+          override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
         }
         val objectService = initObjectServiceWithGoogleStorageAlg(Map(localBaseDirectory.path -> storageLink), Map.empty, storageAlg)
         val requestBody = s"""
@@ -1162,8 +1166,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             pattern: Regex,
             traceId: TraceId
         ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
       }
       val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
       val objectService =
@@ -1214,8 +1218,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             pattern: Regex,
             traceId: TraceId
         ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
       }
       val objectService = initObjectServiceWithGoogleStorageAlg(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, googleStorageAlg)
       val localAbsolutePath = Paths.get(s"/tmp/${storageLink.localBaseDirectory.path.toString}/test.ipynb")
@@ -1257,8 +1261,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
             pattern: Regex,
             traceId: TraceId
         ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+        override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
       }
       val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
       val objectService =
@@ -1407,8 +1411,8 @@ class MockGoogleStorageAlg extends GoogleStorageAlg {
       pattern: Regex,
       traceId: TraceId
   ): Stream[IO, AdaptedGcsMetadataCache] = ???
-  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = ???
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = ???
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = ???
   def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName): Pipe[IO, Byte, Unit] = ???
   def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
     for {

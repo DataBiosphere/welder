@@ -9,7 +9,7 @@ import _root_.io.circe.Decoder
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import fs2.concurrent.SignallingRef
 import fs2.{Pipe, Stream, io}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
@@ -43,8 +43,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         pattern: Regex,
         traceId: TraceId
     ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
       io.file.readAll[IO](localFile, blocker, 4096).compile.to(Array).flatMap { body =>
         FakeGoogleStorageInterpreter
           .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)

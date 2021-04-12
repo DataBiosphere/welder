@@ -3,13 +3,12 @@ package server
 
 import java.nio.file.Path
 import java.util.UUID
-
 import cats.effect.{Blocker, ContextShift, IO}
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -40,7 +39,7 @@ class ShutdownService(
 
     // Copy all welder log files and jupyter log file to staging bucket
     val flushLogFiles = for {
-      implicit0(ev: ApplicativeAsk[IO, TraceId]) <- IO(ApplicativeAsk.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
+      implicit0(ev: Ask[IO, TraceId]) <- IO(Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
       _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
         val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
         googleStorageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))

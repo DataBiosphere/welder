@@ -3,7 +3,7 @@ package server
 
 import cats.effect._
 import cats.implicits._
-import io.chrisdavenport.log4cats.StructuredLogger
+import org.typelevel.log4cats.StructuredLogger
 import io.circe.Encoder
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.server.WelderApp._

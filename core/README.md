@@ -10,11 +10,11 @@ Run `sbt server/console`
 // copy+paste to import all these 
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import scala.concurrent.ExecutionContext.global
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import cats.effect.IO
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import io.chrisdavenport.linebacker.Linebacker
+import org.typelevel.linebacker.Linebacker
 implicit val cs = IO.contextShift(global)
 implicit val t = IO.timer(global)
 implicit def unsafeLogger = Slf4jLogger.getLogger[IO]  

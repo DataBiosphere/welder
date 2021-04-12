@@ -7,7 +7,7 @@ import java.util.UUID
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import fs2.{Stream, text}
 import io.circe.{Json, parser}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -33,8 +33,8 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
         patter: Regex,
         traceId: TraceId
     ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   }
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
   val storageLinksService = StorageLinksService(
