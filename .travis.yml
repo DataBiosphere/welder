@@ -1,9 +1,9 @@
 jdk:
-- openjdk8
+- openjdk11
 language: scala
 sudo: required
 scala:
-- 2.13.3
+- 2.13.5
 cache:
  directories:
  - "$HOME/.ivy2/cache/"
