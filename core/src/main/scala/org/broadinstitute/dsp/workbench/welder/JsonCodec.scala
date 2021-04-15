@@ -69,8 +69,8 @@ object JsonCodec {
   implicit val regexDecoder: Decoder[Regex] = Decoder.decodeString.emap(s => Either.catchNonFatal(s.r).leftMap(_.getMessage))
 
   implicit val storageLinkEncoder: Encoder[StorageLink] =
-    Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(
-      storageLink => StorageLink.unapply(storageLink).get
+    Encoder.forProduct4("localBaseDirectory", "localSafeModeBaseDirectory", "cloudStorageDirectory", "pattern")(storageLink =>
+      StorageLink.unapply(storageLink).get
     )
 
   implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.instance { x =>
@@ -101,16 +101,13 @@ object JsonCodec {
     "lock",
     "crc32c"
   )(RemoteState.Found.apply)
-  implicit val remoteStateEncoder: Encoder[RemoteState] = Encoder.instance(
-    x =>
-      x match {
-        case RemoteState.NotFound => "NotFound".asJson
-        case e: RemoteState.Found => e.asJson
-      }
+  implicit val remoteStateEncoder: Encoder[RemoteState] = Encoder.instance(x =>
+    x match {
+      case RemoteState.NotFound => "NotFound".asJson
+      case e: RemoteState.Found => e.asJson
+    }
   )
-  implicit val remoteStateDecoder: Decoder[RemoteState] = Decoder.instance(
-    x => x.as[RemoteState.Found].orElse(Right(RemoteState.NotFound))
-  )
+  implicit val remoteStateDecoder: Decoder[RemoteState] = Decoder.instance(x => x.as[RemoteState.Found].orElse(Right(RemoteState.NotFound)))
   implicit val gcsMetadataEncoder: Encoder[AdaptedGcsMetadataCache] = Encoder.forProduct3(
     "localPath",
     "remoteState",

@@ -16,12 +16,8 @@ import pureconfig.error.ExceptionThrown
 import scala.concurrent.duration.FiniteDuration
 
 object Config {
-  implicit val uriConfigReader: ConfigReader[Uri] = ConfigReader.fromString(
-    s => Uri.fromString(s).leftMap(err => ExceptionThrown(err))
-  )
-  implicit val pathConfigReader: ConfigReader[Path] = ConfigReader.fromString(
-    s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err))
-  )
+  implicit val uriConfigReader: ConfigReader[Uri] = ConfigReader.fromString(s => Uri.fromString(s).leftMap(err => ExceptionThrown(err)))
+  implicit val pathConfigReader: ConfigReader[Path] = ConfigReader.fromString(s => Either.catchNonFatal(Paths.get(s)).leftMap(err => ExceptionThrown(err)))
   implicit val relativePathConfigReader: ConfigReader[RelativePath] = pathConfigReader.map(RelativePath)
   implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.stringConfigReader.map(WorkbenchEmail)
   implicit val gcsBlobNameReader: ConfigReader[GcsBlobName] = ConfigReader.stringConfigReader.map(GcsBlobName)
