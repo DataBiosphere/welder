@@ -21,7 +21,7 @@ object Settings {
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
-    javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
+    javacOptions ++= Seq("--release", "11"),
     scalacOptions in (Compile, console) --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings")
   )
 
@@ -40,7 +40,6 @@ object Settings {
 
   // recommended scalac options by https://tpolecat.github.io/2017/04/25/scalac-flags.html
   lazy val commonCompilerSettings = Seq(
-    "-target:jvm-11",
     "-deprecation", // Emit warning and location for usages of deprecated APIs.
     "-encoding",
     "utf-8", // Specify character encoding used by source files.
@@ -88,18 +87,18 @@ object Settings {
       Cmd("USER", "root"),
       ExecCmd("RUN", "/bin/bash", "-c", s"echo $entrypointCmd > $entrypoint"),
       Cmd("RUN", s"chown -R welder-user:users /opt/docker && chmod u+x,g+x $entrypoint"),
-      Cmd("USER", (daemonUser in Docker).value)
+      Cmd("USER", (Docker / daemonUser).value)
     )
   )
 
   lazy val serverDockerSettings = commonDockerSettings ++ List(
-    mainClass in Compile := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
-    packageName in Docker := "broad-dsp-gcr-public/welder-server",
+    Compile / mainClass := Some("org.broadinstitute.dsp.workbench.welder.server.Main"),
+    Docker / packageName := "broad-dsp-gcr-public/welder-server",
     // user, uid, group, and gid are all replicated in the Jupyter container
-    daemonUser in Docker := "welder-user",
-    daemonUserUid in Docker := Some("1001"),
-    daemonGroup in Docker := "users",
-    daemonGroupGid in Docker := Some("100"),
+    Docker / daemonUser := "welder-user",
+    Docker / daemonUserUid := Some("1001"),
+    Docker / daemonGroup := "users",
+    Docker / daemonGroupGid := Some("100"),
     dockerEntrypoint := List(entrypoint),
     dockerAlias := DockerAlias(
       Some("us.gcr.io"),
