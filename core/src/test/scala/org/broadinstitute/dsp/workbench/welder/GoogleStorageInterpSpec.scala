@@ -209,7 +209,7 @@ object GoogleStorageServiceWithFailures extends BaseFakeGoogleStorage {
       metadata: Map[String, String],
       generation: Option[Long],
       overwrite: Boolean = true,
-      traceId: Option[TraceId],
+      traceId: Option[TraceId]
   ): Pipe[IO, Byte, Unit] = in => {
     val errors = new GoogleJsonError()
     errors.setCode(412)

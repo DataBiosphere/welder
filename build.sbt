@@ -4,7 +4,7 @@ coverageFailOnMinimum := false //Make this true once we have more tests
 lazy val welder = project
   .in(file("."))
   .settings(
-    skip in publish := true,
+    publish / skip := true,
     Settings.commonSettings
   )
   .aggregate(core, server)
@@ -17,8 +17,8 @@ lazy val core =
       Settings.commonSettings,
       Settings.buildInfoSettings,
 //    This is not ideal, but BuildInfoPlugin doesn't work as expected for core
-      sourceGenerators in Compile += Def.task {
-        val outDir = (sourceManaged in Compile).value / "welderBuildInfo"
+      Compile / sourceGenerators += Def.task {
+        val outDir = (Compile / sourceManaged).value / "welderBuildInfo"
         val outFile = new File(outDir, "buildinfo.scala")
         outDir.mkdirs
         val v = version.value

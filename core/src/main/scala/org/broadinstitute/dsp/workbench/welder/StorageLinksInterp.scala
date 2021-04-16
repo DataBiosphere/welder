@@ -1,13 +1,13 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import org.broadinstitute.dsde.workbench.model.TraceId
 
 class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLinksAlg {
-  def findStorageLink[A](localPath: RelativePath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[CommonContext] =
+  def findStorageLink[A](localPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[CommonContext] =
     for {
-      traceId <- ev.ask
+      traceId <- ev.ask[TraceId]
       storageLinks <- storageLinksCache.get
       baseDirectories = getPossibleBaseDirectory(localPath.asPath)
       context = baseDirectories.collectFirst {

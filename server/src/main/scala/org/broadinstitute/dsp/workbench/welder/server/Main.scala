@@ -5,8 +5,8 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Blocker, ExitCode, IO, IOApp}
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import io.chrisdavenport.log4cats.{Logger, StructuredLogger}
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.{Logger, StructuredLogger}
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
@@ -27,9 +27,7 @@ object Main extends IOApp {
     } yield ()
 
     app
-      .handleErrorWith { error =>
-        Stream.eval(Logger[IO].error(error)("Failed to start server")) >> Stream.raiseError[IO](error)
-      }
+      .handleErrorWith(error => Stream.eval(Logger[IO].error(error)("Failed to start server")) >> Stream.raiseError[IO](error))
       .compile
       .drain
       .as(ExitCode.Error)

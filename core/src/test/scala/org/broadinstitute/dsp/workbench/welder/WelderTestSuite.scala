@@ -2,9 +2,9 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.Eq
 import cats.effect.{Blocker, ContextShift, IO, Timer}
-import cats.mtl.ApplicativeAsk
-import io.chrisdavenport.log4cats.StructuredLogger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import cats.mtl.Ask
+import org.typelevel.log4cats.StructuredLogger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.http4s.{Header, Headers}
 import org.scalatest.prop.Configuration
@@ -22,7 +22,7 @@ trait WelderTestSuite extends Matchers with ScalaCheckPropertyChecks with Config
   implicit val unsafeLogger: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
   val fakeTraceId = TraceId("fakeTraceId")
   val fakeTraceIdHeader = Headers.of(Header("X-Cloud-Trace-Context", fakeTraceId.asString))
-  implicit val traceId: ApplicativeAsk[IO, TraceId] = ApplicativeAsk.const[IO, TraceId](fakeTraceId)
+  implicit val traceId: Ask[IO, TraceId] = Ask.const[IO, TraceId](fakeTraceId)
 
   val blocker: Blocker = Blocker.liftExecutionContext(global)
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 3)

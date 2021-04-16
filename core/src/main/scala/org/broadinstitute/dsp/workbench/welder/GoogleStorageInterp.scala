@@ -4,11 +4,11 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-import _root_.io.chrisdavenport.log4cats.Logger
+import _root_.org.typelevel.log4cats.Logger
 import _root_.io.circe.Decoder
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
+import cats.mtl.Ask
 import fs2.{Pipe, Stream, io}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
@@ -109,12 +109,12 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     } yield DelocalizeResponse(blob.getGeneration, Crc32(blob.getCrc32c))
   }
 
-  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] = {
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: ApplicativeAsk[IO, TraceId]): IO[Unit] =
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     logger.info(s"flushing file ${localFile}") >>
       (io.file.readAll[IO](localFile, blocker, 4096) through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName)).compile.drain
 

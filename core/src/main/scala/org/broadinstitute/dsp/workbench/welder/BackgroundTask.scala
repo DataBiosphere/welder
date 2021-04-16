@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.Stream
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName

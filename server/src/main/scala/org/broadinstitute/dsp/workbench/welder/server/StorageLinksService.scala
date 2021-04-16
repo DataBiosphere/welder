@@ -16,7 +16,7 @@ import cats.implicits._
 import _root_.io.circe.Encoder.encodeString
 import _root_.io.circe.Printer
 import _root_.io.circe.syntax._
-import _root_.io.chrisdavenport.log4cats.StructuredLogger
+import _root_.org.typelevel.log4cats.StructuredLogger
 import org.broadinstitute.dsde.workbench.model.TraceId
 
 class StorageLinksService(
@@ -83,7 +83,9 @@ class StorageLinksService(
       cloudStorageDirectory: CloudStorageDirectory
   ): IO[Unit] = {
     val fileBody =
-      RuntimeVariables(s"gs://${cloudStorageDirectory.bucketName.value}/notebooks") //appending notebooks to mimick old jupyter image until we start using new images.
+      RuntimeVariables(
+        s"gs://${cloudStorageDirectory.bucketName.value}/notebooks"
+      ) //appending notebooks to mimick old jupyter image until we start using new images.
       .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
     val editModeDestinationPath = config.workingDirectory
       .resolve(baseDirectory.path.asPath)
@@ -116,10 +118,10 @@ class StorageLinksService(
         exists <- IO(file.exists())
         _ <- if (exists) IO.unit
         else {
-          IO(file.mkdirs()).flatMap(r => {
+          IO(file.mkdirs()).flatMap { r =>
             if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
             else logger.info(s"Successfully created ${file}")
-          })
+          }
         }
       } yield ()
     }.void
