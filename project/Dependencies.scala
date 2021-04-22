@@ -23,6 +23,7 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "ca.mrvisser" %% "sealerate" % "0.0.6",
     "com.google.cloud" % "google-cloud-nio" % "0.122.11" % "test",
+    "ch.qos.logback" % "logback-classic" % "1.2.3",
     "net.logstash.logback" % "logstash-logback-encoder" % "6.2" // for structured logging in logback
   )
 
