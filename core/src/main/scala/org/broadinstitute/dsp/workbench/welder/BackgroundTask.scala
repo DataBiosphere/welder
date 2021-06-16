@@ -79,6 +79,12 @@ class BackgroundTask(
 
     (Stream.sleep[IO](config.syncCloudStorageDirectoryInterval) ++ Stream.eval(res)).repeat
   }
+
+  val delocalizeBackgroundProcess: Stream[IO, Unit] = {
+    val res = for {
+
+    }
+  }
 }
 
 final case class BackgroundTaskConfig(
