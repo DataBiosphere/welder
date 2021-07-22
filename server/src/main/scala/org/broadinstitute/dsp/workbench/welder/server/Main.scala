@@ -87,7 +87,8 @@ object Main extends IOApp {
         appConfig.stagingBucketName,
         appConfig.cleanUpLockInterval,
         appConfig.flushCacheInterval,
-        appConfig.syncCloudStorageDirectoryInterval
+        appConfig.syncCloudStorageDirectoryInterval,
+        appConfig.delocalizeDirectoryInterval
       )
       val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(

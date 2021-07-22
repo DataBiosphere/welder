@@ -108,5 +108,6 @@ final case class BackgroundTaskConfig(
     stagingBucket: GcsBucketName,
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
-    syncCloudStorageDirectoryInterval: FiniteDuration
+    syncCloudStorageDirectoryInterval: FiniteDuration,
+    delocalizeDirectoryInterval: FiniteDuration
 )

@@ -35,7 +35,8 @@ final case class AppConfig(
     gcsMetadataJsonBlobName: GcsBlobName,
     workspaceBucketNameFileName: Path,
     objectService: ObjectServiceConfig,
-    stagingBucketName: GcsBucketName
+    stagingBucketName: GcsBucketName,
+    delocalizeDirectoryInterval: FiniteDuration
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
