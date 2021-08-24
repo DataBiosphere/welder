@@ -3,9 +3,9 @@ package org.broadinstitute.dsp.workbench.welder
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 import cats.effect.{Blocker, ContextShift, IO, Timer}
 import cats.implicits._
+import cats.mtl.Ask
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -86,24 +86,20 @@ class BackgroundTask(
     if (config.rstudioRuntime) {
       val res = for {
         storageLinks <- storageLinksCache.get
-        traceId <- IO(TraceId(UUID.randomUUID().toString))
+        implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          logger.info(s"syncing file from ${storageLink.localBaseDirectory}") >>
-            findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
+          findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
               val gsPath = getGsPath(storageLink, file)
-              logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.delocalize(
-                storageLink.localBaseDirectory.path,
-                gsPath,
-                0L,
-                Map.empty,
-                traceId
+              logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.fileToGcs(
+                RelativePath(java.nio.file.Paths.get(file.getName)),
+                gsPath
               )
             }
         }
       } yield ()
       Stream.eval(logger.info("begin delocalize Rmd")) >> (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
     } else {
-      Stream.empty
+      Stream.eval(logger.info("Not running rmd sync process because this is not a Rstudio runtime"))
     }
   }
 
