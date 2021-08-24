@@ -79,7 +79,7 @@ object JsonCodec {
       safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
       cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
       pattern <- x.downField("pattern").as[Regex]
-    } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), LocalSafeBaseDirectory(RelativePath(safeBaseDir)), cloudStorageDir, pattern)
+    } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), Some(LocalSafeBaseDirectory(RelativePath(safeBaseDir))), cloudStorageDir, pattern)
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)

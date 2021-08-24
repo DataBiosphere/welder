@@ -56,7 +56,10 @@ class StorageLinksService(
   def createStorageLink(storageLink: StorageLink): Kleisli[IO, TraceId, StorageLink] = Kleisli { traceId =>
     for {
       link <- storageLinks.modify { links =>
-        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink).toMap
+        val safeModeDirectory =
+          storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
+
+        val toAdd = List(storageLink.localBaseDirectory.path -> storageLink).toMap ++ safeModeDirectory
         (links ++ toAdd, storageLink)
       }
       _ <- initializeDirectories(storageLink)
@@ -79,7 +82,7 @@ class StorageLinksService(
 
   private def persistWorkspaceBucket(
       baseDirectory: LocalDirectory,
-      safeModeDirectory: LocalDirectory,
+      safeModeDirectory: Option[LocalDirectory],
       cloudStorageDirectory: CloudStorageDirectory
   ): IO[Unit] = {
     val fileBody =
@@ -90,9 +93,11 @@ class StorageLinksService(
     val editModeDestinationPath = config.workingDirectory
       .resolve(baseDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
-    val safeModeDestinationPath = config.workingDirectory
-      .resolve(safeModeDirectory.path.asPath)
-      .resolve(config.workspaceBucketNameFileName)
+    val safeModeDestinationPath = safeModeDirectory.map(d =>
+      config.workingDirectory
+        .resolve(d.path.asPath)
+        .resolve(config.workspaceBucketNameFileName)
+    )
 
     val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath =>
       logger.info(s"writing ${destinationPath}") >> (Stream.emits(fileBody) through io.file.writeAll[IO](
@@ -101,15 +106,15 @@ class StorageLinksService(
         List(StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
       )).compile.drain // overwrite the file everytime storagelink is called since workspace bucket can be updated
 
-    (writeToFile(editModeDestinationPath), writeToFile(safeModeDestinationPath)).parTupled.void
+    (writeToFile(editModeDestinationPath), safeModeDestinationPath.traverse(p => writeToFile(p))).parTupled.void
   }
 
   //returns whether the directories exist at the end of execution
   private def initializeDirectories(storageLink: StorageLink): IO[Unit] = {
-    val localSafeAbsolutePath = config.workingDirectory.resolve(storageLink.localSafeModeBaseDirectory.path.asPath)
+    val localSafeAbsolutePath = storageLink.localSafeModeBaseDirectory.map(d => config.workingDirectory.resolve(d.path.asPath))
     val localEditAbsolutePath = config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)
 
-    val dirsToCreate: List[java.nio.file.Path] = List(localSafeAbsolutePath, localEditAbsolutePath)
+    val dirsToCreate: List[java.nio.file.Path] = List(localEditAbsolutePath) ++ localSafeAbsolutePath
 
     //creates all dirs and logs any errors
     dirsToCreate.traverse { dir =>
@@ -129,7 +134,7 @@ class StorageLinksService(
 
   def deleteStorageLink(storageLink: StorageLink): IO[Unit] =
     storageLinks.modify { links =>
-      val toDelete = List(storageLink.localBaseDirectory.path, storageLink.localSafeModeBaseDirectory.path)
+      val toDelete = List(storageLink.localBaseDirectory.path) ++ storageLink.localSafeModeBaseDirectory.map(_.path)
       (links -- toDelete, ())
     }
 

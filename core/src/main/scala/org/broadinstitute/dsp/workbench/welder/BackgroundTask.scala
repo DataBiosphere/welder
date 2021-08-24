@@ -90,7 +90,7 @@ class BackgroundTask(
         _ <- storageLinks.values.toList.traverse { storageLink =>
           logger.info(s"syncing file from ${storageLink.localBaseDirectory}") >>
             findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
-              val gsPath = getGsPath(storageLink, file)
+              val gsPath = getGsPath(storageLink, new File(file.getName))
               logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.delocalize(
                 storageLink.localBaseDirectory.path,
                 gsPath,
@@ -103,7 +103,7 @@ class BackgroundTask(
       } yield ()
       Stream.eval(logger.info("begin delocalize Rmd")) >> (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
     } else {
-      Stream.empty
+      Stream.eval(logger.info("NOT running background process")) //>> Stream.empty
     }
   }
 

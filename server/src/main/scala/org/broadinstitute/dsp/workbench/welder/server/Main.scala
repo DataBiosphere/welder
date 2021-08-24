@@ -46,7 +46,11 @@ object Main extends IOApp {
         appConfig.stagingBucketName,
         appConfig.storageLinksJsonBlobName,
         blocker,
-        storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink)
+        storageLink => {
+          val safeModeDirectory =
+            storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
+          List(storageLink.localBaseDirectory.path -> storageLink) ++ safeModeDirectory
+        }
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         googleStorageAlg,
