@@ -1,7 +1,7 @@
 <configuration>
 <!--  The following line suppresses ch.qos log in the beginning when service starts up -->
 <!--  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />-->
-  <property name="WORKING_DIRECTORY" value="/work" />
+  <property name="WORKING_DIRECTORY" value="/tmp" />
 
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
     <file>${WORKING_DIRECTORY}/welder.log</file>

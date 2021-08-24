@@ -14,7 +14,8 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
-import scala.concurrent.duration.FiniteDuration
+import java.io.File
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class BackgroundTask(
     config: BackgroundTaskConfig,
@@ -82,24 +83,37 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
-    val res = for {
-      storageLinks <- storageLinksCache.get
-      traceId <- IO(TraceId(UUID.randomUUID().toString))
-      _ <- storageLinks.values.toList.traverse { storageLink =>
-        logger.info(s"syncing file from ${storageLink.localBaseDirectory}")
-        findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
-          val fullBlobPath = getFullBlobName(
-            storageLink.localBaseDirectory.path,
-            storageLink.localBaseDirectory.path.asPath.resolve(file.toString),
-            storageLink.cloudStorageDirectory.blobPath
-          )
-          val gsPath = GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
-          googleStorageAlg.delocalize(storageLink.localBaseDirectory.path, gsPath, 0L, Map.empty, traceId)
+    if (config.rstudioRuntime) {
+      val res = for {
+        storageLinks <- storageLinksCache.get
+        traceId <- IO(TraceId(UUID.randomUUID().toString))
+        _ <- storageLinks.values.toList.traverse { storageLink =>
+          logger.info(s"syncing file from ${storageLink.localBaseDirectory}") >>
+            findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
+              val gsPath = getGsPath(storageLink, file)
+              logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.delocalize(
+                storageLink.localBaseDirectory.path,
+                gsPath,
+                0L,
+                Map.empty,
+                traceId
+              )
+            }
         }
-      }
-    } yield ()
+      } yield ()
+      Stream.eval(logger.info("begin delocalize Rmd")) >> (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
+    } else {
+      Stream.empty
+    }
+  }
 
-    (Stream.sleep[IO](config.syncCloudStorageDirectoryInterval) ++ Stream.eval(res)).repeat
+  def getGsPath(storageLink: StorageLink, file: File): GsPath = {
+    val fullBlobPath = getFullBlobName(
+      storageLink.localBaseDirectory.path,
+      storageLink.localBaseDirectory.path.asPath.resolve(file.toString),
+      storageLink.cloudStorageDirectory.blobPath
+    )
+    GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
   }
 }
 
@@ -109,5 +123,6 @@ final case class BackgroundTaskConfig(
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
-    delocalizeDirectoryInterval: FiniteDuration
+    delocalizeDirectoryInterval: FiniteDuration,
+    rstudioRuntime: Boolean
 )

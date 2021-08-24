@@ -88,7 +88,8 @@ object Main extends IOApp {
         appConfig.cleanUpLockInterval,
         appConfig.flushCacheInterval,
         appConfig.syncCloudStorageDirectoryInterval,
-        appConfig.delocalizeDirectoryInterval
+        appConfig.delocalizeDirectoryInterval,
+        appConfig.rstudioRuntime
       )
       val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(
@@ -96,6 +97,6 @@ object Main extends IOApp {
         appConfig.gcsMetadataJsonBlobName,
         blocker
       )
-      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, serverStream.drain)
+      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
 }

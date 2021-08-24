@@ -36,7 +36,8 @@ final case class AppConfig(
     workspaceBucketNameFileName: Path,
     objectService: ObjectServiceConfig,
     stagingBucketName: GcsBucketName,
-    delocalizeDirectoryInterval: FiniteDuration
+    delocalizeDirectoryInterval: FiniteDuration,
+    rstudioRuntime: Boolean
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
