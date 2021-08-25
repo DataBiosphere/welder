@@ -26,7 +26,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       objectServiceConfig,
       GcsBucketName("fakeBucket"),
       15 seconds,
-      true
+      false
     )
     config shouldBe Right(expectedConfig)
   }
