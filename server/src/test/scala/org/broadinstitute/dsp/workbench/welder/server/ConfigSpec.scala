@@ -24,7 +24,9 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       GcsBlobName("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
-      GcsBucketName("fakeBucket")
+      GcsBucketName("fakeBucket"),
+      15 seconds,
+      true
     )
     config shouldBe Right(expectedConfig)
   }

@@ -17,12 +17,12 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
 
   "getGsPath" should "be return the correct path to delocalize files to" in {
     val storageLink = StorageLink(
-      LocalBaseDirectory(RelativePath(Paths.get("/testWorkspaceName"))),
-      LocalBaseDirectory(RelativePath(Paths.get(""))),
-      CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks/test.Rmd"))),
+      LocalBaseDirectory(RelativePath(Paths.get("/work"))),
+      None,
+      CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks"))),
       ".*\\.Rmd".r
     )
-    val file = new File("/work/testWorkspaceName/test.Rmd")
+    val file = new File("test.Rmd")
     val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None).getGsPath(storageLink, file)
     res.toString shouldBe "gs://testBucket/notebooks/test.Rmd"
   }

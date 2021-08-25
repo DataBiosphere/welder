@@ -70,7 +70,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val expectedBody =
       """{"storageLinks":[{"localBaseDirectory":"foo","localSafeModeBaseDirectory":"bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}]}"""
 
-    val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), LocalSafeBaseDirectory(baseSafeDir), cloudStorageDirectory, ".zip".r)
+    val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), Some(LocalSafeBaseDirectory(baseSafeDir)), cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 

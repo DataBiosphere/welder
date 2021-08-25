@@ -20,11 +20,11 @@ class StorageLinksInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks w
 
   it should "return isSafeMode true when localPath is in safe mode" in {
     forAll { (storageLink: StorageLink) =>
-      val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(storageLink.localSafeModeBaseDirectory.path -> storageLink))
+      val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(storageLink.localSafeModeBaseDirectory.get.path -> storageLink))
       val storageLinksAlg = new StorageLinksInterp(storageLinksCache)
-      val localPath = RelativePath(Paths.get(s"${storageLink.localSafeModeBaseDirectory.path.toString}/test.ipynb"))
+      val localPath = RelativePath(Paths.get(s"${storageLink.localSafeModeBaseDirectory.get.path.toString}/test.ipynb"))
       val res = storageLinksAlg.findStorageLink(localPath)
-      val expectedResult = CommonContext(true, storageLink.localSafeModeBaseDirectory.path, storageLink)
+      val expectedResult = CommonContext(true, storageLink.localSafeModeBaseDirectory.get.path, storageLink)
       res.unsafeRunSync() shouldBe (expectedResult)
     }
   }
