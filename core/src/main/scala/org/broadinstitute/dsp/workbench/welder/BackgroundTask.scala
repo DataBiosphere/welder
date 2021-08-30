@@ -83,22 +83,21 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
-    if (config.rstudioRuntime) {
+    if (config.isRStudioRuntime) {
       val res = for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          logger.info(s"syncing file from ${storageLink.localBaseDirectory}") >>
-            findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
-              val gsPath = getGsPath(storageLink, new File(file.getName))
-              logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.fileToGcs(
-                RelativePath(java.nio.file.Paths.get(file.getName)),
-                gsPath
-              )
-            }
+          findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
+            val gsPath = getGsPath(storageLink, new File(file.getName))
+            logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.fileToGcs(
+              RelativePath(java.nio.file.Paths.get(file.getName)),
+              gsPath
+            )
+          }
         }
       } yield ()
-      Stream.eval(logger.info("begin delocalize Rmd")) >> (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
+      (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
     } else {
       Stream.eval(logger.info("Not running rmd sync process because this is not a Rstudio runtime"))
     }
@@ -121,5 +120,5 @@ final case class BackgroundTaskConfig(
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
     delocalizeDirectoryInterval: FiniteDuration,
-    rstudioRuntime: Boolean
+    isRStudioRuntime: Boolean
 )
