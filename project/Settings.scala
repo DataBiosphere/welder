@@ -76,7 +76,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
-    dockerBaseImage := "ghcr.io/graalvm/graalvm-ce:ol8-java11-21.0.0.2",
+    dockerBaseImage := "us.gcr.io/broad-dsp-gcr-public/base/jre:11-debian",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),
