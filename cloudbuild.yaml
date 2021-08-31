@@ -1,5 +1,8 @@
 steps:
   - name: 'gcr.io/$PROJECT_ID/scala-sbt'
+    env:
+      - 'OWNER_EMAIL=fake@gmail.com'
+      - 'STAGING_BUCKET=fakeBucket'
     args:
       - |
         test; server/docker:publishLocal
