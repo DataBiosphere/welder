@@ -93,7 +93,7 @@ object Main extends IOApp {
         appConfig.flushCacheInterval,
         appConfig.syncCloudStorageDirectoryInterval,
         appConfig.delocalizeDirectoryInterval,
-        appConfig.isRStudioRuntime
+        appConfig.isRstudioRuntime
       )
       val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(

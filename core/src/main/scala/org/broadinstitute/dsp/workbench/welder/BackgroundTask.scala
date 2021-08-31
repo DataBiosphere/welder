@@ -83,7 +83,7 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
-    if (config.isRStudioRuntime) {
+    if (config.isRstudioRuntime) {
       val res = for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
@@ -120,5 +120,5 @@ final case class BackgroundTaskConfig(
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
     delocalizeDirectoryInterval: FiniteDuration,
-    isRStudioRuntime: Boolean
+    isRstudioRuntime: Boolean
 )
