@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/$PROJECT_ID/scala-sbt'
+    env:
+      - 'OWNER_EMAIL=fake@gmail.com'
+      - 'STAGING_BUCKET=fakeBucket'
+    args:
+      - |
+        test; server/docker:publishLocal
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'image', 'tag', 'us.gcr.io/broad-dsp-gcr-public/welder-server:latest', 'us.gcr.io/broad-dsp-gcr-public/welder-server:$SHORT_SHA']
+images: [
+    'us.gcr.io/broad-dsp-gcr-public/welder-server:$SHORT_SHA',
+    'us.gcr.io/broad-dsp-gcr-public/welder-server:latest'
+]
