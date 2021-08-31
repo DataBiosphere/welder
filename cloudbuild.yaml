@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/$PROJECT_ID/scala-sbt'
+    args:
+      - |
+        test; server/docker:publishLocal
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'image', 'tag', 'us.gcr.io/broad-dsp-gcr-public/welder:latest', 'us.gcr.io/broad-dsp-gcr-public/welder:$SHORT_SHA']
+images: [
+    'us.gcr.io/broad-dsp-gcr-public/welder:$SHORT_SHA',
+    'us.gcr.io/broad-dsp-gcr-public/welder:latest'
+]
