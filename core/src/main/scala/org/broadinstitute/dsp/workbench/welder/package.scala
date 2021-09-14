@@ -19,6 +19,8 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
+import scala.util.matching.Regex
+
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
@@ -186,6 +188,9 @@ package object welder {
     */
   def findFilesWithSuffix(parent: Path, suffix: String): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && f.getName.endsWith(suffix)).toList
+
+  def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
+    parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
 
   private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
 

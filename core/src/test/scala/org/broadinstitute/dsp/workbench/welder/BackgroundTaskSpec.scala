@@ -1,6 +1,6 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import cats.effect.IO
+import cats.effect.{Blocker, IO}
 import cats.effect.concurrent.Ref
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
@@ -23,20 +23,29 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
       ".*\\.Rmd".r
     )
     val file = new File("test.Rmd")
-    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None).getGsPath(storageLink, file)
+    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None, blocker).getGsPath(storageLink, file)
     res.toString shouldBe "gs://testBucket/notebooks/test.Rmd"
   }
 
   private def initBackgroundTask(
       storageLinks: Map[RelativePath, StorageLink],
       metadata: Map[RelativePath, AdaptedGcsMetadataCache],
-      googleStorageService: Option[GoogleStorageService[IO]]
+      googleStorageService: Option[GoogleStorageService[IO]],
+      blocker: Blocker
   ): BackgroundTask = {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val defaultGoogleStorageAlg =
       GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
-    new BackgroundTask(backgroundTaskConfig, metaCache, storageLinksCache, defaultGoogleStorageAlg, metadataCacheAlg)
+    new BackgroundTask(
+      backgroundTaskConfig,
+      metaCache,
+      storageLinksCache,
+      defaultGoogleStorageAlg,
+      metadataCacheAlg,
+      googleStorageService.getOrElse(FakeGoogleStorageInterpreter),
+      blocker
+    )
   }
 }

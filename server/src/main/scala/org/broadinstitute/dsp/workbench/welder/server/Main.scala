@@ -95,7 +95,8 @@ object Main extends IOApp {
         appConfig.delocalizeDirectoryInterval,
         appConfig.isRstudioRuntime
       )
-      val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
+      val backGroundTask =
+        new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg, googleStorageService, blocker)
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
         appConfig.gcsMetadataJsonBlobName,

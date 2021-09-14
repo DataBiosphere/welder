@@ -8,7 +8,7 @@ import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
 import org.typelevel.log4cats.Logger
-import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataResponse, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
@@ -22,7 +22,9 @@ class BackgroundTask(
     metadataCache: MetadataCache,
     storageLinksCache: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
-    metadataCacheAlg: MetadataCacheAlg
+    metadataCacheAlg: MetadataCacheAlg,
+    googleStorageService: GoogleStorageService[IO],
+    blocker: Blocker
 )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]) {
   val cleanUpLock: Stream[IO, Unit] = {
     val task = (for {
@@ -88,13 +90,23 @@ class BackgroundTask(
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          findFilesWithSuffix(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), ".Rmd").traverse_ { file =>
-            val gsPath = getGsPath(storageLink, new File(file.getName))
-            logger.info(s"!!! file: ${file.toString}; || gsPath: ${gsPath.toString}") >> googleStorageAlg.fileToGcs(
-              RelativePath(java.nio.file.Paths.get(file.getName)),
-              gsPath
-            )
-          }
+          if (storageLink.pattern.toString.contains(".Rmd")) //TODO: double check this works
+            findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
+              val gsPath = getGsPath(storageLink, new File(file.getName))
+              for {
+                sd <- shouldDelocalize(gsPath, storageLink)
+                _ <- if (sd) {
+                  googleStorageAlg.fileToGcs(
+                    RelativePath(java.nio.file.Paths.get(file.getName)),
+                    gsPath
+                  )
+                } else {
+                  IO.unit
+                }
+              } yield ()
+
+            }
+          else IO.unit
         }
       } yield ()
       (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
@@ -102,6 +114,19 @@ class BackgroundTask(
       Stream.eval(logger.info("Not running rmd sync process because this is not a Rstudio runtime"))
     }
   }
+
+  def shouldDelocalize(gsPath: GsPath, storageLink: StorageLink): IO[Boolean] =
+    for {
+      meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.last
+      localCrc32c <- Crc32c.calculateCrc32ForFile(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), blocker)
+    } yield meta match {
+      case Some(GetMetadataResponse.Metadata(crc32, _, _)) =>
+        if (localCrc32c == crc32)
+          false
+        else
+          true
+      case _ => true
+    }
 
   def getGsPath(storageLink: StorageLink, file: File): GsPath = {
     val fullBlobPath = getFullBlobName(

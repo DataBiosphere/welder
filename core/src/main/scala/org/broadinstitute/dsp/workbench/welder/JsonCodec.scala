@@ -76,10 +76,10 @@ object JsonCodec {
   implicit val storageLinkDecoder: Decoder[StorageLink] = Decoder.instance { x =>
     for {
       baseDir <- x.downField("localBaseDirectory").as[Path]
-      safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Path]
+      safeBaseDir <- x.downField("localSafeModeBaseDirectory").as[Option[Path]]
       cloudStorageDir <- x.downField("cloudStorageDirectory").as[CloudStorageDirectory]
       pattern <- x.downField("pattern").as[Regex]
-    } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), Some(LocalSafeBaseDirectory(RelativePath(safeBaseDir))), cloudStorageDir, pattern)
+    } yield StorageLink(LocalBaseDirectory(RelativePath(baseDir)), safeBaseDir.map(x => LocalSafeBaseDirectory(RelativePath(x))), cloudStorageDir, pattern)
   }
 
   implicit val syncModeEncoder: Encoder[SyncMode] = Encoder.encodeString.contramap(_.toString)
