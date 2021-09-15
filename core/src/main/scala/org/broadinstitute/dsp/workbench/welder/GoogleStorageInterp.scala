@@ -111,8 +111,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
 
   override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-    logger.info(s"+++ localAbsolutePath: ${localAbsolutePath}") >>
-      fileToGcsAbsolutePath(localAbsolutePath, gsPath)
+    fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
