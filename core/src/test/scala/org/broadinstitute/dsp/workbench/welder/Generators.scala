@@ -44,11 +44,16 @@ object Generators {
     blobPathOpt <- Gen.option[BlobPath](blobPath)
   } yield CloudStorageDirectory(bucketName, blobPathOpt)
 
-  val genStorageLink = for {
+  val genIpynbStorageLink = for {
     localBaseDirectory <- genLocalBaseDirectory
     localSafeDirectory <- genLocalSafeBaseDirectory
     cloudStorageDirectory <- genCloudStorageDirectory
   } yield StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb$".r)
+
+  val genRmdStorageLink = for {
+    localBaseDirectory <- genLocalBaseDirectory
+    cloudStorageDirectory <- genCloudStorageDirectory
+  } yield StorageLink(localBaseDirectory, None, cloudStorageDirectory, "\\.Rmd$".r)
 
   val genWorkbenchEmail = Gen.uuid.map(x => WorkbenchEmail(s"$x@gmail.com"))
 
@@ -62,5 +67,5 @@ object Generators {
   implicit val arbLocalBaseDirectory: Arbitrary[LocalBaseDirectory] = Arbitrary(genLocalBaseDirectory)
   implicit val arbLocalSafeBaseDirectory: Arbitrary[LocalSafeBaseDirectory] = Arbitrary(genLocalSafeBaseDirectory)
   implicit val arbWorkbenchEmail: Arbitrary[WorkbenchEmail] = Arbitrary(genWorkbenchEmail)
-  implicit val arbStorageLink: Arbitrary[StorageLink] = Arbitrary(genStorageLink)
+  implicit val arbIpynbStorageLink: Arbitrary[StorageLink] = Arbitrary(genIpynbStorageLink)
 }

@@ -1379,19 +1379,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   }
 }
 
-class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends BaseFakeGoogleStorage {
-  override def getObjectMetadata(
-      bucketName: GcsBucketName,
-      blobName: GcsBlobName,
-      traceId: Option[TraceId],
-      retryConfig: RetryConfig
-  ): fs2.Stream[IO, GetMetadataResponse] = Stream.emit(metadataResponse).covary[IO]
-}
-
-object FakeGoogleStorageService {
-  def apply(metadata: GetMetadataResponse): FakeGoogleStorageService = new FakeGoogleStorageService(metadata)
-}
-
 class MockGoogleStorageAlg extends GoogleStorageAlg {
   override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] = ???
   override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
