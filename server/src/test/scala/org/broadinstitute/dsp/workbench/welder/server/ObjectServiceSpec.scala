@@ -12,8 +12,7 @@ import cats.implicits._
 import io.circe.{Decoder, Json, parser}
 import _root_.fs2.{Pipe, Stream, io, text}
 import cats.mtl.Ask
-import org.broadinstitute.dsde.workbench.RetryConfig
-import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
+import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GetMetadataResponse, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}

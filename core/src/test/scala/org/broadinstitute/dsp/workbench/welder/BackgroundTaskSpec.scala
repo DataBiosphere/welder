@@ -14,7 +14,7 @@ import java.io.File
 import scala.concurrent.duration._
 
 class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
-  val backgroundTaskConfig = BackgroundTaskConfig(Paths.get("/work"), GcsBucketName("testStagingBucket"), 7 minutes, 10 minutes, 15 minutes, 15 seconds, true)
+  val backgroundTaskConfig = BackgroundTaskConfig(Paths.get("/work"), GcsBucketName("testStagingBucket"), 7 minutes, 10 minutes, 15 minutes, 30 seconds, true)
 
   "getGsPath" should "return the correct path to delocalize files to" in {
     val storageLink = genRmdStorageLink.sample.get

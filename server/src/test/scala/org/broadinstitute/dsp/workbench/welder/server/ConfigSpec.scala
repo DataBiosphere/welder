@@ -25,7 +25,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       Paths.get(".delocalize.json"),
       objectServiceConfig,
       GcsBucketName("fakeBucket"),
-      15 seconds,
+      30 seconds,
       false
     )
     config shouldBe Right(expectedConfig)
