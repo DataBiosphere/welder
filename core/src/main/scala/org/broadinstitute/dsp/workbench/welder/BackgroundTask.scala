@@ -110,7 +110,7 @@ class BackgroundTask(
           } else IO.unit
         }
       } yield ()
-      (Stream.sleep[IO](2 seconds) ++ Stream.eval(res)).repeat
+      (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
     } else {
       Stream.eval(logger.info("Not running rmd sync process because this is not an Rstudio runtime"))
     }
