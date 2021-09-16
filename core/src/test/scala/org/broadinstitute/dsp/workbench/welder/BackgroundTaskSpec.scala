@@ -24,7 +24,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   "shouldDelocalize" should "return true if files have changed" in {
-    val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is from gsutil
+    val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is to not match the file's crc32c created in this test
     val storageService = FakeGoogleStorageService(metadataResp)
     val localAbsolutePath = Paths.get(s"/tmp/test.Rmd")
     val bodyBytes = "this is great!".getBytes("UTF-8")
