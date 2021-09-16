@@ -15,7 +15,7 @@ import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 
 import java.io.File
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 
 class BackgroundTask(
     config: BackgroundTaskConfig,
