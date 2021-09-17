@@ -53,6 +53,21 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     res.unsafeRunSync()
   }
 
+  "shouldDelocalize" should "return true if the file does not exist in Google" in {
+    val metadataResp = GetMetadataResponse.NotFound
+    val storageService = FakeGoogleStorageService(metadataResp)
+    val localAbsolutePath = Paths.get(s"/tmp/test.Rmd")
+    val bodyBytes = "this is great!".getBytes("UTF-8")
+    val storageLink = genRmdStorageLink.sample.get
+    val gsPath = genGsPath.sample.get
+    val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
+    val res = for {
+      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
+      r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
+    } yield (r shouldBe (true))
+    res.unsafeRunSync()
+  }
+
   private def initBackgroundTask(
       storageLinks: Map[RelativePath, StorageLink],
       metadata: Map[RelativePath, AdaptedGcsMetadataCache],
