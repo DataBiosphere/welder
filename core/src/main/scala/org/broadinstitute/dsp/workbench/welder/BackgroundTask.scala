@@ -119,7 +119,9 @@ class BackgroundTask(
   def shouldDelocalize(gsPath: GsPath, localAbsolutePath: Path): IO[Boolean] =
     for {
       meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.last
+      _ <- logger.info(s"!!!meta: ${meta.getOrElse("nada").toString}")
       localCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
+      _ <- logger.info(s"!!!c: ${localCrc32c}")
     } yield meta match {
       case Some(GetMetadataResponse.Metadata(crc32, _, _)) =>
         if (localCrc32c == crc32)
