@@ -20,7 +20,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val storageLink = genRmdStorageLink.sample.get
     val file = new File("test1.Rmd")
     val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None, blocker).getGsPath(storageLink, file)
-    res.toString shouldBe s"gs://${storageLink.cloudStorageDirectory.bucketName.value}/${storageLink.cloudStorageDirectory.blobPath.get.asString}/test.Rmd"
+    res.toString shouldBe s"gs://${storageLink.cloudStorageDirectory.bucketName.value}/${storageLink.cloudStorageDirectory.blobPath.get.asString}/test1.Rmd"
   }
 
   "shouldDelocalize" should "return true if files have changed" in {
@@ -32,7 +32,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val gsPath = genGsPath.sample.get
     val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
     val res = for {
-      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
+      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test2.Rmd"), blocker)).compile.drain
       r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
     } yield (r shouldBe (true))
     res.unsafeRunSync()
@@ -47,7 +47,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val gsPath = genGsPath.sample.get
     val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
     val res = for {
-      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
+      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test3.Rmd"), blocker)).compile.drain
       r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
     } yield (r shouldBe (false))
     res.unsafeRunSync()
@@ -62,7 +62,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val gsPath = genGsPath.sample.get
     val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
     val res = for {
-      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
+      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test4.Rmd"), blocker)).compile.drain
       r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
     } yield (r shouldBe (true))
     res.unsafeRunSync()
