@@ -35,7 +35,9 @@ final case class AppConfig(
     gcsMetadataJsonBlobName: GcsBlobName,
     workspaceBucketNameFileName: Path,
     objectService: ObjectServiceConfig,
-    stagingBucketName: GcsBucketName
+    stagingBucketName: GcsBucketName,
+    delocalizeDirectoryInterval: FiniteDuration,
+    isRstudioRuntime: Boolean
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)

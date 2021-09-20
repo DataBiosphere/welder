@@ -12,8 +12,7 @@ import cats.implicits._
 import io.circe.{Decoder, Json, parser}
 import _root_.fs2.{Pipe, Stream, io, text}
 import cats.mtl.Ask
-import org.broadinstitute.dsde.workbench.RetryConfig
-import org.broadinstitute.dsde.workbench.google2.mock.{BaseFakeGoogleStorage, FakeGoogleStorageInterpreter}
+import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GetMetadataResponse, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
@@ -158,7 +157,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return RemoteNotFound if metadata is not found in GCS" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
       val objectService = initObjectService(Map(localBaseDirectory.path -> storageLink), Map.empty, None)
 
       val requestBody = s"""
@@ -183,7 +182,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return SafeMode if storagelink exists in LocalSafeBaseDirectory" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
       val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
 
       val requestBody =
@@ -209,7 +208,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return SyncStatus.LIVE if crc32c matches" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is from gsutil
       val storageService = FakeGoogleStorageService(metadataResp)
@@ -251,7 +250,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return SyncStatus.LocalChanged if crc32c doesn't match but local cached generation matches remote" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
       val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
       val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
       val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](
@@ -296,7 +295,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return SyncStatus.RemoteChanged if crc32c doesn't match and local cached generation doesn't match remote" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
       val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
       val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
       val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](
@@ -339,7 +338,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "return SyncStatus.OutOfSync if crc32c doesn't match and no local cached metadata found for the file" in {
     forAll { (cloudStorageDirectory: CloudStorageDirectory, localBaseDirectory: LocalBaseDirectory, localSafeDirectory: LocalSafeBaseDirectory) =>
-      val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, """\.ipynb$""".stripMargin.r)
+      val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, """\.ipynb$""".stripMargin.r)
       val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
       val bodyBytes = "this is great! Okay".getBytes("UTF-8")
       val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 1L) //This crc32c is from gsutil
@@ -381,7 +380,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map("lastLockedBy" -> lockedBy.value, "lockExpiresAt" -> Long.MaxValue.toString), 0L) //This crc32c is from gsutil
@@ -428,7 +427,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map("lastLockedBy" -> lockedBy.value, "lockExpiresAt" -> Long.MinValue.toString), 0L) //This crc32c is from gsutil
@@ -474,7 +473,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -556,7 +555,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localBaseDirectory: LocalBaseDirectory,
           localSafeDirectory: LocalSafeBaseDirectory
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.txt"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -618,7 +617,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -687,7 +686,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
@@ -759,7 +758,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val storageAlg = new MockGoogleStorageAlg {
@@ -823,7 +822,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localSafeDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
@@ -867,7 +866,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localBaseDirectory: LocalBaseDirectory,
           localSafeDirectory: LocalSafeBaseDirectory
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](
@@ -942,7 +941,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localSafeDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val objectService = initObjectService(Map(localSafeDirectory.path -> storageLink), Map.empty, None)
@@ -987,7 +986,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           localSafeDirectory: LocalSafeBaseDirectory,
           lockedBy: WorkbenchEmail
       ) =>
-        val storageLink = StorageLink(localBaseDirectory, localSafeDirectory, cloudStorageDirectory, "\\.ipynb".r)
+        val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val localPath = s"${localBaseDirectory.path.toString}/test.ipynb"
         val bodyBytes = "this is great!".getBytes("UTF-8")
         val metadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](
@@ -1377,19 +1376,6 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
     ObjectService(permitsRef, objectServiceConfig, defaultGoogleStorageAlg, blocker, storageLinkAlg, metadataCacheAlg)
   }
-}
-
-class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends BaseFakeGoogleStorage {
-  override def getObjectMetadata(
-      bucketName: GcsBucketName,
-      blobName: GcsBlobName,
-      traceId: Option[TraceId],
-      retryConfig: RetryConfig
-  ): fs2.Stream[IO, GetMetadataResponse] = Stream.emit(metadataResponse).covary[IO]
-}
-
-object FakeGoogleStorageService {
-  def apply(metadata: GetMetadataResponse): FakeGoogleStorageService = new FakeGoogleStorageService(metadata)
 }
 
 class MockGoogleStorageAlg extends GoogleStorageAlg {

@@ -53,7 +53,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
     val addResult = storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
     assert(addResult equals linkToAdd)
@@ -63,7 +63,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
@@ -84,7 +84,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
       .map(path => new java.io.File(path.toUri))
       .map(dir => if (dir.exists()) dir.delete())
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
     storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
     dirsToCreate
@@ -99,7 +99,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAdd = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
@@ -114,7 +114,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToAddAndRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToAddAndRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
     storageLinksService.createStorageLink(linkToAddAndRemove).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
@@ -134,7 +134,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
     assert(initialListResult.storageLinks.isEmpty)
 
-    val linkToRemove = StorageLink(baseDir, baseSafeDir, cloudStorageDirectory, ".zip".r)
+    val linkToRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
     storageLinksService.deleteStorageLink(linkToRemove).unsafeRunSync()
 

@@ -46,7 +46,11 @@ object Main extends IOApp {
         appConfig.stagingBucketName,
         appConfig.storageLinksJsonBlobName,
         blocker,
-        storageLink => List(storageLink.localBaseDirectory.path -> storageLink, storageLink.localSafeModeBaseDirectory.path -> storageLink)
+        storageLink => {
+          val safeModeDirectory =
+            storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
+          List(storageLink.localBaseDirectory.path -> storageLink) ++ safeModeDirectory
+        }
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         googleStorageAlg,
@@ -87,14 +91,17 @@ object Main extends IOApp {
         appConfig.stagingBucketName,
         appConfig.cleanUpLockInterval,
         appConfig.flushCacheInterval,
-        appConfig.syncCloudStorageDirectoryInterval
+        appConfig.syncCloudStorageDirectoryInterval,
+        appConfig.delocalizeDirectoryInterval,
+        appConfig.isRstudioRuntime
       )
-      val backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
+      val backGroundTask =
+        new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg, googleStorageService, blocker)
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
         appConfig.gcsMetadataJsonBlobName,
         blocker
       )
-      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, serverStream.drain)
+      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
 }

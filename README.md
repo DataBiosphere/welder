@@ -5,13 +5,15 @@ Welder is a lightweight webservice intended to be run on Dataproc Clusters and G
 # Try it out
 
 * export OWNER_EMAIL="fake@gmail.com"
+* export STAGING_BUCKET=<bucket-that-you-have-access-to>
+* export IS_RSTUDIO_RUNTIME=true # false if you don't want the Rmd file syncing background process to run
 * Run `gcloud auth application-default login`
 * Start welder-api-server `sbt server/run`
 ** you may want to create `server/src/main/resources/application.conf` with the following content
 ```bash
 path-to-storage-links-json = "storage_links.json"
 path-to-gcs-metadata-json = "gcs_metadata.json"
-working-directory = "/tmp"
+object-service.working-directory = "/tmp"
 ```
 
 # Publish container image to Google container registry

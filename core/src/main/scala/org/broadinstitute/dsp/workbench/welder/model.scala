@@ -65,7 +65,7 @@ final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Opti
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,
-    localSafeModeBaseDirectory: LocalDirectory,
+    localSafeModeBaseDirectory: Option[LocalDirectory],
     cloudStorageDirectory: CloudStorageDirectory,
     pattern: Regex
 )

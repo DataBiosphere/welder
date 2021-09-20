@@ -14,7 +14,7 @@ class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLi
         case x if (storageLinks.get(RelativePath(x)).isDefined) =>
           val relativePath = RelativePath(x)
           val sl = storageLinks.get(relativePath).get
-          val isSafeMode = sl.localSafeModeBaseDirectory.path == relativePath
+          val isSafeMode = sl.localSafeModeBaseDirectory.exists(_.path == relativePath)
           CommonContext(isSafeMode, relativePath, sl)
       }
       res <- context.fold[IO[CommonContext]](IO.raiseError(StorageLinkNotFoundException(traceId, s"No storage link found for ${localPath}")))(IO.pure)
