@@ -18,30 +18,30 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
 
   "getGsPath" should "return the correct path to delocalize files to" in {
     val storageLink = genRmdStorageLink.sample.get
-    val file = new File("test.Rmd")
+    val file = new File("test1.Rmd")
     val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None, blocker).getGsPath(storageLink, file)
     res.toString shouldBe s"gs://${storageLink.cloudStorageDirectory.bucketName.value}/${storageLink.cloudStorageDirectory.blobPath.get.asString}/test.Rmd"
   }
 
-//  "shouldDelocalize" should "return true if files have changed" in {
-//    val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is to not match the file's crc32c created in this test
-//    val storageService = FakeGoogleStorageService(metadataResp)
-//    val localAbsolutePath = Paths.get(s"/tmp/test.Rmd")
-//    val bodyBytes = "this is great!".getBytes("UTF-8")
-//    val storageLink = genRmdStorageLink.sample.get
-//    val gsPath = genGsPath.sample.get
-//    val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
-//    val res = for {
-//      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
-//      r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
-//    } yield (r shouldBe (true))
-//    res.unsafeRunSync()
-//  }
+  "shouldDelocalize" should "return true if files have changed" in {
+    val metadataResp = GetMetadataResponse.Metadata(Crc32("aZKdIw=="), Map.empty, 0L) //This crc32c is to not match the file's crc32c created in this test
+    val storageService = FakeGoogleStorageService(metadataResp)
+    val localAbsolutePath = Paths.get(s"/tmp/test2.Rmd")
+    val bodyBytes = "this is great!".getBytes("UTF-8")
+    val storageLink = genRmdStorageLink.sample.get
+    val gsPath = genGsPath.sample.get
+    val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, Some(storageService), blocker)
+    val res = for {
+      _ <- Stream.emits(bodyBytes).covary[IO].through(fs2.io.file.writeAll[IO](Paths.get(s"/tmp/test.Rmd"), blocker)).compile.drain
+      r <- backgroundTask.shouldDelocalize(gsPath, localAbsolutePath)
+    } yield (r shouldBe (true))
+    res.unsafeRunSync()
+  }
 
   "shouldDelocalize" should "return false if files have not changed" in {
     val metadataResp = GetMetadataResponse.Metadata(Crc32("trIjMQ=="), Map.empty, 0L) //This crc32c is from the file created in this test
     val storageService = FakeGoogleStorageService(metadataResp)
-    val localAbsolutePath = Paths.get(s"/tmp/test.Rmd")
+    val localAbsolutePath = Paths.get(s"/tmp/test3.Rmd")
     val bodyBytes = "this is great!".getBytes("UTF-8")
     val storageLink = genRmdStorageLink.sample.get
     val gsPath = genGsPath.sample.get
@@ -56,7 +56,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   "shouldDelocalize" should "return true if the file does not exist in Google" in {
     val metadataResp = GetMetadataResponse.NotFound
     val storageService = FakeGoogleStorageService(metadataResp)
-    val localAbsolutePath = Paths.get(s"/tmp/test.Rmd")
+    val localAbsolutePath = Paths.get(s"/tmp/test4.Rmd")
     val bodyBytes = "this is great!".getBytes("UTF-8")
     val storageLink = genRmdStorageLink.sample.get
     val gsPath = genGsPath.sample.get
