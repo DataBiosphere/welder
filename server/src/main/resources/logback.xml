@@ -31,7 +31,6 @@
 
   <logger name="org.http4s.server.blaze.Http1ServerStage" level="INFO" additivity="false">
     <appender-ref ref="FILE"/>
-    <appender-ref ref="CONSOLE"/>
   </logger>
 
   <appender class="ch.qos.logback.core.ConsoleAppender" name="CONSOLE">
