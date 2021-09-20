@@ -120,9 +120,6 @@ class BackgroundTask(
     for {
       meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.last
       localCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
-      _ <- logger.info(
-        s"localAbsolutePath: ${localAbsolutePath.toString} | googleMetadata: ${meta.getOrElse("nada").toString} | calculatedCrc32: ${localCrc32c}"
-      )
     } yield meta match {
       case Some(GetMetadataResponse.Metadata(crc32, _, _)) =>
         if (localCrc32c == crc32)

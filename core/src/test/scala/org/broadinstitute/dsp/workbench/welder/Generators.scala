@@ -55,6 +55,10 @@ object Generators {
     cloudStorageDirectory <- genCloudStorageDirectory
   } yield StorageLink(localBaseDirectory, None, cloudStorageDirectory, "\\.Rmd$".r)
 
+  val genRmdFile = for {
+    fileName <- Gen.uuid
+  } yield Paths.get(s"/tmp/${fileName}.Rmd")
+
   val genWorkbenchEmail = Gen.uuid.map(x => WorkbenchEmail(s"$x@gmail.com"))
 
   implicit val arbGsPathUri: Arbitrary[Uri] = Arbitrary(genGsPathUri)
