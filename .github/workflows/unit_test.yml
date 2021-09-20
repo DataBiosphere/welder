@@ -31,7 +31,7 @@ jobs:
         JVM_OPTS:  -Xmx3G
         OWNER_EMAIL: "fake@gmail.com"
         STAGING_BUCKET: "fakeBucket"
-        IS_RSTUDIO_RUNTIME: true
+        IS_RSTUDIO_RUNTIME: false
       run: |
          sbt coverage test coverageReport
 
