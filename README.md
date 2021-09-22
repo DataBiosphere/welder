@@ -44,6 +44,7 @@ Set up environment variables
 ```
 export OWNER_EMAIL="fake@gmail.com"
 export STAGING_BUCKET="fakeBucket"
+export IS_RSTUDIO_RUNTIME=false // true if Rmd file syncing background process is wanted
 ```
 Run tests
 ```
