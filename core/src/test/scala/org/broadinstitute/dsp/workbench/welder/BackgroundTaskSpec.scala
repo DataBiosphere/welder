@@ -7,6 +7,7 @@ import org.broadinstitute.dsde.workbench.google2.{Crc32, GetMetadataResponse, Go
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators.{genGsPath, genRmdFile, genRmdStorageLink}
+import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.nio.file.Paths
@@ -17,10 +18,16 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   val backgroundTaskConfig = BackgroundTaskConfig(Paths.get("/work"), GcsBucketName("testStagingBucket"), 7 minutes, 10 minutes, 15 minutes, 30 seconds, true)
 
   "getGsPath" should "return the correct path to delocalize files to" in {
-    val storageLink = genRmdStorageLink.sample.get
+    val storageLink =
+      StorageLink(
+        LocalBaseDirectory(RelativePath(Paths.get(""))),
+        None,
+        CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks"))),
+        "\\.Rmd$".r
+      )
     val file = new File("test.Rmd")
     val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None, blocker).getGsPath(storageLink, file)
-    res.toString shouldBe s"gs://${storageLink.cloudStorageDirectory.bucketName.value}/${storageLink.cloudStorageDirectory.blobPath.get.asString}/test.Rmd"
+    res.toString shouldBe s"gs://testBucket/notebooks/test.Rmd"
   }
 
   "shouldDelocalize" should "return false if files have not changed" in {
