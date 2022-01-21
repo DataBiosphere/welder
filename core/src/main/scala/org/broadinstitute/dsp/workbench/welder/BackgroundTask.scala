@@ -85,7 +85,7 @@ class BackgroundTask(
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
     if (config.isRstudioRuntime) {
-      val res = for {
+      val res = (for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
@@ -96,7 +96,7 @@ class BackgroundTask(
             }
           } else IO.unit
         }
-      } yield ()
+      } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
     } else {
       Stream.eval(logger.info("Not running rmd sync process because this is not an Rstudio runtime"))
@@ -146,7 +146,7 @@ class BackgroundTask(
         }
         .recoverWith {
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, Map("ownerEmail" -> "outdated"), traceId)
+            googleStorageAlg.updateMetadata(gsPath, traceId, Map("outdated" -> config.ownerEmail.value)) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
