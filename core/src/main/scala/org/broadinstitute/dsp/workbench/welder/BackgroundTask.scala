@@ -107,7 +107,7 @@ class BackgroundTask(
     for {
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath) //TODO: make sure this is correct
-      _ <- logger.info(s"local absolute path ${localAbsolutePath}")
+      _ <- logger.info(s"! local absolute path ${localAbsolutePath}")
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
       calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
 
@@ -146,7 +146,7 @@ class BackgroundTask(
         }
         .recoverWith {
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            googleStorageAlg.updateMetadata(gsPath, traceId, Map("outdated" -> config.ownerEmail.value)) >> IO.raiseError[DelocalizeResponse](e)
+            googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.toString() -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
