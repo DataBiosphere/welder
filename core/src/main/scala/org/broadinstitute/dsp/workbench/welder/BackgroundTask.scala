@@ -92,7 +92,10 @@ class BackgroundTask(
           if (storageLink.pattern.toString.contains(".Rmd")) {
             findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
               val gsPath = getGsPath(storageLink, new File(file.getName))
-              safeDelocalize(gsPath, RelativePath(java.nio.file.Paths.get(file.getName)))
+              logger.info(s"!! gsPath: ${gsPath.toString}, file: ${file.getName}") >> safeDelocalize(
+                gsPath,
+                RelativePath(java.nio.file.Paths.get(file.getName))
+              )
             }
           } else IO.unit
         }
@@ -106,8 +109,8 @@ class BackgroundTask(
   def safeDelocalize(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
-      localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath) //TODO: make sure this is correct
-      _ <- logger.info(s"! local absolute path ${localAbsolutePath}")
+      localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
+      _ = logger.info(s"!! localAbsolutePath: ${localAbsolutePath.toString}")
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
       calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
 
