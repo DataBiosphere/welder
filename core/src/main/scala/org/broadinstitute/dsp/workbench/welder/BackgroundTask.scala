@@ -92,7 +92,7 @@ class BackgroundTask(
           if (storageLink.pattern.toString.contains(".Rmd")) {
             findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
               val gsPath = getGsPath(storageLink, new File(file.getName))
-              logger.info(s"!! gsPath: ${gsPath.toString}, file: ${file.getName}") >> safeDelocalize(
+              safeDelocalize(
                 gsPath,
                 RelativePath(java.nio.file.Paths.get(file.getName))
               )
@@ -110,7 +110,6 @@ class BackgroundTask(
     for {
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-      _ = logger.info(s"!! localAbsolutePath: ${localAbsolutePath.toString}")
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
       calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
 
@@ -139,17 +138,19 @@ class BackgroundTask(
         .recoverWith {
           case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
             if (generation == 0L)
-              IO.raiseError(e)
+              googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.toString() -> "outdated")) >> IO.raiseError(e)
             else {
               // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
               // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
               // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-              googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, lastModifiedByMetadataToPush, traceId)
+              googleStorageAlg.delocalize(
+                localObjectPath,
+                gsPath,
+                0L,
+                lastModifiedByMetadataToPush,
+                traceId
+              )
             }
-        }
-        .recoverWith {
-          case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.toString() -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
