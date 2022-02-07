@@ -136,22 +136,25 @@ class BackgroundTask(
       delocalizeResp <- googleStorageAlg
         .delocalize(localObjectPath, gsPath, generation, lastModifiedByMetadataToPush, traceId)
         .recoverWith {
-          case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-            val outdatedFileMetadata = lastModifiedByMetadataToPush.++(Map(hashedOwnerEmail.toString() -> "outdated"))
+          case e: GenerationMismatch =>
             if (generation == 0L)
-              logger.info("gen0") >> googleStorageAlg.updateMetadata(gsPath, traceId, outdatedFileMetadata) >> IO.raiseError(e)
+              IO.raiseError(e)
             else {
               // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
               // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
               // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-              logger.info(s"gen: ${generation.toString}") >> googleStorageAlg.delocalize(
+              googleStorageAlg.delocalize(
                 localObjectPath,
                 gsPath,
                 0L,
-                outdatedFileMetadata,
+                lastModifiedByMetadataToPush,
                 traceId
               )
             }
+        }
+        .recoverWith {
+          case e: GenerationMismatch =>
+            googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.toString() -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
