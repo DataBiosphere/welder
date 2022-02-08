@@ -28,7 +28,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
-    logger.info(s"updateMetadata: ${metadata}") >> googleStorageService
+    googleStorageService
       .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
       .compile
       .drain
