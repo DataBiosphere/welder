@@ -8,8 +8,8 @@ import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
 import org.typelevel.log4cats.Logger
-import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataResponse, GoogleStorageService}
-import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.google2.GcsBlobName
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -23,7 +23,6 @@ class BackgroundTask(
     storageLinksCache: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
     metadataCacheAlg: MetadataCacheAlg,
-    googleStorageService: GoogleStorageService[IO],
     blocker: Blocker
 )(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]) {
   val cleanUpLock: Stream[IO, Unit] = {
@@ -86,48 +85,80 @@ class BackgroundTask(
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
     if (config.isRstudioRuntime) {
-      val res = for {
+      val res = (for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
           if (storageLink.pattern.toString.contains(".Rmd")) {
             findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
               val gsPath = getGsPath(storageLink, new File(file.getName))
-              val localAbsolutePath = config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath).resolve(file.getName)
-              for {
-                sd <- shouldDelocalize(gsPath, localAbsolutePath)
-                _ <- if (sd) {
-                  googleStorageAlg.fileToGcs(
-                    RelativePath(java.nio.file.Paths.get(file.getName)),
-                    gsPath
-                  )
-                } else {
-                  IO.unit
-                }
-              } yield ()
-
+              safeDelocalize(
+                gsPath,
+                RelativePath(java.nio.file.Paths.get(file.getName))
+              )
             }
           } else IO.unit
         }
-      } yield ()
+      } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
     } else {
       Stream.eval(logger.info("Not running rmd sync process because this is not an Rstudio runtime"))
     }
   }
 
-  def shouldDelocalize(gsPath: GsPath, localAbsolutePath: Path): IO[Boolean] =
+  def safeDelocalize(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
-      meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.last
-      localCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
-    } yield meta match {
-      case Some(GetMetadataResponse.Metadata(crc32, _, _)) =>
-        if (localCrc32c == crc32)
-          false
-        else
-          true
-      case _ => true
-    }
+      traceId <- ev.ask[TraceId]
+      localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
+      previousMeta <- metadataCacheAlg.getCache(localObjectPath)
+      calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
+
+      _ <- previousMeta match {
+        case Some(meta) =>
+          meta.remoteState match {
+            case RemoteState.NotFound =>
+              delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId)
+            case RemoteState.Found(_, crc32c) =>
+              if (calculatedCrc32c == crc32c)
+                IO.unit
+              else
+                delocalizeAndUpdateCache(localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), traceId)
+          }
+        case None =>
+          delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId)
+      }
+    } yield ()
+
+  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit] = {
+    val hashedOwnerEmail = IO.fromEither(hashString(config.ownerEmail.value))
+    val lastModifiedByMetadataToPush: Map[String, String] = Map("lastModifiedBy" -> hashedOwnerEmail.toString())
+    for {
+      delocalizeResp <- googleStorageAlg
+        .delocalize(localObjectPath, gsPath, generation, lastModifiedByMetadataToPush, traceId)
+        .recoverWith {
+          case e: GenerationMismatch =>
+            if (generation == 0L)
+              IO.raiseError(e)
+            else {
+              // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
+              // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
+              // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
+              googleStorageAlg.delocalize(
+                localObjectPath,
+                gsPath,
+                0L,
+                lastModifiedByMetadataToPush,
+                traceId
+              )
+            }
+        }
+        .recoverWith {
+          case e: GenerationMismatch =>
+            googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.toString() -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
+        }
+      _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
+    } yield ()
+  }
 
   def getGsPath(storageLink: StorageLink, file: File): GsPath = {
     val fullBlobPath = getFullBlobName(
@@ -146,5 +177,6 @@ final case class BackgroundTaskConfig(
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
     delocalizeDirectoryInterval: FiniteDuration,
-    isRstudioRuntime: Boolean
+    isRstudioRuntime: Boolean,
+    ownerEmail: WorkbenchEmail
 )

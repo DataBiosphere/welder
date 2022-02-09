@@ -91,6 +91,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
 
     for {
+      _ <- logger.info(s"Trace Id: ${traceId.asString} | Delocalizing file: ${localAbsolutePath.toString}")
       _ <- (io.file.readAll[IO](localAbsolutePath, blocker, 4096) through googleStorageService.streamUploadBlob(
         gsPath.bucketName,
         gsPath.blobName,
