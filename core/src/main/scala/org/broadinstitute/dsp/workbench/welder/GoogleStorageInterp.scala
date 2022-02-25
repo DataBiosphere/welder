@@ -56,6 +56,17 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       }
     } yield res
 
+  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Option[Map[String, String]]] =
+    for {
+      meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.last
+      res <- meta match {
+        case Some(google2.GetMetadataResponse.Metadata(_, userDefinedMetadata, _)) =>
+          IO(Some(userDefinedMetadata))
+        case _ =>
+          IO.pure(None)
+      }
+    } yield res
+
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] =
     googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, generation, Some(traceId))
 
