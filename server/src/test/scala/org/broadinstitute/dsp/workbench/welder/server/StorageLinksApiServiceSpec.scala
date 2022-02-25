@@ -3,9 +3,10 @@ package server
 
 import java.nio.file.{Path, Paths}
 import java.util.UUID
-
 import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.{Stream, text}
@@ -37,13 +38,13 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   }
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
-  val storageLinksService = StorageLinksService(
+  val storageLinksServiceResource = Dispatcher[IO].map(d => StorageLinksService(
     storageLinks,
     googleStorageAlg,
     metadataCacheAlg,
     StorageLinksServiceConfig(workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")),
-    blocker
-  )
+    d
+  ))
   val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar")))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))
@@ -53,12 +54,14 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
     val expectedBody = """{"storageLinks":[]}""".stripMargin
 
-    val res = for {
-      resp <- storageLinksService.service.run(request).value
-      body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
-    } yield {
-      resp.get.status shouldBe Status.Ok
-      body shouldBe expectedBody
+    val res = storageLinksServiceResource.use {storageLinksService =>
+      for {
+        resp <- storageLinksService.service.run(request).value
+        body <- resp.get.body.through(text.utf8.decode).compile.foldMonoid
+      } yield {
+        resp.get.status shouldBe Status.Ok
+        body shouldBe expectedBody
+      }
     }
 
     res.unsafeRunSync()
@@ -72,17 +75,20 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
     val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), Some(LocalSafeBaseDirectory(baseSafeDir)), cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
 
-    val intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(intermediateListResult.storageLinks equals Set(linkToAdd))
 
-    val res = for {
-      resp <- storageLinksService.service.run(request).value
-      body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
-    } yield {
-      resp.get.status shouldBe Status.Ok
-      body shouldBe expectedBody
+    val res = storageLinksServiceResource.use {storageLinksService =>
+      for {
+        _ <- storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString))
+
+        intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
+        _ =                                assert(intermediateListResult.storageLinks equals Set(linkToAdd))
+        resp <- storageLinksService.service.run(request).value
+        body <- resp.get.body.through(text.utf8.decode).compile.foldMonoid
+      } yield {
+        resp.get.status shouldBe Status.Ok
+        body shouldBe expectedBody
+      }
     }
 
     res.unsafeRunSync()
@@ -94,12 +100,14 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
     val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
 
-    val res = for {
-      resp <- storageLinksService.service.run(request).value
-      body <- resp.get.body.through(text.utf8Decode).compile.foldMonoid
-    } yield {
-      resp.get.status shouldBe Status.Ok
-      body shouldBe requestBody
+    val res = storageLinksServiceResource.use {storageLinksService =>
+      for {
+        resp <- storageLinksService.service.run(request).value
+        body <- resp.get.body.through(text.utf8.decode).compile.foldMonoid
+      } yield {
+        resp.get.status shouldBe Status.Ok
+        body shouldBe requestBody
+      }
     }
 
     res.unsafeRunSync()

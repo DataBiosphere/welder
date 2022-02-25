@@ -1,56 +1,58 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import cats.effect.{Blocker, ContextShift, IO}
-import io.circe.{Decoder, Encoder}
+import _root_.io.circe.Encoder.encodeString
+import _root_.io.circe.syntax._
+import _root_.io.circe.{Decoder, Encoder, Printer}
+import _root_.org.typelevel.log4cats.StructuredLogger
+import cats.data.Kleisli
+import cats.effect.IO
+import cats.effect.implicits._
+import cats.effect.std.Dispatcher
+import cats.implicits._
+import fs2.Stream
+import fs2.io.file.{Files, Flags}
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
-import org.http4s.{Charset, HttpRoutes}
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
-import java.nio.file.{Path, StandardOpenOption}
+import org.http4s.{Charset, HttpRoutes}
 
-import fs2.{Stream, io}
-import cats.data.Kleisli
-import cats.implicits._
-import _root_.io.circe.Encoder.encodeString
-import _root_.io.circe.Printer
-import _root_.io.circe.syntax._
-import _root_.org.typelevel.log4cats.StructuredLogger
-import org.broadinstitute.dsde.workbench.model.TraceId
+import java.nio.file.Path
 
 class StorageLinksService(
     storageLinks: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
     metadataCacheAlg: MetadataCacheAlg,
-    blocker: Blocker,
-    config: StorageLinksServiceConfig
+    config: StorageLinksServiceConfig,
+    dispatcher: Dispatcher[IO]
 )(
-    implicit logger: StructuredLogger[IO],
-    contextShift: ContextShift[IO]
+    implicit logger: StructuredLogger[IO]
 ) extends WelderService {
-  val service: HttpRoutes[IO] = withTraceId {
-    case GET -> Root =>
-      _ =>
-        for {
-          res <- getStorageLinks
-          resp <- Ok(res)
-        } yield resp
-    case req @ DELETE -> Root =>
-      _ =>
-        for {
-          storageLink <- req.as[StorageLink]
-          _ <- deleteStorageLink(storageLink)
-          resp <- NoContent()
-        } yield resp
-    case req @ POST -> Root =>
-      traceId =>
-        for {
-          storageLink <- req.as[StorageLink]
-          res <- createStorageLink(storageLink).run(traceId)
-          resp <- Ok(res)
-        } yield resp
-  }
+  val service: HttpRoutes[IO] =
+    withTraceId {
+      case GET -> Root =>
+        _ =>
+          for {
+            res <- getStorageLinks
+            resp <- Ok(res)
+          } yield resp
+      case req@DELETE -> Root =>
+        _ =>
+          for {
+            storageLink <- req.as[StorageLink]
+            _ <- deleteStorageLink(storageLink)
+            resp <- NoContent()
+          } yield resp
+      case req@POST -> Root =>
+        traceId =>
+          for {
+            storageLink <- req.as[StorageLink]
+            res <- createStorageLink(storageLink).run(traceId)
+            resp <- Ok(res)
+          } yield resp
+    }
 
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): Kleisli[IO, TraceId, StorageLink] = Kleisli { traceId =>
@@ -64,19 +66,20 @@ class StorageLinksService(
       }
       _ <- initializeDirectories(storageLink)
       _ <- persistWorkspaceBucket(link.localBaseDirectory, link.localSafeModeBaseDirectory, link.cloudStorageDirectory)
-      _ <- (googleStorageAlg
+      localizeFiles =  (googleStorageAlg
         .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
         .drain
-        .runAsync { cb =>
-          cb match {
+        .attempt.flatMap {
+        result =>
+          result match {
             case Left(e) =>
               logger.warn(Map("traceId" -> traceId.asString), e)(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
             case Right(()) => IO.unit
           }
-        }
-        .toIO
+      }
+        _ <- IO(dispatcher.unsafeRunAndForget(localizeFiles))
     } yield link
   }
 
@@ -99,12 +102,13 @@ class StorageLinksService(
         .resolve(config.workspaceBucketNameFileName)
     )
 
-    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath =>
-      logger.info(s"writing ${destinationPath}") >> (Stream.emits(fileBody) through io.file.writeAll[IO](
-        destinationPath,
-        blocker,
-        List(StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
+    val writeToFile: java.nio.file.Path => IO[Unit] = destinationPath => {
+      val path = fs2.io.file.Path.fromNioPath(destinationPath)
+      logger.info(s"writing ${destinationPath}") >> (Stream.emits(fileBody) through Files[IO].writeAll(
+        path,
+        Flags.Write
       )).compile.drain // overwrite the file everytime storagelink is called since workspace bucket can be updated
+    }
 
     (writeToFile(editModeDestinationPath), safeModeDestinationPath.traverse(p => writeToFile(p))).parTupled.void
   }
@@ -153,12 +157,11 @@ object StorageLinksService {
       googleStorageAlg: GoogleStorageAlg,
       metadataCacheAlg: MetadataCacheAlg,
       config: StorageLinksServiceConfig,
-      blocker: Blocker
+      dispatcher: Dispatcher[IO]
   )(
-      implicit logger: StructuredLogger[IO],
-      contextShift: ContextShift[IO]
+      implicit logger: StructuredLogger[IO]
   ): StorageLinksService =
-    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, blocker, config)
+    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, config, dispatcher)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"

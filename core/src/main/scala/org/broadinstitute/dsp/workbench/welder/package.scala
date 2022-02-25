@@ -1,16 +1,10 @@
 package org.broadinstitute.dsp.workbench
 
-import java.io.File
-import java.math.BigInteger
-import java.nio.file.{Path, Paths, StandardOpenOption}
-import java.security.MessageDigest
-import java.util.Base64
 import cats.Eq
-import cats.effect.concurrent.Ref
-import cats.effect.{Blocker, ContextShift, IO, Resource, Sync}
+import cats.effect.{IO, Ref, Resource, Sync}
 import cats.implicits._
+import fs2.io.file.Flags
 import fs2.{Pipe, Stream}
-import org.typelevel.log4cats.Logger
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -18,7 +12,13 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.typelevel.log4cats.Logger
 
+import java.io.File
+import java.math.BigInteger
+import java.nio.file.{Path, Paths}
+import java.security.MessageDigest
+import java.util.Base64
 import scala.util.matching.Regex
 
 package object welder {
@@ -114,11 +114,9 @@ package object welder {
       googleStorageAlg: GoogleStorageAlg,
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
-      blocker: Blocker,
       toTuple: B => List[(A, B)]
   )(
-      implicit cs: ContextShift[IO],
-      logger: Logger[IO]
+      implicit   logger: Logger[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
@@ -126,7 +124,7 @@ package object welder {
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
       // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
       // This change is made on 3/26/2020
-      cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"), blocker)
+      cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
       loadedCache <- cacheFromDisk.fold {
         googleStorageAlg
           .getBlob[List[B]](stagingBucketName, blobName)
@@ -140,14 +138,13 @@ package object welder {
       )
     } yield ref
 
-  private def localCache[B: Decoder](path: Path, blocker: Blocker)(
-      implicit logger: Logger[IO],
-      cs: ContextShift[IO]
+  private def localCache[B: Decoder](path: Path)(
+      implicit logger: Logger[IO]
   ): Stream[IO, Option[List[B]]] =
     for {
       res <- if (path.toFile.exists()) {
         for {
-          cached <- util2.readJsonFileToA[IO, List[B]](path, Some(blocker)).handleErrorWith { error =>
+          cached <- util2.readJsonFileToA[IO, List[B]](path).handleErrorWith { error =>
             error match {
               case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.raiseError[IO](e)
             }
@@ -192,7 +189,7 @@ package object welder {
   def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
 
-  private[welder] val writeFileOptions = List(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+  private[welder] val writeFileOptions = Flags.Write
 
   implicit val eqLocalDirectory: Eq[LocalDirectory] = Eq.instance((p1, p2) => p1.path.toString == p2.path.toString)
 }

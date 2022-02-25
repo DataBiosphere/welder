@@ -1,20 +1,17 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Path
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-
-import _root_.fs2.{Stream, io}
-import _root_.org.typelevel.log4cats.StructuredLogger
+import _root_.fs2.Stream
 import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder}
+import _root_.org.typelevel.log4cats.StructuredLogger
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
-import cats.effect.concurrent.Semaphore
-import cats.effect.{Blocker, ContextShift, IO, Resource, Timer}
+import cats.effect.std.Semaphore
+import cats.effect.{IO, Resource}
 import cats.implicits._
 import cats.mtl.Ask
+import fs2.io.file.Files
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
@@ -25,16 +22,17 @@ import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 
+import java.nio.file.Path
+import java.time.Instant
 import scala.concurrent.duration._
 
 class ObjectService(
     permitsRef: Permits,
     config: ObjectServiceConfig,
     googleStorageAlg: GoogleStorageAlg,
-    blocker: Blocker,
     storageLinksAlg: StorageLinksAlg,
     metadataCacheAlg: MetadataCacheAlg
-)(implicit cs: ContextShift[IO], timer: Timer[IO], logger: StructuredLogger[IO])
+)(implicit logger: StructuredLogger[IO])
     extends WelderService {
   val service: HttpRoutes[IO] = withTraceId {
     case req @ POST -> Root / "metadata" =>
@@ -72,9 +70,10 @@ class ObjectService(
       .emits(req.entries)
       .map { entry =>
         val localAbsolutePath = config.workingDirectory.resolve(entry.localObjectPath.asPath)
+        val fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
 
         val localizeFile = entry.sourceUri match {
-          case DataUri(data) => Stream.emits(data).through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))
+          case DataUri(data) => Stream.emits(data).through(Files[IO].writeAll(fs2Path, writeFileOptions))
           case gsPath: GsPath =>
             for {
               meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
@@ -105,10 +104,10 @@ class ObjectService(
     val actionToLock = for {
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
-      current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+      current <- IO.realTimeInstant
       gsPath = getGsPath(req.localObjectPath, context)
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
-      newLock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current + config.lockExpiration.toMillis))
+      newLock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
       meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
       _ <- meta match {
         case Some(m) =>
@@ -168,7 +167,7 @@ class ObjectService(
             case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
               val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
               for {
-                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
+                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
                 syncStatus <- if (calculatedCrc32c == crc32c)
                   IO.pure(SyncStatus.Live)
                 else {
@@ -216,8 +215,8 @@ class ObjectService(
         val actionToLock: IO[Unit] = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           gsPath = getGsPath(req.localObjectPath, context)
-          now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-          calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
+          now <- IO.realTimeInstant
+          calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
           // If we have lock info in local cache, we check cache to see if we hold a valid lock.
           // local cache should be updated pretty frequently since acquireLock is called much more often than lock expires.
@@ -232,7 +231,7 @@ class ObjectService(
                     IO.unit
                   else
                     for {
-                      _ <- lock.traverse(l => checkLock(l, now, gsPath.bucketName))
+                      _ <- lock.traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName))
                       //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
                       //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
                       _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), lock, traceId)
@@ -242,8 +241,8 @@ class ObjectService(
               // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
               for {
                 hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
-                current <- timer.clock.realTime(TimeUnit.MILLISECONDS)
-                lock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current + config.lockExpiration.toMillis))
+                current <- IO.realTimeInstant
+                lock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
                 _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, Some(lock), traceId)
               } yield ()
           }
@@ -263,14 +262,14 @@ class ObjectService(
         val gsPath = getGsPath(req.localObjectPath, context)
         val actionToLock = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
-          now <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+          now <- IO.realTimeInstant
           generation <- previousMeta match {
             case Some(meta) =>
               meta.remoteState match {
                 case RemoteState.NotFound => IO.pure(0L)
                 case RemoteState.Found(lock, _) =>
                   lock
-                    .traverse(l => checkLock(l, now, gsPath.bucketName)) //check if user owns the lock before deleting
+                    .traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName)) //check if user owns the lock before deleting
                     .as(meta.localFileGeneration.getOrElse(0L))
               }
             case None =>
@@ -308,15 +307,14 @@ class ObjectService(
     for {
       traceId <- ev.ask[TraceId]
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
-      _ <- if (now <= lock.lockExpiresAt.toEpochMilli && lock.hashedLockedBy == hashedLockedByCurrentUser) //if current user holds the lock
-        IO.unit
-      else
-        IO.raiseError(
-          InvalidLock(
-            traceId,
-            s"Fail to delocalize due to lock expiration or lock held by someone else. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}"
-          )
-        )
+      _ <- IO.raiseError(InvalidLock(
+        traceId,
+        s"Fail to delocalize due to lock held by someone else. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}."
+      )).whenA(lock.hashedLockedBy != hashedLockedByCurrentUser)
+      _ <- IO.raiseError(InvalidLock(
+        traceId,
+        s"Fail to delocalize due to lock expiration. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}."
+      )).whenA(now > lock.lockExpiresAt.toEpochMilli)
     } yield ()
 
   private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =
@@ -335,14 +333,11 @@ object ObjectService {
       permitsRef: Permits,
       config: ObjectServiceConfig,
       googleStorageAlg: GoogleStorageAlg,
-      blocker: Blocker,
       storageLinksAlg: StorageLinksAlg,
       metadataCacheAlg: MetadataCacheAlg
   )(
-      implicit cs: ContextShift[IO],
-      timer: Timer[IO],
-      logger: StructuredLogger[IO]
-  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, blocker, storageLinksAlg, metadataCacheAlg)
+      implicit logger: StructuredLogger[IO]
+  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap(str => Action.stringToAction.get(str).toRight("invalid action"))
 

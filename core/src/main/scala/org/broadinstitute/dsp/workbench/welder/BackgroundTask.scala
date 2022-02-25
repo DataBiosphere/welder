@@ -2,8 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
 import java.util.UUID
-import java.util.concurrent.TimeUnit
-import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
@@ -22,18 +21,17 @@ class BackgroundTask(
     metadataCache: MetadataCache,
     storageLinksCache: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
-    metadataCacheAlg: MetadataCacheAlg,
-    blocker: Blocker
-)(implicit cs: ContextShift[IO], logger: Logger[IO], timer: Timer[IO]) {
+    metadataCacheAlg: MetadataCacheAlg
+)(implicit logger: Logger[IO]) {
   val cleanUpLock: Stream[IO, Unit] = {
     val task = (for {
-      now <- timer.clock.monotonic(TimeUnit.MILLISECONDS)
+      now <- IO.realTimeInstant
       updatedMap <- metadataCache.modify { mp =>
         val newMap = mp.map { kv =>
           kv._2.remoteState match {
             case RemoteState.NotFound => kv
             case RemoteState.Found(lock, crc32c) =>
-              val newLock = lock.filter(l => l.lockExpiresAt.toEpochMilli < now)
+              val newLock = lock.filter(l => l.lockExpiresAt.toEpochMilli < now.toEpochMilli)
               (kv._1 -> kv._2.copy(remoteState = RemoteState.Found(newLock, crc32c))) //This can be a bit cleaner with monocle
           }
         }
@@ -48,8 +46,7 @@ class BackgroundTask(
 
   def flushBothCache(
       storageLinksJsonBlobName: GcsBlobName,
-      gcsMetadataJsonBlobName: GcsBlobName,
-      blocker: Blocker
+      gcsMetadataJsonBlobName: GcsBlobName
   ): Stream[IO, Unit] = {
     val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
       Stream.eval(logger.info(t)("failed to flush storagelinks cache to GCS"))
@@ -111,7 +108,7 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
-      calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath, blocker)
+      calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
       _ <- previousMeta match {
         case Some(meta) =>

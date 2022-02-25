@@ -1,17 +1,14 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.io.File
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths}
-
 import _root_.io.circe.Decoder
-import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.concurrent.SignallingRef
-import fs2.{Pipe, Stream, io}
+import fs2.io.file.Files
+import fs2.{Pipe, Stream}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -23,6 +20,9 @@ import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.typelevel.jawn.AsyncParser
 
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Path, Paths}
 import scala.util.matching.Regex
 
 class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
@@ -45,7 +45,7 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
     ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
-      io.file.readAll[IO](localFile, blocker, 4096).compile.to(Array).flatMap { body =>
+      Files[IO].readAll(fs2.io.file.Path.fromNioPath(localFile)).compile.to(Array).flatMap { body =>
         FakeGoogleStorageInterpreter
           .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
           .void
@@ -61,7 +61,7 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
         a <- Stream
           .emits(blob.getContent())
-          .through(fs2.text.utf8Decode)
+          .through(fs2.text.utf8.decode)
           .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
           .through(_root_.io.circe.fs2.decoder[IO, A])
       } yield a
@@ -76,8 +76,7 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         signal,
         Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localPath -> storageLink)),
         Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map(localPath -> metadata)),
-        fakeGoogleStorageAlg,
-        blocker
+        fakeGoogleStorageAlg
       )
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/flush"))
 
@@ -86,8 +85,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
       val res = for {
         // write two fake log files
-        _ <- Stream.emits(welderLogContenct.getBytes("UTF-8")).through(fs2.io.file.writeAll[IO](Paths.get("/tmp/welder.log"), blocker)).compile.drain
-        _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(fs2.io.file.writeAll[IO](Paths.get("/tmp/jupyter.log"), blocker)).compile.drain
+        _ <- Stream.emits(welderLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/welder.log"))).compile.drain
+        _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
 
         resp <- cacheService.service.run(request).value
         gcsMetadata <- fakeGoogleStorageAlg.getBlob[List[AdaptedGcsMetadataCache]](config.stagingBucketName, config.gcsMetadataJsonBlobName).compile.lastOrError

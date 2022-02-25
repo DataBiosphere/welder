@@ -2,7 +2,6 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import cats.effect._
-import cats.implicits._
 import org.typelevel.log4cats.StructuredLogger
 import io.circe.Encoder
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -11,12 +10,10 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.http4s.server.middleware.{Logger => HttpLogger}
-import org.http4s.syntax.kleisli._
 import org.http4s.{HttpApp, Response}
 
 class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksService, cacheService: ShutdownService)(
-    implicit cs: ContextShift[IO],
-    logger: StructuredLogger[IO]
+   implicit logger: StructuredLogger[IO]
 ) extends Http4sDsl[IO] {
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
@@ -44,7 +41,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
                 case InternalException(traceId, x, _) => InternalServerError(ErrorReport(x, None, Some(traceId)))
                 case LockedByOther(traceId, x, _) => Conflict(ErrorReport(x, None, Some(traceId)))
               }
-              logger.error(e.ctx)(s"Error response: ${e.getMessage}") >> resp
+              logger.error(e.ctx, e)(s"Error response: ${e.getMessage}") >> resp
             case e =>
               val errorMessage = if (e.getCause != null) e.getCause.toString else e.toString
               logger.error(e)(s"Unknown error: ${e.getMessage}") >> InternalServerError(ErrorReport(errorMessage, None, None))
@@ -60,8 +57,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
 
 object WelderApp {
   def apply(syncService: ObjectService, storageLinksService: StorageLinksService, cacheService: ShutdownService)(
-      implicit cs: ContextShift[IO],
-      logger: StructuredLogger[IO]
+    implicit  logger: StructuredLogger[IO]
   ): WelderApp =
     new WelderApp(syncService, storageLinksService, cacheService)
 

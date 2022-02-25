@@ -2,14 +2,13 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
 import java.time.Instant
-import java.util.concurrent.TimeUnit
-
 import _root_.org.typelevel.log4cats.Logger
 import _root_.io.circe.Decoder
-import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
-import fs2.{Pipe, Stream, io}
+import fs2.io.file.Files
+import fs2.{Pipe, Stream, text}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -20,10 +19,8 @@ import org.typelevel.jawn.AsyncParser
 import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
-class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, googleStorageService: GoogleStorageService[IO])(
-    implicit logger: Logger[IO],
-    timer: Timer[IO],
-    cs: ContextShift[IO]
+class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
+    implicit logger: Logger[IO]
 ) extends GoogleStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
@@ -62,6 +59,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
     for {
       blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, None, Some(traceId))
+      fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
       _ <- (fs2.io
         .readInputStream[IO](
           IO(
@@ -73,10 +71,9 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
               }
           ),
           chunkSize,
-          blocker,
           closeAfterUse = true
         )
-        .through(io.file.writeAll[IO](localAbsolutePath, blocker, writeFileOptions))) ++ Stream.eval(IO.unit)
+        .through(Files[IO].writeAll(fs2Path, writeFileOptions))) ++ Stream.eval(IO.unit)
       userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
       meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
     } yield meta
@@ -92,7 +89,8 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
 
     for {
       _ <- logger.info(s"Trace Id: ${traceId.asString} | Delocalizing file: ${localAbsolutePath.toString}")
-      _ <- (io.file.readAll[IO](localAbsolutePath, blocker, 4096) through googleStorageService.streamUploadBlob(
+      fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
+      _ <- (Files[IO].readAll(fs2path) through googleStorageService.streamUploadBlob(
         gsPath.bucketName,
         gsPath.blobName,
         userDefinedMeta,
@@ -115,9 +113,11 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
+    val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
     logger.info(s"flushing file ${localFile}") >>
-      (io.file.readAll[IO](localFile, blocker, 4096) through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName)).compile.drain
+      (Files[IO].readAll(fs2Path) through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName)).compile.drain
+  }
 
   override def localizeCloudDirectory(
       localBaseDirectory: RelativePath,
@@ -161,7 +161,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       blob <- googleStorageService.getBlob(bucketName, blobName, None)
       a <- Stream
         .emits(blob.getContent())
-        .through(fs2.text.utf8Decode)
+        .through(text.utf8.decode)
         .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
         .through(_root_.io.circe.fs2.decoder)
     } yield a
@@ -177,10 +177,10 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
           instant = ea.map(Instant.ofEpochMilli)
         } yield instant
       }
-      currentTime <- timer.clock.realTime(TimeUnit.MILLISECONDS)
+      currentTime <- IO.realTimeInstant
       lock = lastLockedBy.flatMap { hashedLockBy =>
         expiresAt.flatMap { ea =>
-          if (currentTime < ea.toEpochMilli)
+          if (currentTime.toEpochMilli < ea.toEpochMilli)
             Some(Lock(hashedLockBy, ea))
           else
             none[Lock] //we don't care who held lock if it has expired

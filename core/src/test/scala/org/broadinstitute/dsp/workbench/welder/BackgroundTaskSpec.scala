@@ -1,7 +1,6 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import cats.effect.{Blocker, IO}
-import cats.effect.concurrent.Ref
+import cats.effect.{IO, Ref}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -9,8 +8,8 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.scalatest.flatspec.AnyFlatSpec
 
-import java.nio.file.Paths
 import java.io.File
+import java.nio.file.Paths
 import scala.concurrent.duration._
 
 class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
@@ -34,28 +33,26 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
         "\\.Rmd$".r
       )
     val file = new File("test.Rmd")
-    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None, blocker).getGsPath(storageLink, file)
+    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None).getGsPath(storageLink, file)
     res.toString shouldBe s"gs://testBucket/notebooks/test.Rmd"
   }
 
   private def initBackgroundTask(
       storageLinks: Map[RelativePath, StorageLink],
       metadata: Map[RelativePath, AdaptedGcsMetadataCache],
-      googleStorageService: Option[GoogleStorageService[IO]],
-      blocker: Blocker
+      googleStorageService: Option[GoogleStorageService[IO]]
   ): BackgroundTask = {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val defaultGoogleStorageAlg =
-      GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+      GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
     new BackgroundTask(
       backgroundTaskConfig,
       metaCache,
       storageLinksCache,
       defaultGoogleStorageAlg,
-      metadataCacheAlg,
-      blocker
+      metadataCacheAlg
     )
   }
 }
