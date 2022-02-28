@@ -78,7 +78,8 @@ object Main extends IOApp {
       )
 
       val welderApp = WelderApp(objectService, storageLinksService, shutdownService)
-      val serverStream = org.http4s.blaze.server.BlazeServerBuilder[IO]
+      val serverStream = org.http4s.blaze.server
+        .BlazeServerBuilder[IO]
         .bindHttp(appConfig.serverPort, "0.0.0.0")
         .withHttpApp(welderApp.service)
         .serveWhile(shutDownSignal, Ref.unsafe[IO, ExitCode](ExitCode.Success))
@@ -97,7 +98,7 @@ object Main extends IOApp {
         new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
-        appConfig.gcsMetadataJsonBlobName,
+        appConfig.gcsMetadataJsonBlobName
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }

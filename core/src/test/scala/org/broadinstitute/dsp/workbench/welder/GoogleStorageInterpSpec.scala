@@ -110,7 +110,8 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       }
       val res = for {
         _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
-        _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through Files[IO].writeAll(fs2.io.file.Path.fromNioPath(localAbsolutePath))) ++ Stream.eval(IO.unit)
+        _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through Files[IO].writeAll(fs2.io.file.Path.fromNioPath(localAbsolutePath))) ++ Stream
+          .eval(IO.unit)
         resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath, TraceId(randomUUID().toString))
         newFileContent <- Files[IO].readAll(fs2.io.file.Path.fromNioPath(localAbsolutePath)).map(x => List(x)).foldMonoid
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))

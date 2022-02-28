@@ -116,7 +116,7 @@ package object welder {
       blobName: GcsBlobName,
       toTuple: B => List[(A, B)]
   )(
-      implicit   logger: Logger[IO]
+      implicit logger: Logger[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.

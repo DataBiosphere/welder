@@ -307,14 +307,22 @@ class ObjectService(
     for {
       traceId <- ev.ask[TraceId]
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
-      _ <- IO.raiseError(InvalidLock(
-        traceId,
-        s"Fail to delocalize due to lock held by someone else. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}."
-      )).whenA(lock.hashedLockedBy != hashedLockedByCurrentUser)
-      _ <- IO.raiseError(InvalidLock(
-        traceId,
-        s"Fail to delocalize due to lock expiration. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}."
-      )).whenA(now > lock.lockExpiresAt.toEpochMilli)
+      _ <- IO
+        .raiseError(
+          InvalidLock(
+            traceId,
+            s"Fail to delocalize due to lock held by someone else. Lock held by ${lock.hashedLockedBy} but current user is ${hashedLockedByCurrentUser}."
+          )
+        )
+        .whenA(lock.hashedLockedBy != hashedLockedByCurrentUser)
+      _ <- IO
+        .raiseError(
+          InvalidLock(
+            traceId,
+            s"Fail to delocalize due to lock expiration. Lock expires at ${lock.lockExpiresAt.toEpochMilli}, and current time is ${now}."
+          )
+        )
+        .whenA(now > lock.lockExpiresAt.toEpochMilli)
     } yield ()
 
   private[server] def preventConcurrentAction[A](ioa: IO[A], localPath: RelativePath): IO[A] =

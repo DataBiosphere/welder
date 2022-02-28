@@ -59,7 +59,7 @@ object ShutdownService {
       shutDownSignal: SignallingRef[IO, Boolean],
       storageLinksCache: StorageLinksCache,
       metadataCache: MetadataCache,
-      googleStorageAlg: GoogleStorageAlg,
+      googleStorageAlg: GoogleStorageAlg
   )(
       implicit logger: Logger[IO]
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg)

@@ -13,7 +13,7 @@ import org.http4s.server.middleware.{Logger => HttpLogger}
 import org.http4s.{HttpApp, Response}
 
 class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksService, cacheService: ShutdownService)(
-   implicit logger: StructuredLogger[IO]
+    implicit logger: StructuredLogger[IO]
 ) extends Http4sDsl[IO] {
   private val routes: HttpApp[IO] = Router[IO](
     "/status" -> StatusService.service,
@@ -57,7 +57,7 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
 
 object WelderApp {
   def apply(syncService: ObjectService, storageLinksService: StorageLinksService, cacheService: ShutdownService)(
-    implicit  logger: StructuredLogger[IO]
+      implicit logger: StructuredLogger[IO]
   ): WelderApp =
     new WelderApp(syncService, storageLinksService, cacheService)
 

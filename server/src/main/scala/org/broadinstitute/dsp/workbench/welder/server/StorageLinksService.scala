@@ -38,14 +38,14 @@ class StorageLinksService(
             res <- getStorageLinks
             resp <- Ok(res)
           } yield resp
-      case req@DELETE -> Root =>
+      case req @ DELETE -> Root =>
         _ =>
           for {
             storageLink <- req.as[StorageLink]
             _ <- deleteStorageLink(storageLink)
             resp <- NoContent()
           } yield resp
-      case req@POST -> Root =>
+      case req @ POST -> Root =>
         traceId =>
           for {
             storageLink <- req.as[StorageLink]
@@ -66,20 +66,20 @@ class StorageLinksService(
       }
       _ <- initializeDirectories(storageLink)
       _ <- persistWorkspaceBucket(link.localBaseDirectory, link.localSafeModeBaseDirectory, link.cloudStorageDirectory)
-      localizeFiles =  (googleStorageAlg
+      localizeFiles = (googleStorageAlg
         .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
         .drain
-        .attempt.flatMap {
-        result =>
+        .attempt
+        .flatMap { result =>
           result match {
             case Left(e) =>
               logger.warn(Map("traceId" -> traceId.asString), e)(s"fail to download files under ${storageLink.cloudStorageDirectory} when creating storagelink")
             case Right(()) => IO.unit
           }
-      }
-        _ <- IO(dispatcher.unsafeRunAndForget(localizeFiles))
+        }
+      _ <- IO(dispatcher.unsafeRunAndForget(localizeFiles))
     } yield link
   }
 
