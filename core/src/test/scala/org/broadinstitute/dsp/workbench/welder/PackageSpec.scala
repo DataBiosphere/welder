@@ -1,7 +1,8 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Paths
+import cats.effect.unsafe.implicits.global
 
+import java.nio.file.Paths
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -68,9 +69,9 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
 
   "cachedResource" should "load empty cache if it doesn't exist in both local disk and gcs" in {
     forAll { (gcsBucketName: GcsBucketName) =>
-      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), blocker, FakeGoogleStorageInterpreter)
+      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val res =
-        cachedResource[String, String](googleStorageAlg, gcsBucketName, GcsBlobName("welder-metadata/storage_links.json"), blocker, s => List((s, s))).compile.lastOrError
+        cachedResource[String, String](googleStorageAlg, gcsBucketName, GcsBlobName("welder-metadata/storage_links.json"), s => List((s, s))).compile.lastOrError
           .unsafeRunSync()
       res.get.unsafeRunSync() shouldBe Map.empty
     }

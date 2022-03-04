@@ -1,11 +1,9 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.{Path, Paths}
-import java.util.UUID
-
-import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import cats.mtl.Ask
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
@@ -15,6 +13,8 @@ import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirector
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.flatspec.AnyFlatSpec
 
+import java.nio.file.{Path, Paths}
+import java.util.UUID
 import scala.util.matching.Regex
 
 class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
@@ -51,94 +51,126 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
 
-    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
+      val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    val addResult = storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
-    assert(addResult equals linkToAdd)
+      for {
+        addResult <- storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString))
+      } yield assert(addResult equals linkToAdd)
+    }
+
+    res.unsafeRunSync()
   }
 
   it should "not create duplicate storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
 
-    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
+      val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
+      for {
 
-    val listResult = storageLinksService.getStorageLinks.unsafeRunSync()
+        _ <- storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString))
+        listResult <- storageLinksService.getStorageLinks
 
-    assert(listResult.storageLinks equals Set(linkToAdd))
+      } yield assert(listResult.storageLinks equals Set(linkToAdd))
+    }
+    res.unsafeRunSync()
   }
 
   it should "initialize directories" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
 
-    val safeAbsolutePath = config.workingDirectory.resolve(baseSafeDir.path.asPath)
-    val editAbsolutePath = config.workingDirectory.resolve(baseDir.path.asPath)
-    val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](safeAbsolutePath, editAbsolutePath)
+      val safeAbsolutePath = config.workingDirectory.resolve(baseSafeDir.path.asPath)
+      val editAbsolutePath = config.workingDirectory.resolve(baseDir.path.asPath)
+      val dirsToCreate: List[java.nio.file.Path] = List[java.nio.file.Path](safeAbsolutePath, editAbsolutePath)
 
-    dirsToCreate
-      .map(path => new java.io.File(path.toUri))
-      .map(dir => if (dir.exists()) dir.delete())
+      dirsToCreate
+        .map(path => new java.io.File(path.toUri))
+        .map(dir => if (dir.exists()) dir.delete())
 
-    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
-    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
+      val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    dirsToCreate
-      .map(path => assert(path.toFile.exists))
+      storageLinksService
+        .createStorageLink(linkToAdd)
+        .run(TraceId(UUID.randomUUID().toString))
+        .map(_ =>
+          dirsToCreate
+            .map(path => assert(path.toFile.exists))
+        )
+    }
+
+    res.unsafeRunSync()
   }
 
 //  initializeDirectories
   it should "list storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
 
-    val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(initialListResult.storageLinks.isEmpty)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
+      for {
+        initialListResult <- storageLinksService.getStorageLinks
+        _ = assert(initialListResult.storageLinks.isEmpty)
+        linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
+        _ <- storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString))
+        finalListResult <- storageLinksService.getStorageLinks
 
-    storageLinksService.createStorageLink(linkToAdd).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
+      } yield assert(finalListResult.storageLinks equals Set(linkToAdd))
+    }
 
-    val finalListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(finalListResult.storageLinks equals Set(linkToAdd))
+    res.unsafeRunSync()
   }
 
   it should "delete a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
 
-    val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(initialListResult.storageLinks.isEmpty)
+      for {
+        initialListResult <- storageLinksService.getStorageLinks
+        _ = assert(initialListResult.storageLinks.isEmpty)
+        linkToAddAndRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    val linkToAddAndRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
+        _ <- storageLinksService.createStorageLink(linkToAddAndRemove).run(TraceId(UUID.randomUUID().toString))
+        intermediateListResult <- storageLinksService.getStorageLinks
+        _ = assert(intermediateListResult.storageLinks equals Set(linkToAddAndRemove))
 
-    storageLinksService.createStorageLink(linkToAddAndRemove).run(TraceId(UUID.randomUUID().toString)).unsafeRunSync()
+        _ <- storageLinksService.deleteStorageLink(linkToAddAndRemove)
+        finalListResult <- storageLinksService.getStorageLinks
 
-    val intermediateListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(intermediateListResult.storageLinks equals Set(linkToAddAndRemove))
+      } yield {
+        assert(finalListResult.storageLinks.isEmpty)
+        assert(finalListResult.storageLinks.isEmpty)
+      }
+    }
 
-    storageLinksService.deleteStorageLink(linkToAddAndRemove).unsafeRunSync()
-
-    val finalListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(finalListResult.storageLinks.isEmpty)
+    res.unsafeRunSync()
   }
 
   it should "gracefully handle deleting a storage link that doesn't exist" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, blocker)
 
-    val initialListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(initialListResult.storageLinks.isEmpty)
+    val res = Dispatcher[IO].use { d =>
+      val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlg, metadataCacheAlg, config, d)
 
-    val linkToRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
+      for {
+        initialListResult <- storageLinksService.getStorageLinks
+        _ = assert(initialListResult.storageLinks.isEmpty)
+        linkToRemove = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
 
-    storageLinksService.deleteStorageLink(linkToRemove).unsafeRunSync()
+        _ <- storageLinksService.deleteStorageLink(linkToRemove)
+        finalListResult <- storageLinksService.getStorageLinks
 
-    val finalListResult = storageLinksService.getStorageLinks.unsafeRunSync()
-    assert(finalListResult.storageLinks.isEmpty)
+      } yield assert(finalListResult.storageLinks.isEmpty)
+    }
+
+    res.unsafeRunSync()
   }
 }

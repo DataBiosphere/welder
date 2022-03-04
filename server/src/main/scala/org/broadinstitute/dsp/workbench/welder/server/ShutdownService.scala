@@ -3,7 +3,7 @@ package server
 
 import java.nio.file.Path
 import java.util.UUID
-import cats.effect.{Blocker, ContextShift, IO}
+import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
@@ -23,9 +23,8 @@ class ShutdownService(
     shutDownSignal: SignallingRef[IO, Boolean],
     storageLinksCache: StorageLinksCache,
     metadataCache: MetadataCache,
-    googleStorageAlg: GoogleStorageAlg,
-    blocker: Blocker
-)(implicit cs: ContextShift[IO], logger: Logger[IO])
+    googleStorageAlg: GoogleStorageAlg
+)(implicit logger: Logger[IO])
     extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -60,12 +59,10 @@ object ShutdownService {
       shutDownSignal: SignallingRef[IO, Boolean],
       storageLinksCache: StorageLinksCache,
       metadataCache: MetadataCache,
-      googleStorageAlg: GoogleStorageAlg,
-      blocker: Blocker
+      googleStorageAlg: GoogleStorageAlg
   )(
-      implicit cs: ContextShift[IO],
-      logger: Logger[IO]
-  ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg, blocker)
+      implicit logger: Logger[IO]
+  ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg)
 }
 
 final case class PreshutdownServiceConfig(

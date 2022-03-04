@@ -1,9 +1,9 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import java.util.zip.Checksum
-
-import cats.effect.{Blocker, ContextShift, IO}
+import cats.effect.IO
 import com.google.common.io.BaseEncoding
+import fs2.io.file.Files
 import org.broadinstitute.dsde.workbench.google2.Crc32
 // Adapted from https://github.com/googlearchive/crc32c-java/blob/master/src/com/google/cloud/Crc32c.java, which is the only java implementation for google's crc32c algorithm.
 // Note: The CRC popularly known as CRC32 differs from the CRC32c algorithm used by Cloud Storage.
@@ -37,8 +37,10 @@ object Crc32c {
   private val LONG_MASK = 0XFFFFFFFFL
   private val BYTE_MASK = 0xff
 
-  def calculateCrc32ForFile(path: java.nio.file.Path, blocker: Blocker)(implicit cs: ContextShift[IO]): IO[Crc32] =
-    fs2.io.file.readAll[cats.effect.IO](path, blocker, 4096).compile.to(Array).map(bytes => calculateCrc32c(bytes))
+  def calculateCrc32ForFile(path: java.nio.file.Path): IO[Crc32] = {
+    val fs2Path = fs2.io.file.Path.fromNioPath(path)
+    Files[IO].readAll(fs2Path).compile.to(Array).map(bytes => calculateCrc32c(bytes))
+  }
 
   def calculateCrc32c(bytes: Array[Byte]): Crc32 = {
     val checksum = new Crc32c()

@@ -1,12 +1,12 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Paths
-
-import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+import java.nio.file.Paths
 
 class StorageLinksInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "StorageLinksInterp" should "return fail if storagelink can't be found" in {

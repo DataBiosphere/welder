@@ -6,6 +6,7 @@ import org.http4s.{Method, Request, Status, Uri}
 import org.http4s.circe.CirceEntityDecoder._
 import StatusServiceSpec._
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

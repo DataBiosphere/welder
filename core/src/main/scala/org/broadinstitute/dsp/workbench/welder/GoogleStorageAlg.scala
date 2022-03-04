@@ -2,7 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.Path
 
-import cats.effect.{Blocker, ContextShift, IO, Timer}
+import cats.effect.IO
 import cats.mtl.Ask
 import fs2.{Pipe, Stream}
 import org.typelevel.log4cats.Logger
@@ -68,10 +68,9 @@ trait GoogleStorageAlg {
 object GoogleStorageAlg {
   def fromGoogle(
       config: GoogleStorageAlgConfig,
-      blocker: Blocker,
       googleStorageService: GoogleStorageService[IO]
-  )(implicit logger: Logger[IO], timer: Timer[IO], cs: ContextShift[IO]): GoogleStorageAlg =
-    new GoogleStorageInterp(config, blocker, googleStorageService)
+  )(implicit logger: Logger[IO]): GoogleStorageAlg =
+    new GoogleStorageInterp(config, googleStorageService)
 }
 
 final case class GoogleStorageAlgConfig(workingDirectory: Path)

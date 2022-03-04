@@ -2,9 +2,9 @@ package org.broadinstitute.dsp.workbench.welder
 
 import java.nio.file.{Path, Paths}
 import java.time.Instant
-
 import cats.implicits._
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import io.circe.syntax._
