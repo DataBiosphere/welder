@@ -148,7 +148,7 @@ class BackgroundTask(
 
   private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit] =
     for {
-      hashedOwnerEmail <- IO.fromEither(hashString(config.ownerEmail.value))
+      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
       lastModifiedByMetadataToPush: Map[String, String] = Map("lastModifiedBy" -> hashedOwnerEmail.asString)
       delocalizeResp <- googleStorageAlg
         .delocalize(localObjectPath, gsPath, generation, lastModifiedByMetadataToPush, traceId)
