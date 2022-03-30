@@ -56,14 +56,14 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, blocker: Blocker, goog
       }
     } yield res
 
-  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Option[Map[String, String]]] =
+  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]] =
     for {
       meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.last
       res <- meta match {
         case Some(google2.GetMetadataResponse.Metadata(_, userDefinedMetadata, _)) =>
-          IO(Some(userDefinedMetadata))
+          IO(userDefinedMetadata)
         case _ =>
-          IO.pure(None)
+          IO.pure(Map.empty[String, String])
       }
     } yield res
 

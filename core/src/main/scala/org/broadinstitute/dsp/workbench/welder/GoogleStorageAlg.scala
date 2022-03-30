@@ -17,7 +17,7 @@ import scala.util.matching.Regex
 trait GoogleStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
-  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Option[Map[String, String]]]
+  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]]
   def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
 
   /**

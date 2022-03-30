@@ -111,9 +111,9 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       hashedOwnerEmail <- IO.fromEither(hashString(config.ownerEmail.value))
       bucketMetadata <- googleStorageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
-      _ = logger.info("bucketMetadata: " + bucketMetadata.getOrElse(None).toString)
+      _ = logger.info("bucketMetadata: " + bucketMetadata)
       _ <- bucketMetadata match {
-        case Some(meta) => {
+        case meta if meta.nonEmpty => {
           if (meta.keySet.contains(hashedOwnerEmail.asString) && meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
             logger.info("skipping doNotSync!") >> IO.unit
           } else {
