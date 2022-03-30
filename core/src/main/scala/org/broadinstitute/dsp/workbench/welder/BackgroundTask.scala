@@ -1,19 +1,19 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Path
-import java.util.UUID
 import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
-import org.typelevel.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.typelevel.log4cats.StructuredLogger
 
 import java.io.File
+import java.nio.file.Path
+import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
 class BackgroundTask(
@@ -22,7 +22,7 @@ class BackgroundTask(
     storageLinksCache: StorageLinksCache,
     googleStorageAlg: GoogleStorageAlg,
     metadataCacheAlg: MetadataCacheAlg
-)(implicit logger: Logger[IO]) {
+)(implicit logger: StructuredLogger[IO]) {
   val cleanUpLock: Stream[IO, Unit] = {
     val task = (for {
       now <- IO.realTimeInstant

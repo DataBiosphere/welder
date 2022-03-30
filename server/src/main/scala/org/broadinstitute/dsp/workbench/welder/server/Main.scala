@@ -7,19 +7,15 @@ import cats.effect.{ExitCode, IO, IOApp}
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
-import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, StructuredLogger}
-
-import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     implicit val logger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
-      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool[IO])
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       streams <- initStreams(appConfig)
       _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)

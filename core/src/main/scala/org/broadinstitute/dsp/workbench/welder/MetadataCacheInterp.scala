@@ -13,7 +13,6 @@ class MetadataCacheInterp(metadataCache: MetadataCache) extends MetadataCacheAlg
 
   def updateLocalFileStateCache(localPath: RelativePath, remoteState: RemoteState, localFileGeneration: Long): IO[Unit] =
     metadataCache.modify { mp =>
-      val previousMeta = mp.get(localPath)
       val newCache = mp + (localPath -> AdaptedGcsMetadataCache(localPath, remoteState, Some(localFileGeneration)))
       (newCache, ())
     }

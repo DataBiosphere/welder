@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
-import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.StructuredLogger
 
 import java.io.File
 import java.math.BigInteger
@@ -24,6 +24,7 @@ import scala.util.matching.Regex
 package object welder {
   val LAST_LOCKED_BY = "lastLockedBy"
   val LOCK_EXPIRES_AT = "lockExpiresAt"
+  val TRACE_ID_LOGGING_KEY = "traceId"
 
   val gsDirectoryReg = "gs:\\/\\/.*".r
 
@@ -116,7 +117,7 @@ package object welder {
       blobName: GcsBlobName,
       toTuple: B => List[(A, B)]
   )(
-      implicit logger: Logger[IO]
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
@@ -139,7 +140,7 @@ package object welder {
     } yield ref
 
   private def localCache[B: Decoder](path: Path)(
-      implicit logger: Logger[IO]
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, Option[List[B]]] =
     for {
       res <- if (path.toFile.exists()) {

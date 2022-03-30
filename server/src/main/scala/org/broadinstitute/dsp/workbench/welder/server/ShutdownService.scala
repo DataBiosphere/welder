@@ -1,14 +1,11 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Path
-import java.util.UUID
 import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import org.typelevel.log4cats.Logger
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -16,6 +13,10 @@ import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
+import org.typelevel.log4cats.StructuredLogger
+
+import java.nio.file.Path
+import java.util.UUID
 
 // This endpoint is called by leonardo before it tells dataproc to shut down user's vm.
 class ShutdownService(
@@ -24,7 +25,7 @@ class ShutdownService(
     storageLinksCache: StorageLinksCache,
     metadataCache: MetadataCache,
     googleStorageAlg: GoogleStorageAlg
-)(implicit logger: Logger[IO])
+)(implicit logger: StructuredLogger[IO])
     extends Http4sDsl[IO] {
 
   val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -46,7 +47,7 @@ class ShutdownService(
     } yield ()
 
     val streams = flushStorageLinks ++ flushMetadataCache ++ Stream.eval(flushLogFiles)
-    Logger[IO].info("Shutting down welder") >> Stream(streams)
+    StructuredLogger[IO].info("Shutting down welder") >> Stream(streams)
       .parJoin(3)
       .compile
       .drain >> IO(shutDownSignal.update(_ => true)).void //shut down http server
@@ -61,7 +62,7 @@ object ShutdownService {
       metadataCache: MetadataCache,
       googleStorageAlg: GoogleStorageAlg
   )(
-      implicit logger: Logger[IO]
+      implicit logger: StructuredLogger[IO]
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg)
 }
 

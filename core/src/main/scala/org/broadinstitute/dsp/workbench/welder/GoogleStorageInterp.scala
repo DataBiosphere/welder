@@ -1,9 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Path
-import java.time.Instant
-import _root_.org.typelevel.log4cats.Logger
 import _root_.io.circe.Decoder
+import _root_.org.typelevel.log4cats.StructuredLogger
 import cats.effect.IO
 import cats.implicits._
 import cats.mtl.Ask
@@ -16,11 +14,13 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 
+import java.nio.file.Path
+import java.time.Instant
 import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
 class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
-    implicit logger: Logger[IO]
+    implicit logger: StructuredLogger[IO]
 ) extends GoogleStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
@@ -33,7 +33,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       .handleErrorWith {
         case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
           for {
-            _ <- logger.warn(s"$traceId | Fail to update lock due to 403. Going to download the blob and re-upload")
+            _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
             bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
             _ <- (Stream
               .emits(bytes)
@@ -88,7 +88,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
 
     for {
-      _ <- logger.info(s"Trace Id: ${traceId.asString} | Delocalizing file: ${localAbsolutePath.toString}")
+      _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
       fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
       _ <- (Files[IO].readAll(fs2path) through googleStorageService.streamUploadBlob(
         gsPath.bucketName,
@@ -100,7 +100,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
       )).compile.drain.handleErrorWith {
         case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
           val msg = s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: ${generation}). ${e.getMessage}"
-          logger.info(e)(msg) >> IO.raiseError(GenerationMismatch(traceId, msg))
+          logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString), e)(msg) >> IO.raiseError(GenerationMismatch(traceId, msg))
         case e =>
           IO.raiseError(e)
       }

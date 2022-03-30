@@ -209,7 +209,9 @@ class ObjectService(
       _ <- if (context.isSafeMode)
         IO.raiseError(SafeDelocalizeSafeModeFileError(traceId, s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
       else if (context.storageLink.pattern.findFirstIn(req.localObjectPath.asPath.toString).isEmpty)
-        logger.info(s"ignore ${req.localObjectPath} because it doesn't satisfy ${context.storageLink.pattern} pattern")
+        logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(
+          s"ignore ${req.localObjectPath} because it doesn't satisfy ${context.storageLink.pattern} pattern"
+        )
       else {
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
         val actionToLock: IO[Unit] = for {
@@ -248,7 +250,8 @@ class ObjectService(
           }
         } yield ()
 
-        preventConcurrentAction(actionToLock, req.localObjectPath)
+        val retryAction = Stream.retry(actionToLock, 1 seconds, identity, 3).compile.drain
+        preventConcurrentAction(retryAction, req.localObjectPath)
       }
     } yield ()
 
