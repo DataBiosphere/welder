@@ -114,7 +114,7 @@ class BackgroundTask(
       _ = logger.info("bucketMetadata: " + bucketMetadata.getOrElse(None).toString)
       _ <- bucketMetadata match {
         case Some(meta) => {
-          if (meta.keySet.contains(hashedOwnerEmail.asString) && meta.get(hashedOwnerEmail.asString).getOrElse(None) == "doNotSync") {
+          if (meta.keySet.contains(hashedOwnerEmail.asString) && meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
             logger.info("skipping doNotSync!") >> IO.unit
           } else {
             checkCacheBeforeDelocalizing(gsPath, localObjectPath)
