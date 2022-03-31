@@ -1299,11 +1299,12 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   "preventConcurrentAction" should "be able to prevent two IOs run concurrently" in {
     val localPath = genRelativePath.sample.get
     val objectService = initObjectServiceWithPermits(Map.empty)
-    val io1 = IO.sleep(3 seconds)
-    val io2 = IO.sleep(1 seconds)
+    val io1 = IO.sleep(4 seconds) >> IO(println("finished 1"))
+    val io2 = IO.sleep(1 seconds) >> IO(println("finished 2"))
     val res = for {
       start <- IO.realTimeInstant
       _ = objectService.preventConcurrentAction(io1, localPath).unsafeToFuture() //start io1 asynchronously
+      _ <- IO.sleep(500 millis) // adding this tiny sleep here so that at least there's enough time for lock to kick in
       _ <- objectService.preventConcurrentAction(io2, localPath)
       end <- IO.realTimeInstant
     } yield {
@@ -1368,7 +1369,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   private def initObjectServiceWithPermits(permits: Map[RelativePath, Semaphore[IO]]): ObjectService = {
-    val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](Map.empty[RelativePath, Semaphore[IO]])
+    val permitsRef = Ref.unsafe[IO, Map[RelativePath, Semaphore[IO]]](permits)
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
     val defaultGoogleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)

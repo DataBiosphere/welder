@@ -1,17 +1,16 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.Path
-
 import cats.effect.IO
 import cats.mtl.Ask
 import fs2.{Pipe, Stream}
-import org.typelevel.log4cats.Logger
 import io.circe.Decoder
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.typelevel.log4cats.StructuredLogger
 
+import java.nio.file.Path
 import scala.util.matching.Regex
 
 trait GoogleStorageAlg {
@@ -69,7 +68,7 @@ object GoogleStorageAlg {
   def fromGoogle(
       config: GoogleStorageAlgConfig,
       googleStorageService: GoogleStorageService[IO]
-  )(implicit logger: Logger[IO]): GoogleStorageAlg =
+  )(implicit logger: StructuredLogger[IO]): GoogleStorageAlg =
     new GoogleStorageInterp(config, googleStorageService)
 }
 

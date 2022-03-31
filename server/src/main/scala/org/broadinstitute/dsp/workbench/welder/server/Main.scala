@@ -3,23 +3,20 @@ package server
 
 import cats.effect.kernel.Ref
 import cats.effect.std.{Dispatcher, Semaphore}
+import cats.effect.unsafe.implicits.global
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
-import org.broadinstitute.dsde.workbench.util2.ExecutionContexts
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, StructuredLogger}
-
-import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     implicit val logger = Slf4jLogger.getLogger[IO]
 
     val app: Stream[IO, Unit] = for {
-      blockingEc <- Stream.resource[IO, ExecutionContext](ExecutionContexts.cachedThreadPool[IO])
       appConfig <- Stream.fromEither[IO](Config.appConfig)
       streams <- initStreams(appConfig)
       _ <- Stream.emits(streams).covary[IO].parJoin(streams.length)
@@ -58,8 +55,23 @@ object Main extends IOApp {
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
       dispatcher <- Stream.resource(Dispatcher[IO])
+      metadataCacheAlg = new MetadataCacheInterp(metadataCache)
+
+      backGroundTaskConfig = BackgroundTaskConfig(
+        appConfig.objectService.workingDirectory,
+        appConfig.stagingBucketName,
+        appConfig.cleanUpLockInterval,
+        appConfig.flushCacheInterval,
+        appConfig.syncCloudStorageDirectoryInterval,
+        appConfig.delocalizeDirectoryInterval,
+        appConfig.isRstudioRuntime,
+        appConfig.objectService.ownerEmail
+      )
+      backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
+      _ <- Stream.eval(
+        IO(sys.addShutdownHook(backGroundTask.flushBothCacheOnce(appConfig.storageLinksJsonBlobName, appConfig.gcsMetadataJsonBlobName).unsafeRunSync()))
+      )
     } yield {
-      val metadataCacheAlg = new MetadataCacheInterp(metadataCache)
       val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
       val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig, dispatcher)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
@@ -84,18 +96,6 @@ object Main extends IOApp {
         .withHttpApp(welderApp.service)
         .serveWhile(shutDownSignal, Ref.unsafe[IO, ExitCode](ExitCode.Success))
 
-      val backGroundTaskConfig = BackgroundTaskConfig(
-        appConfig.objectService.workingDirectory,
-        appConfig.stagingBucketName,
-        appConfig.cleanUpLockInterval,
-        appConfig.flushCacheInterval,
-        appConfig.syncCloudStorageDirectoryInterval,
-        appConfig.delocalizeDirectoryInterval,
-        appConfig.isRstudioRuntime,
-        appConfig.objectService.ownerEmail
-      )
-      val backGroundTask =
-        new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
         appConfig.gcsMetadataJsonBlobName
