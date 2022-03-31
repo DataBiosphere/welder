@@ -135,7 +135,7 @@ package object welder {
 
       cached = loadedCache.flatMap(b => toTuple(b)).toMap
       ref <- Stream.resource(
-        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(googleStorageAlg, stagingBucketName, blobName, ref).compile.drain)
+        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(googleStorageAlg, stagingBucketName, blobName, ref))
       )
     } yield ref
 
@@ -159,8 +159,9 @@ package object welder {
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
       ref: Ref[IO, Map[A, B]]
-  ): Stream[IO, Unit] = {
-    val res = for {
+  )(implicit logger: StructuredLogger[IO]): IO[Unit] =
+    for {
+      _ <- logger.info(s"flushing cache to ${blobName.value}/${blobName.value}")
       data <- ref.get
       bytes = Stream.emits(data.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")).covary[IO]
       _ <- (bytes through googleStorageAlg.uploadBlob(stagingBucketName, blobName)).compile.drain
@@ -175,9 +176,6 @@ package object welder {
         IO(files.toList.foreach(_.delete()))
       else IO.unit
     } yield ()
-
-    Stream.eval(res)
-  }
 
   /**
     * Example:

@@ -250,8 +250,7 @@ class ObjectService(
           }
         } yield ()
 
-        val retryAction = Stream.retry(actionToLock, 1 seconds, identity, 3).compile.drain
-        preventConcurrentAction(retryAction, req.localObjectPath)
+        preventConcurrentAction(actionToLock, req.localObjectPath)
       }
     } yield ()
 

@@ -46,7 +46,7 @@ class ShutdownService(
       }
     } yield ()
 
-    val streams = flushStorageLinks ++ flushMetadataCache ++ Stream.eval(flushLogFiles)
+    val streams = Stream.eval(flushStorageLinks) ++ Stream.eval(flushMetadataCache) ++ Stream.eval(flushLogFiles)
     StructuredLogger[IO].info("Shutting down welder") >> Stream(streams)
       .parJoin(3)
       .compile

@@ -47,14 +47,14 @@ class BackgroundTask(
   def flushBothCache(
       storageLinksJsonBlobName: GcsBlobName,
       gcsMetadataJsonBlobName: GcsBlobName
-  ): Stream[IO, Unit] = {
+  )(implicit logger: StructuredLogger[IO]): Stream[IO, Unit] = {
     val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
-      Stream.eval(logger.info(t)("failed to flush storagelinks cache to GCS"))
+      logger.info(t)("failed to flush storagelinks cache to GCS")
     }
     val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucket, gcsMetadataJsonBlobName, metadataCache).handleErrorWith { t =>
-      Stream.eval(logger.info(t)("failed to flush metadata cache to GCS"))
+      logger.info(t)("failed to flush metadata cache to GCS")
     }
-    (Stream.sleep[IO](config.flushCacheInterval) ++ flushStorageLinks ++ flushMetadataCache).repeat
+    (Stream.sleep[IO](config.flushCacheInterval) ++ Stream.eval(flushStorageLinks) ++ Stream.eval(flushMetadataCache)).repeat
   }
 
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
