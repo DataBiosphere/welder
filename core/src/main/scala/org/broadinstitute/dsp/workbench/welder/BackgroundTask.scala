@@ -111,10 +111,11 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       hashedOwnerEmail <- IO.fromEither(hashString(config.ownerEmail.value))
       bucketMetadata <- googleStorageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
-      _ <- logger.info("bucketMetadata: " + bucketMetadata)
+      _ <- logger.info("bucketMetadata: " + bucketMetadata.get(hashedOwnerEmail.asString) + " email: " + hashedOwnerEmail.asString)
       _ <- bucketMetadata match {
         case meta if meta.nonEmpty => {
-          if (meta.keySet.contains(hashedOwnerEmail.asString) && meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
+          //Map(hi -> test, 93cfadd7d1c494970d3716868b581d927964f912c1eea90e20f2a598b1941a95 -> doNotSync, lastModifiedBy -> 7442a06c828c2f80ed458113a8232f9ce7fc3b9413e7a1c9fce73aca1f50508b)
+          if (meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
             logger.info("skipping doNotSync!")
           } else {
             checkCacheBeforeDelocalizing(gsPath, localObjectPath)
