@@ -109,23 +109,28 @@ class BackgroundTask(
   def checkSyncStatus(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
-      hashedOwnerEmail <- IO.fromEither(hashString(config.ownerEmail.value))
+      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
       bucketMetadata <- googleStorageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
-      _ <- logger.info("bucketMetadata: " + bucketMetadata.get(hashedOwnerEmail.asString) + " email: " + hashedOwnerEmail.asString)
       _ <- bucketMetadata match {
         case meta if meta.nonEmpty => {
-          //Map(hi -> test, 93cfadd7d1c494970d3716868b581d927964f912c1eea90e20f2a598b1941a95 -> doNotSync, lastModifiedBy -> 7442a06c828c2f80ed458113a8232f9ce7fc3b9413e7a1c9fce73aca1f50508b)
           if (meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
-            logger.info("skipping doNotSync!")
+            logger.info(s"skipping file ${localObjectPath.toString} doNotSync!")
           } else {
-            checkCacheBeforeDelocalizing(gsPath, localObjectPath)
+            checkCacheBeforeDelocalizing(gsPath, localObjectPath, hashedOwnerEmail, bucketMetadata)
           }
         }
-        case _ => checkCacheBeforeDelocalizing(gsPath, localObjectPath)
+        case _ => checkCacheBeforeDelocalizing(gsPath, localObjectPath, hashedOwnerEmail, bucketMetadata)
       }
     } yield ()
 
-  private def checkCacheBeforeDelocalizing(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+  private def checkCacheBeforeDelocalizing(
+      gsPath: GsPath,
+      localObjectPath: RelativePath,
+      hashedOwnerEmail: HashedLockedBy,
+      existingMetadata: Map[String, String]
+  )(
+      implicit ev: Ask[IO, TraceId]
+  ): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
@@ -136,24 +141,30 @@ class BackgroundTask(
         case Some(meta) =>
           meta.remoteState match {
             case RemoteState.NotFound =>
-              delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId)
+              delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId, hashedOwnerEmail, existingMetadata)
             case RemoteState.Found(_, crc32c) =>
               if (calculatedCrc32c == crc32c)
                 IO.unit
               else
-                delocalizeAndUpdateCache(localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), traceId)
+                delocalizeAndUpdateCache(localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), traceId, hashedOwnerEmail, existingMetadata)
           }
         case None =>
-          delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId)
+          delocalizeAndUpdateCache(localObjectPath, gsPath, 0L, traceId, hashedOwnerEmail, existingMetadata)
       }
     } yield ()
 
-  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, traceId: TraceId): IO[Unit] =
+  private def delocalizeAndUpdateCache(
+      localObjectPath: RelativePath,
+      gsPath: GsPath,
+      generation: Long,
+      traceId: TraceId,
+      hashedOwnerEmail: HashedLockedBy,
+      existingMetadata: Map[String, String]
+  ): IO[Unit] = {
+    val updatedMetadata = existingMetadata + ("lastModifiedBy" -> hashedOwnerEmail.asString)
     for {
-      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
-      lastModifiedByMetadataToPush: Map[String, String] = Map("lastModifiedBy" -> hashedOwnerEmail.asString)
       delocalizeResp <- googleStorageAlg
-        .delocalize(localObjectPath, gsPath, generation, lastModifiedByMetadataToPush, traceId)
+        .delocalize(localObjectPath, gsPath, generation, updatedMetadata, traceId)
         .recoverWith {
           case e: GenerationMismatch =>
             if (generation == 0L)
@@ -166,7 +177,7 @@ class BackgroundTask(
                 localObjectPath,
                 gsPath,
                 0L,
-                lastModifiedByMetadataToPush,
+                updatedMetadata,
                 traceId
               )
             }
@@ -177,6 +188,7 @@ class BackgroundTask(
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()
+  }
 
   def getGsPath(storageLink: StorageLink, file: File): GsPath = {
     val fullBlobPath = getFullBlobName(
