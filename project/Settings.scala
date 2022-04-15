@@ -21,7 +21,7 @@ object Settings {
   //coreDefaultSettings + defaultConfigs = the now deprecated defaultSettings
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
-    javacOptions ++= Seq("--release", "11"),
+    javacOptions ++= Seq("--release", "17"),
     Compile / console / scalacOptions --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings")
   )
 
@@ -61,7 +61,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
-      scalaVersion := "2.13.5",
+      scalaVersion := "2.13.8",
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
@@ -76,7 +76,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
-    dockerBaseImage := "us.gcr.io/broad-dsp-gcr-public/base/jre:11-debian",
+    dockerBaseImage := "us.gcr.io/broad-dsp-gcr-public/base/jre:17-debian",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
     dockerEnvVars := Map("JAVA_OPTS" -> "-server -Xmx512m -Xms512m"),
