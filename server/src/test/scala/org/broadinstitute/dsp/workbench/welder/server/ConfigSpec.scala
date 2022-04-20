@@ -18,7 +18,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
     val expectedConfig = AppConfig(
       8080,
       7 minutes,
-      3 minutes,
+      1 minutes,
       15 minutes,
       GcsBlobName("welder-metadata/storage_links.json"),
       GcsBlobName("welder-metadata/gcs_metadata.json"),
