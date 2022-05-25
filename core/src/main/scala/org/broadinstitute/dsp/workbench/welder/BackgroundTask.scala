@@ -92,7 +92,7 @@ class BackgroundTask(
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          if (storageLink.pattern.toString.contains(".Rmd")) {
+          if (storageLink.pattern.toString == ".*\\.Rmd" || storageLink.pattern.toString == ".*\\.R") {
             findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
               val gsPath = getGsPath(storageLink, new File(file.getName))
               checkSyncStatus(
