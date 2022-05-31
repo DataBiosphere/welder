@@ -42,6 +42,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     BackgroundTask.shouldSync("test.Rdd") shouldBe false
     BackgroundTask.shouldSync("test.Rmd") shouldBe true
     BackgroundTask.shouldSync("test.py") shouldBe false
+    BackgroundTask.shouldSync("test.Rmddd") shouldBe false
   }
 
   private def initBackgroundTask(
