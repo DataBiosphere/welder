@@ -38,15 +38,10 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   "shouldSync" should "return true if passed a supported pattern" in {
-    val storageLink =
-      StorageLink(
-        LocalBaseDirectory(RelativePath(Paths.get(""))),
-        None,
-        CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks"))),
-        ".*\\.R".r
-      )
-    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None).shouldSync(storageLink.pattern.toString())
-    res shouldBe true
+    BackgroundTask.shouldSync("test.R") shouldBe true
+    BackgroundTask.shouldSync("test.Rdd") shouldBe false
+    BackgroundTask.shouldSync("test.Rmd") shouldBe true
+    BackgroundTask.shouldSync("test.py") shouldBe false
   }
 
   private def initBackgroundTask(
