@@ -15,6 +15,7 @@ import java.io.File
 import java.nio.file.Path
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
+import scala.util.matching.Regex
 
 class BackgroundTask(
     config: BackgroundTaskConfig,
@@ -23,6 +24,7 @@ class BackgroundTask(
     googleStorageAlg: GoogleStorageAlg,
     metadataCacheAlg: MetadataCacheAlg
 )(implicit logger: StructuredLogger[IO]) {
+
   val cleanUpLock: Stream[IO, Unit] = {
     val task = (for {
       now <- IO.realTimeInstant
@@ -92,7 +94,7 @@ class BackgroundTask(
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          if (storageLink.pattern.toString.contains(".Rmd")) {
+          if (BackgroundTask.shouldSync(storageLink.pattern.toString())) {
             findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
               val gsPath = getGsPath(storageLink, new File(file.getName))
               checkSyncStatus(
@@ -201,6 +203,11 @@ class BackgroundTask(
     )
     GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
   }
+}
+
+object BackgroundTask {
+  val filesShouldSyncRegex: Regex = ".*(.R)$|(.Rmd)$".r
+  def shouldSync(storageLinkPattern: String): Boolean = filesShouldSyncRegex.findFirstIn(storageLinkPattern).isDefined
 }
 
 final case class BackgroundTaskConfig(

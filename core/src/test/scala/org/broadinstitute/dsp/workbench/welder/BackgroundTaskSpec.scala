@@ -37,6 +37,14 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     res.toString shouldBe s"gs://testBucket/notebooks/test.Rmd"
   }
 
+  "shouldSync" should "return true if passed a supported pattern" in {
+    BackgroundTask.shouldSync("test.R") shouldBe true
+    BackgroundTask.shouldSync("test.Rdd") shouldBe false
+    BackgroundTask.shouldSync("test.Rmd") shouldBe true
+    BackgroundTask.shouldSync("test.py") shouldBe false
+    BackgroundTask.shouldSync("test.Rmddd") shouldBe false
+  }
+
   private def initBackgroundTask(
       storageLinks: Map[RelativePath, StorageLink],
       metadata: Map[RelativePath, AdaptedGcsMetadataCache],
