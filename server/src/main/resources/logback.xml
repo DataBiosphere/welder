@@ -4,7 +4,7 @@
   <property name="WORKING_DIRECTORY" value="/work" />
 
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>${WORKING_DIRECTORY}/welder.log</file>
+    <file>${WORKING_DIRECTORY}/.welder.log</file>
 
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
       <fieldNames>

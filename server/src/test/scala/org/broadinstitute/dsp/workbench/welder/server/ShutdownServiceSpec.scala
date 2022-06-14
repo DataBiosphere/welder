@@ -85,15 +85,15 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
       val res = for {
         // write two fake log files
-        _ <- Stream.emits(welderLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/welder.log"))).compile.drain
+        _ <- Stream.emits(welderLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/.welder.log"))).compile.drain
         _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
 
         resp <- cacheService.service.run(request).value
         gcsMetadata <- fakeGoogleStorageAlg.getBlob[List[AdaptedGcsMetadataCache]](config.stagingBucketName, config.gcsMetadataJsonBlobName).compile.lastOrError
         storageLinksCache <- fakeGoogleStorageAlg.getBlob[List[StorageLink]](config.stagingBucketName, config.storageLinksJsonBlobName).compile.lastOrError
-        welderLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/welder.log")).compile.lastOrError
+        welderLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/.welder.log")).compile.lastOrError
         jupyterLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/jupyter.log")).compile.lastOrError
-        _ <- IO((new File("/tmp/welder.log")).delete())
+        _ <- IO((new File("/tmp/.welder.log")).delete())
         _ <- IO((new File("/tmp/jupyter.log")).delete())
       } yield {
         resp.get.status shouldBe Status.NoContent

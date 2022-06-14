@@ -69,7 +69,7 @@ object Settings {
     )
 
   lazy val entrypoint = "/opt/docker/bin/entrypoint.sh"
-  lazy val entrypointLog = "/work/entrypoint.out"
+  lazy val entrypointLog = "/work/.entrypoint.out"
 
   lazy val entrypointCmd =
     s"""'#!/bin/bash\\numask 002;\\necho '[$$(date -u)] Starting welder java process' >> $entrypointLog\\nuntil /opt/docker/bin/server; do\\n\\techo '[$$(date -u)] Welder crashed. Respawning..' >> $entrypointLog\\n\\tsleep 1\\ndone'""".stripMargin
