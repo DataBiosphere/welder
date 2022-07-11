@@ -100,9 +100,9 @@ class BackgroundTask(
               checkSyncStatus(
                 gsPath,
                 RelativePath(java.nio.file.Paths.get(file.getName))
-              )
+              ) >> logger.info(s"gsPath: ${gsPath}")
             }
-          } else IO.unit
+          } else IO.unit >> logger.info("did not find files")
         }
       } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
