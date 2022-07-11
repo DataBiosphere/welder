@@ -20,7 +20,8 @@ object-service.working-directory = "/tmp"
 * Set up auth for publishing docker image to GCR
 `gcloud auth configure-docker`
 * Publish welder
-`sbt server/docker:publish` (or `sbt server/docker:publishLocal` for local development)
+For local development: `sbt server/docker:publishLocal`
+To prod:  `sbt server/docker:publish` 
 
 # Development
 
