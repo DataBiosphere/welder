@@ -15,7 +15,6 @@ import java.io.File
 import java.nio.file.Path
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
-import scala.util.matching.Regex
 
 class BackgroundTask(
     config: BackgroundTaskConfig,
@@ -94,15 +93,13 @@ class BackgroundTask(
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
-          if (BackgroundTask.shouldSync(storageLink.pattern.toString())) {
-            findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
-              val gsPath = getGsPath(storageLink, new File(file.getName))
-              checkSyncStatus(
-                gsPath,
-                RelativePath(java.nio.file.Paths.get(file.getName))
-              )
-            }
-          } else IO.unit
+          findFilesWithROrRmdPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath)).traverse_ { file =>
+            val gsPath = getGsPath(storageLink, new File(file.getName))
+            checkSyncStatus(
+              gsPath,
+              RelativePath(java.nio.file.Paths.get(file.getName))
+            )
+          }
         }
       } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
@@ -203,11 +200,6 @@ class BackgroundTask(
     )
     GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
   }
-}
-
-object BackgroundTask {
-  val filesShouldSyncRegex: Regex = ".*(.R)$|(.Rmd)$".r
-  def shouldSync(storageLinkPattern: String): Boolean = filesShouldSyncRegex.findFirstIn(storageLinkPattern).isDefined
 }
 
 final case class BackgroundTaskConfig(

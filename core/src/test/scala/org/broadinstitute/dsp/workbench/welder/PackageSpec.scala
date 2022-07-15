@@ -12,6 +12,8 @@ import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import java.io.File
+
 class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "parseGsPath" should "be able to parse gs path correctly" in {
     forAll { (bucketName: GcsBucketName) =>
@@ -75,5 +77,15 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
           .unsafeRunSync()
       res.get.unsafeRunSync() shouldBe Map.empty
     }
+  }
+
+  "findFilesWithROrRmdPattern" should "only find files with certain pattern" in {
+    val parentPath = Paths.get("/tmp")
+    new java.io.File(parentPath.resolve("test.R").toUri).createNewFile()
+    new java.io.File(parentPath.resolve("test.R1").toUri).createNewFile()
+    new java.io.File(parentPath.resolve("test.Rmd").toUri).createNewFile()
+    new java.io.File(parentPath.resolve("test.ipynb").toUri).createNewFile()
+    val resR = findFilesWithROrRmdPattern(parentPath)
+    resR shouldBe List(new File("/tmp/test.R"), new File("/tmp/test.Rmd"))
   }
 }
