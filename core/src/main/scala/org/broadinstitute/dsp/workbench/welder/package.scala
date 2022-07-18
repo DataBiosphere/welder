@@ -27,7 +27,6 @@ package object welder {
   val TRACE_ID_LOGGING_KEY = "traceId"
 
   val gsDirectoryReg = "gs:\\/\\/.*".r
-  val filesShouldSyncInBackgroundRegex: Regex = ".*(.R)$|(.Rmd)$".r
 
   def validateGsPrefix(str: String): Either[String, Unit] = gsDirectoryReg.findPrefixOf(str).void.toRight("gs directory has to be prefixed with gs://")
 
@@ -186,8 +185,8 @@ package object welder {
   def findFilesWithSuffix(parent: Path, suffix: String): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && f.getName.endsWith(suffix)).toList
 
-  def findFilesWithROrRmdPattern(parent: Path): List[File] =
-    parent.toFile.listFiles().filter(f => f.isFile && filesShouldSyncInBackgroundRegex.findFirstIn(f.getName).isDefined).toList
+  def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
+    parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
 
   private[welder] val writeFileOptions = Flags.Write
 

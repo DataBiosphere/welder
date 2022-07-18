@@ -79,13 +79,16 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
     }
   }
 
-  "findFilesWithROrRmdPattern" should "only find files with certain pattern" in {
+  "findFilesWithPattern" should "only find files with certain pattern" in {
     val parentPath = Paths.get("/tmp")
     new java.io.File(parentPath.resolve("test.R").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.R1").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.Rmd").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.ipynb").toUri).createNewFile()
-    val resR = findFilesWithROrRmdPattern(parentPath)
+    val resR = findFilesWithPattern(parentPath, ".*(.R)$|(.Rmd)$".r)
     resR shouldBe List(new File("/tmp/test.R"), new File("/tmp/test.Rmd"))
+
+    val resIpynb = findFilesWithPattern(parentPath, ".*.ipynb$".r)
+    resIpynb shouldBe List(new File("/tmp/test.ipynb"))
   }
 }
