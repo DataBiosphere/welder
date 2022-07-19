@@ -82,9 +82,11 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
     new java.io.File(parentPath.resolve("test.R").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.R1").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.Rmd").toUri).createNewFile()
+    new java.io.File(parentPath.resolve("t.R").toUri).createNewFile()
+    new java.io.File(parentPath.resolve("abR").toUri).createNewFile()
     new java.io.File(parentPath.resolve("test.ipynb").toUri).createNewFile()
-    val resR = findFilesWithPattern(parentPath, ".*(.R)$|(.Rmd)$".r)
-    resR.map(_.toString) should contain theSameElementsAs List("/tmp/test.R", "/tmp/test.Rmd")
+    val resR = findFilesWithPattern(parentPath, ".+(\\.R|\\.Rmd)$".r)
+    resR.map(_.toString) should contain theSameElementsAs List("/tmp/test.R", "/tmp/test.Rmd", "/tmp/t.R")
 
     val resIpynb = findFilesWithPattern(parentPath, ".*.ipynb$".r)
     resIpynb.map(_.toString) shouldBe List("/tmp/test.ipynb")
