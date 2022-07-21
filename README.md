@@ -22,7 +22,7 @@ object-service.working-directory = "/tmp"
 * Publish welder. 
    * **IMPORTANT** make sure you have a new commit so that you don't override the HEAD hash in gcr
    * For local development: `sbt server/docker:publishLocal`
-   * To prod or if you'd like to share the image:  `sbt server/docker:publish` 
+   * If you'd like to share the image:  `sbt server/docker:publish` 
 
 # Development
 
