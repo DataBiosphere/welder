@@ -19,9 +19,10 @@ object-service.working-directory = "/tmp"
 # Publish container image to Google container registry
 * Set up auth for publishing docker image to GCR
 `gcloud auth configure-docker`
-* Publish welder
+* Publish welder. 
+**IMPORTANT** make sure you have a new commit so that you don't override the HEAD hash in gcr
 For local development: `sbt server/docker:publishLocal`
-To prod:  `sbt server/docker:publish` 
+To prod or if you'd like to share the image:  `sbt server/docker:publish` 
 
 # Development
 
