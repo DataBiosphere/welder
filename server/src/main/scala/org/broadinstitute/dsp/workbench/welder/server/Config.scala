@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
 import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.auto._
-import pureconfig.error.ExceptionThrown
+import pureconfig.error.{CannotConvert, ExceptionThrown}
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -23,6 +23,10 @@ object Config {
   implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.stringConfigReader.map(WorkbenchEmail)
   implicit val gcsBlobNameReader: ConfigReader[GcsBlobName] = ConfigReader.stringConfigReader.map(GcsBlobName)
   implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.stringConfigReader.map(GcsBucketName)
+  implicit val cloudProviderReader: ConfigReader[CloudProvider] =
+    ConfigReader.stringConfigReader.emap(s =>
+      CloudProvider.stringToCloudProvider.get(s).toRight(CannotConvert(s, "CloudProvider", s"valid values: GCP, AZURE"))
+    )
 
   val appConfig = ConfigSource.default.load[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
 }

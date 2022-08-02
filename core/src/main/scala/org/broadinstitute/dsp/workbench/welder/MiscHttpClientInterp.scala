@@ -34,7 +34,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
       (config.wsmUrl / "api" / "workspaces" / "v1" / config.workspaceId.toString / "resources" / "controlled" / "azure" / "storageContainer" / config.storageContainerResourceId.toString / "getSasToken")
     httpClient.expect[SasTokenResp](
       Request[IO](
-        method = Method.GET,
+        method = Method.POST,
         uri = uri,
         headers = Headers(Authorization((Credentials.Token(AuthScheme.Bearer, petAccessToken.value))))
       )
