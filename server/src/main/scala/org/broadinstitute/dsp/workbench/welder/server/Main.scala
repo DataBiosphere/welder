@@ -7,7 +7,6 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, StructuredLogger}
@@ -35,10 +34,10 @@ object Main extends IOApp {
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
-      googleStorageService <- Stream.resource(GoogleStorageService.fromApplicationDefault(Some(blockerBound)))
-      googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(appConfig.objectService.workingDirectory), googleStorageService)
+      storageAlg2 <- Stream.resource(initStorageAlg(appConfig, blockerBound))
+      storageAlgRef <- Stream.eval(Ref[IO].of(storageAlg2))
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
-        googleStorageAlg,
+        storageAlgRef,
         appConfig.stagingBucketName,
         appConfig.storageLinksJsonBlobName,
         storageLink => {
@@ -48,7 +47,7 @@ object Main extends IOApp {
         }
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
-        googleStorageAlg,
+        storageAlgRef,
         appConfig.stagingBucketName,
         appConfig.gcsMetadataJsonBlobName,
         metadata => List(metadata.localPath -> metadata)
@@ -67,15 +66,15 @@ object Main extends IOApp {
         appConfig.isRstudioRuntime,
         appConfig.objectService.ownerEmail
       )
-      backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, googleStorageAlg, metadataCacheAlg)
+      backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, storageAlgRef, metadataCacheAlg)
       _ <- Stream.eval(
         IO(sys.addShutdownHook(backGroundTask.flushBothCacheOnce(appConfig.storageLinksJsonBlobName, appConfig.gcsMetadataJsonBlobName).unsafeRunSync()))
       )
     } yield {
       val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
-      val storageLinksService = StorageLinksService(storageLinksCache, googleStorageAlg, metadataCacheAlg, storageLinksServiceConfig, dispatcher)
+      val storageLinksService = StorageLinksService(storageLinksCache, storageAlgRef, metadataCacheAlg, storageLinksServiceConfig, dispatcher)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
-      val objectService = ObjectService(permits, appConfig.objectService, googleStorageAlg, storageLinkAlg, metadataCacheAlg)
+      val objectService = ObjectService(permits, appConfig.objectService, storageAlgRef, storageLinkAlg, metadataCacheAlg)
       val shutdownService = ShutdownService(
         PreshutdownServiceConfig(
           appConfig.storageLinksJsonBlobName,
@@ -86,7 +85,7 @@ object Main extends IOApp {
         shutDownSignal,
         storageLinksCache,
         metadataCache,
-        googleStorageAlg
+        storageAlgRef
       )
 
       val welderApp = WelderApp(objectService, storageLinksService, shutdownService)
@@ -102,4 +101,5 @@ object Main extends IOApp {
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
+
 }

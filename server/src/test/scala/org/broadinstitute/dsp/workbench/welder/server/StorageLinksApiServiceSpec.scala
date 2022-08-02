@@ -24,7 +24,7 @@ import scala.util.matching.Regex
 class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
-  val googleStorageAlg = new MockGoogleStorageAlg {
+  val googleStorageAlg = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
     override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def localizeCloudDirectory(
@@ -36,7 +36,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
-  }
+  })
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
   val storageLinksServiceResource = Dispatcher[IO].map(d =>
     StorageLinksService(

@@ -1,4 +1,5 @@
 package org.broadinstitute.dsp.workbench.welder
+package server
 
 import cats.effect.{IO, Ref}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
@@ -45,13 +46,13 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val defaultGoogleStorageAlg =
-      GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+      CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
     new BackgroundTask(
       backgroundTaskConfig,
       metaCache,
       storageLinksCache,
-      defaultGoogleStorageAlg,
+      Ref.unsafe[IO, CloudStorageAlg](defaultGoogleStorageAlg),
       metadataCacheAlg
     )
   }

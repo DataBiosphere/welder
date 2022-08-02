@@ -1,7 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
@@ -24,7 +24,7 @@ class ShutdownService(
     shutDownSignal: SignallingRef[IO, Boolean],
     storageLinksCache: StorageLinksCache,
     metadataCache: MetadataCache,
-    googleStorageAlg: GoogleStorageAlg
+    storageAlgRef: Ref[IO, CloudStorageAlg]
 )(implicit logger: StructuredLogger[IO])
     extends Http4sDsl[IO] {
 
@@ -34,23 +34,29 @@ class ShutdownService(
   }
 
   val flush: IO[Unit] = {
-    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucketName, config.storageLinksJsonBlobName, storageLinksCache)
-    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucketName, config.gcsMetadataJsonBlobName, metadataCache)
+    for {
+      storageAlg <- storageAlgRef.get
 
-    // Copy all welder log files and jupyter log file to staging bucket
-    val flushLogFiles = for {
-      implicit0(ev: Ask[IO, TraceId]) <- IO(Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
-      _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
-        val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
-        googleStorageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
-      }
+      flushStorageLinks = flushCache(storageAlg, config.stagingBucketName, config.storageLinksJsonBlobName, storageLinksCache)
+      flushMetadataCache = flushCache(storageAlg, config.stagingBucketName, config.gcsMetadataJsonBlobName, metadataCache)
+
+      // Copy all welder log files and jupyter log file to staging bucket
+      flushLogFiles = for {
+        implicit0(ev: Ask[IO, TraceId]) <- IO(Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
+        _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
+          val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
+          storageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
+        }
+      } yield ()
+
+      streams = Stream.eval(flushStorageLinks) ++ Stream.eval(flushMetadataCache) ++ Stream.eval(flushLogFiles)
+      _ <- StructuredLogger[IO].info("Shutting down welder") >> Stream(streams)
+        .parJoin(3)
+        .compile
+        .drain
+      _ <- IO(shutDownSignal.update(_ => true)).void //shut down http server
     } yield ()
 
-    val streams = Stream.eval(flushStorageLinks) ++ Stream.eval(flushMetadataCache) ++ Stream.eval(flushLogFiles)
-    StructuredLogger[IO].info("Shutting down welder") >> Stream(streams)
-      .parJoin(3)
-      .compile
-      .drain >> IO(shutDownSignal.update(_ => true)).void //shut down http server
   }
 }
 
@@ -60,10 +66,10 @@ object ShutdownService {
       shutDownSignal: SignallingRef[IO, Boolean],
       storageLinksCache: StorageLinksCache,
       metadataCache: MetadataCache,
-      googleStorageAlg: GoogleStorageAlg
+      storageAlgRef: Ref[IO, CloudStorageAlg]
   )(
       implicit logger: StructuredLogger[IO]
-  ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, googleStorageAlg)
+  ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, storageAlgRef)
 }
 
 final case class PreshutdownServiceConfig(

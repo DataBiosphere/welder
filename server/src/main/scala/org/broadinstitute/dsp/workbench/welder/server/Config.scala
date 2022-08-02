@@ -1,9 +1,10 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import ca.mrvisser.sealerate
+
 import java.nio.file.Path
 import java.nio.file.Paths
-
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -37,7 +38,22 @@ final case class AppConfig(
     objectService: ObjectServiceConfig,
     stagingBucketName: GcsBucketName,
     delocalizeDirectoryInterval: FiniteDuration,
-    isRstudioRuntime: Boolean
+    miscHttpClientConfig: MiscHttpClientConfig,
+    isRstudioRuntime: Boolean,
+    cloudProvider: CloudProvider
 )
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
+sealed abstract class CloudProvider extends Product with Serializable {
+  def asString: String
+}
+object CloudProvider {
+  final case object Gcp extends CloudProvider {
+    override val asString = "GCP"
+  }
+  final case object Azure extends CloudProvider {
+    override val asString = "AZURE"
+  }
+
+  val stringToCloudProvider = sealerate.values[CloudProvider].map(p => (p.asString, p)).toMap
+}

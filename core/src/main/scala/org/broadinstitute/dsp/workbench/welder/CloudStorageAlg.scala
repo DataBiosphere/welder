@@ -13,7 +13,7 @@ import org.typelevel.log4cats.StructuredLogger
 import java.nio.file.Path
 import scala.util.matching.Regex
 
-trait GoogleStorageAlg {
+trait CloudStorageAlg {
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
   def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
   def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]]
@@ -65,12 +65,16 @@ trait GoogleStorageAlg {
   def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A]
 }
 
-object GoogleStorageAlg {
-  def fromGoogle(
+object CloudStorageAlg {
+  def forGoogle(
       config: GoogleStorageAlgConfig,
       googleStorageService: GoogleStorageService[IO]
-  )(implicit logger: StructuredLogger[IO]): GoogleStorageAlg =
+  )(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
     new GoogleStorageInterp(config, googleStorageService)
+
+  //TODO: Justin
+  def forAzure()(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
+    new AzureStorageInterp()
 }
 
 final case class GoogleStorageAlgConfig(workingDirectory: Path)
