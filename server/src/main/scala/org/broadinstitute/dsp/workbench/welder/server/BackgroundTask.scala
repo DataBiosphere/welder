@@ -48,9 +48,9 @@ class BackgroundTask(
   }
 
   def updateStorageAlg(appConfig: AppConfig, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] =
-    appConfig.cloudProvider match {
-      case CloudProvider.Gcp => Stream.eval(IO.unit)
-      case CloudProvider.Azure =>
+    appConfig match {
+      case _: AppConfig.Gcp => Stream.eval(IO.unit)
+      case _: AppConfig.Azure =>
         val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s) >> IO.sleep(50 minutes))
         Stream.eval(task).repeat
     }

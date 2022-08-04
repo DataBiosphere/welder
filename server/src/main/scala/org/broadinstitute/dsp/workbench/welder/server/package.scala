@@ -15,12 +15,12 @@ package object server {
   private[server] def initStorageAlg(config: AppConfig, blockerBound: Semaphore[IO])(implicit logger: StructuredLogger[IO]): Resource[IO, CloudStorageAlg] = {
     val retryPolicy = RetryPolicy[IO](RetryPolicy.exponentialBackoff(30 seconds, 5))
 
-    config.cloudProvider match {
-      case CloudProvider.Gcp =>
+    config match {
+      case conf: AppConfig.Gcp =>
         GoogleStorageService
           .fromApplicationDefault(Some(blockerBound))
-          .map(s => CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(config.objectService.workingDirectory), s))
-      case CloudProvider.Azure =>
+          .map(s => CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(conf.objectService.workingDirectory), s))
+      case conf: AppConfig.Azure =>
         for {
           httpClient <- client
             .BlazeClientBuilder[IO]
@@ -29,7 +29,7 @@ package object server {
             httpClient
           )
           client = Retry(retryPolicy)(httpClientWithLogging)
-          miscHttpClient = new MiscHttpClientInterp(client, config.miscHttpClientConfig)
+          miscHttpClient = new MiscHttpClientInterp(client, conf.miscHttpClientConfig)
           petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
           sasTokenResp <- Resource.eval(miscHttpClient.getSasUrl(petAccessTokenResp.accessToken))
           //TODO: Justin

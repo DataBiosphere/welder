@@ -1,16 +1,13 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.{Path, Paths}
-import java.util.UUID
-import cats.effect.IO
-import cats.effect.Ref
+import cats.effect.{IO, Ref}
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.{Stream, text}
-import io.circe.{Json, parser}
+import io.circe.parser
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
@@ -19,6 +16,8 @@ import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
 
+import java.nio.file.{Path, Paths}
+import java.util.UUID
 import scala.util.matching.Regex
 
 class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
@@ -98,7 +97,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val requestBody = """{"localBaseDirectory":"/foo","localSafeModeBaseDirectory":"/bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}"""
 
     val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
-    val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity[Json](requestBodyJson)
+    val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity(requestBodyJson)
 
     val res = storageLinksServiceResource.use { storageLinksService =>
       for {

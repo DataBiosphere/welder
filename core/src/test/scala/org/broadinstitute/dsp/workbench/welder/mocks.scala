@@ -1,6 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
+import com.google.cloud.storage.Storage
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.RetryConfig
 import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataResponse}
@@ -13,8 +14,9 @@ class FakeGoogleStorageService(metadataResponse: GetMetadataResponse) extends Ba
       bucketName: GcsBucketName,
       blobName: GcsBlobName,
       traceId: Option[TraceId],
-      retryConfig: RetryConfig
-  ): fs2.Stream[IO, GetMetadataResponse] = Stream.emit(metadataResponse).covary[IO]
+      retryConfig: RetryConfig,
+      blobGetOptions: List[Storage.BlobGetOption]
+  ): Stream[IO, GetMetadataResponse] = Stream.emit(metadataResponse).covary[IO]
 }
 
 object FakeGoogleStorageService {

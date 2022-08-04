@@ -49,7 +49,7 @@ object Main extends IOApp {
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
         appConfig.stagingBucketName,
-        appConfig.gcsMetadataJsonBlobName,
+        appConfig.metadataJsonBlobName,
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
@@ -68,7 +68,7 @@ object Main extends IOApp {
       )
       backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, storageAlgRef, metadataCacheAlg)
       _ <- Stream.eval(
-        IO(sys.addShutdownHook(backGroundTask.flushBothCacheOnce(appConfig.storageLinksJsonBlobName, appConfig.gcsMetadataJsonBlobName).unsafeRunSync()))
+        IO(sys.addShutdownHook(backGroundTask.flushBothCacheOnce(appConfig.storageLinksJsonBlobName, appConfig.metadataJsonBlobName).unsafeRunSync()))
       )
     } yield {
       val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
@@ -78,7 +78,7 @@ object Main extends IOApp {
       val shutdownService = ShutdownService(
         PreshutdownServiceConfig(
           appConfig.storageLinksJsonBlobName,
-          appConfig.gcsMetadataJsonBlobName,
+          appConfig.metadataJsonBlobName,
           appConfig.objectService.workingDirectory,
           appConfig.stagingBucketName
         ),
@@ -97,7 +97,7 @@ object Main extends IOApp {
 
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
-        appConfig.gcsMetadataJsonBlobName
+        appConfig.metadataJsonBlobName
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
