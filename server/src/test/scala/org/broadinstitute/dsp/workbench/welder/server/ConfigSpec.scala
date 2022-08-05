@@ -11,7 +11,6 @@ import org.scalatest.matchers.should.Matchers
 import pureconfig.ConfigSource
 
 import java.util.UUID
-//import org.broadinstitute.dsp.workbench.welder.server.Config.appConfigConvert
 import scala.concurrent.duration._
 
 class ConfigSpec extends AnyFlatSpec with Matchers {
@@ -33,7 +32,6 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |  lock-expiration = 3 minutes
         |  owner-email = "fake@gmail.com"
         |}
-        |
         |staging-bucket-name = "fakeBucket"
         |clean-up-lock-interval = 7 minutes
         |flush-cache-interval = 1 minutes
