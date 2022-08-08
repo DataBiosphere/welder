@@ -7,8 +7,9 @@ object Dependencies {
   val scalaTestVersion = "3.2.13"
 
   val workbenchLibsHash = "c8edf8e"
-  val workbenchGoogle2V = s"0.24-${workbenchLibsHash}"
-  val workbenchAzureV = s"0.1-$workbenchLibsHash"
+  val azureWorkbenchLibsHash = "891b768"
+  val workbenchGoogle2V = s"0.24-$workbenchLibsHash"
+  val workbenchAzureV = s"0.1-$azureWorkbenchLibsHash"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.1",
@@ -24,6 +25,7 @@ object Dependencies {
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
+    "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
     "ca.mrvisser" %% "sealerate" % "0.0.6",
     "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test",
     "ch.qos.logback" % "logback-classic" % "1.2.11",

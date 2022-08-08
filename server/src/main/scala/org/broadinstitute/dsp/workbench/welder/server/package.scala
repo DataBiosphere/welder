@@ -32,7 +32,7 @@ package object server {
           miscHttpClient = new MiscHttpClientInterp(client, conf.miscHttpClientConfig)
           petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
           sasTokenResp <- Resource.eval(miscHttpClient.getSasUrl(petAccessTokenResp.accessToken))
-          //TODO: Justin
+          azureStorageService
         } yield ???
     }
   }

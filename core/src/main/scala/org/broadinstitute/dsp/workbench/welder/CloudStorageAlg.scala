@@ -9,41 +9,52 @@ import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
-
 import java.nio.file.Path
+
+import org.broadinstitute.dsde.workbench.azure.AzureStorageService
+
 import scala.util.matching.Regex
 
 trait CloudStorageAlg {
-  def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
-  def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
-  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]]
-  def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
+  def cloudProvider: CloudProvider
+
+  abstract def updateMetadata(gsPath: SourceUri, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
+    IO.raiseError[UpdateMetadataResponse](new RuntimeException(s"$cloudProvider storage interp updateMetadata should only be called with appropriate source URI"))
+
+  def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
+  def retrieveUserDefinedMetadata(gsPath: SourceUri, traceId: TraceId): IO[Map[String, String]]
+  abstract def removeObject(gsPath: SourceUri, traceId: TraceId, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
+    Stream.eval(IO.raiseError[RemoveObjectResult](new RuntimeException(s"$cloudProvider storage interp removeObject should only be called with appropriate source URI")))
 
   /**
     * Overwrites the file if it already exists locally
     */
-  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
+  abstract def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri, traceId: TraceId)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
+    Stream.eval(IO.raiseError[Option[AdaptedGcsMetadata]](new RuntimeException(s"$cloudProvider storage interp remoteToLocalFile should only be called with appropriate source URI")))
 
   /**
     * Delocalize user's files to GCS.
     */
-  def delocalize(
+  abstract def delocalize(
       localObjectPath: RelativePath,
-      gsPath: GsPath,
+      gsPath: SourceUri,
       generation: Long,
       userDefinedMeta: Map[String, String],
       traceId: TraceId
-  ): IO[DelocalizeResponse]
+  )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
+    IO.raiseError(new RuntimeException(s"$cloudProvider storage interp delocalize should only be called with appropriate source URI"))
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
+  abstract def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+    IO.raiseError(new RuntimeException(s"$cloudProvider storage interp fileToGcs should only be called with appropriate source URI"))
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
+  abstract def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+    IO.raiseError(new RuntimeException(s"$cloudProvider storage interp fileToGcsAbsolutePath should only be called with appropriate source URI"))
 
   /**
     * Recursively download files in cloudStorageDirectory to local directory.
@@ -52,17 +63,19 @@ trait CloudStorageAlg {
     * @param cloudStorageDirectory: GCS directory where files will be download from
     * @return AdaptedGcsMetadataCache that should be added to local metadata cache
     */
-  def localizeCloudDirectory(
+  abstract  def localizeCloudDirectory(
       localBaseDirectory: RelativePath,
       cloudStorageDirectory: CloudStorageDirectory,
       workingDir: Path,
       pattern: Regex,
       traceId: TraceId
-  ): Stream[IO, AdaptedGcsMetadataCache]
+  )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] =
+    Stream.eval(IO.raiseError(new RuntimeException(s"$cloudProvider storage interp localizeCloudDirectory should only be called with appropriate source URI")))
 
-  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName): Pipe[IO, Byte, Unit]
+  abstract def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
+    _ => Stream.eval(IO.raiseError(new RuntimeException(s"$cloudProvider storage interp uploadBlob should only be called with appropriate source URI")))
 
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A]
+  def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A]
 }
 
 object CloudStorageAlg {
@@ -72,11 +85,11 @@ object CloudStorageAlg {
   )(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
     new GoogleStorageInterp(config, googleStorageService)
 
-  //TODO: Justin
-  def forAzure()(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
-    new AzureStorageInterp()
+  def forAzure(config: GoogleStorageAlgConfig, azureStorageService: AzureStorageService[IO])(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
+    new AzureStorageInterp(config, azureStorageService)
 }
 
+//TODO: RENAME
 final case class GoogleStorageAlgConfig(workingDirectory: Path)
 final case class DelocalizeResponse(generation: Long, crc32c: Crc32)
 

@@ -30,7 +30,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
       StorageLink(
         LocalBaseDirectory(RelativePath(Paths.get(""))),
         None,
-        CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks"))),
+        CloudStorageDirectory(GoogleCloudStorageContainer(GcsBucketName("testBucket")), Some(BlobPath("notebooks"))),
         "\\.Rmd$".r
       )
     val file = new File("test.Rmd")

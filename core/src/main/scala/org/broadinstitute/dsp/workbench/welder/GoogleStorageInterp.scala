@@ -139,7 +139,7 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
   ): Stream[IO, AdaptedGcsMetadataCache] = {
     val res = for {
       blob <- googleStorageService.listBlobsWithPrefix(
-        cloudStorageDirectory.bucketName,
+        cloudStorageDirectory.containerName.asGcsBucket,
         cloudStorageDirectory.blobPath.map(_.asString).getOrElse(""),
         true,
         1000,
