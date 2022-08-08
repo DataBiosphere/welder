@@ -112,7 +112,7 @@ package object welder {
   }
 
   private[welder] def cachedResource[A, B: Decoder: Encoder](
-      googleStorageAlg: GoogleStorageAlg,
+      cloudStorageAlgRef: Ref[IO, CloudStorageAlg],
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
       toTuple: B => List[(A, B)]
@@ -120,6 +120,7 @@ package object welder {
       implicit logger: StructuredLogger[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
+      storageAlg <- Stream.eval(cloudStorageAlgRef.get)
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
       // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
@@ -127,7 +128,7 @@ package object welder {
       // This change is made on 3/26/2020
       cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
       loadedCache <- cacheFromDisk.fold {
-        googleStorageAlg
+        storageAlg
           .getBlob[List[B]](stagingBucketName, blobName)
           .last
           .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
@@ -135,7 +136,7 @@ package object welder {
 
       cached = loadedCache.flatMap(b => toTuple(b)).toMap
       ref <- Stream.resource(
-        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(googleStorageAlg, stagingBucketName, blobName, ref))
+        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(storageAlg, stagingBucketName, blobName, ref))
       )
     } yield ref
 
@@ -155,7 +156,7 @@ package object welder {
     } yield res
 
   def flushCache[A, B: Decoder: Encoder](
-      googleStorageAlg: GoogleStorageAlg,
+      googleStorageAlg: CloudStorageAlg,
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
       ref: Ref[IO, Map[A, B]]

@@ -2,13 +2,16 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.14.1"
-  val http4sVersion = "1.0.0-M32"
+  val http4sVersion = "1.0.0-M34"
   val grpcCoreVersion = "1.34.0"
   val scalaTestVersion = "3.2.7"
-  val workbenchGoogle2V = "0.24-89b188f"
+
+  val workbenchLibsHash = "c8edf8e"
+  val workbenchGoogle2V = s"0.24-${workbenchLibsHash}"
+  val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
   val common = List(
-    "com.github.pureconfig" %% "pureconfig" % "0.14.1",
+    "com.github.pureconfig" %% "pureconfig" % "0.17.1",
     "co.fs2" %% "fs2-io" % "3.2.4",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
@@ -24,7 +27,7 @@ object Dependencies {
     "ca.mrvisser" %% "sealerate" % "0.0.6",
     "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test",
     "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "net.logstash.logback" % "logstash-logback-encoder" % "6.2" // for structured logging in logback
+    "net.logstash.logback" % "logstash-logback-encoder" % "7.2" // for structured logging in logback
   )
 
   val server = common ++ List(

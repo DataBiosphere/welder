@@ -21,7 +21,7 @@ import scala.util.matching.Regex
 
 class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
     implicit logger: StructuredLogger[IO]
-) extends GoogleStorageAlg {
+) extends CloudStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
   def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =

@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.implicits._
 import com.google.api.client.googleapis.json.GoogleJsonError
+import com.google.cloud.storage.Storage
 import fs2.io.file.Files
 import fs2.{Pipe, Stream}
 import org.broadinstitute.dsde.workbench.RetryConfig
@@ -31,17 +32,18 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       val googleStorage = new BaseFakeGoogleStorage {
         override def setObjectMetadata(
             bucketName: GcsBucketName,
-            blobName: GcsBlobName,
+            objectName: GcsBlobName,
             metadata: Map[String, String],
             traceId: Option[TraceId],
-            retryConfig: RetryConfig
-        ): fs2.Stream[IO, Unit] = {
+            retryConfig: RetryConfig,
+            blobTargetOptions: List[Storage.BlobTargetOption]
+        ): Stream[IO, Unit] = {
           val errors = new GoogleJsonError()
           errors.setCode(403)
           Stream.raiseError[IO](new com.google.cloud.storage.StorageException(errors))
         }
       }
-      val googleStorageAlg = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorage)
+      val googleStorageAlg = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorage)
       val res = for {
         _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
         _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID().toString), Map("lastLockedBy" -> "me"))
@@ -56,7 +58,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   "delocalize" should "fail with GenerationMismatch exception if remote file has changed" in {
     forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+      val googleStorage = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
       // Create the local base directory
       val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -79,7 +81,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   "gcsToLocalFile" should "be able to download a file from gcs and write to local path" in {
     forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+      val googleStorage = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
       // Create the local base directory
       val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -101,7 +103,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   it should "overwrite a file if it already exists " in {
     forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+      val googleStorage = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
       // Create the local base directory
       val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -133,7 +135,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         }
       }
       val objectBody = genGcsObjectBody.sample.get
-      val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+      val googleStorage = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val workingDir = Paths.get("/tmp")
       val localBaseDir = RelativePath(Paths.get("edit"))
 
@@ -169,7 +171,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         case None => GcsBlobName(s"random.txt")
       }
       val objectBody = genGcsObjectBody.sample.get
-      val googleStorage = GoogleStorageAlg.fromGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
+      val googleStorage = CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val workingDir = Paths.get("/tmp")
       val localBaseDir = RelativePath(Paths.get("edit"))
 
@@ -211,8 +213,9 @@ object GoogleStorageServiceWithFailures extends BaseFakeGoogleStorage {
       objectName: GcsBlobName,
       metadata: Map[String, String],
       generation: Option[Long],
-      overwrite: Boolean = true,
-      traceId: Option[TraceId]
+      overwrite: Boolean,
+      traceId: Option[TraceId],
+      blobWriteOptions: List[Storage.BlobWriteOption]
   ): Pipe[IO, Byte, Unit] = in => {
     val errors = new GoogleJsonError()
     errors.setCode(412)

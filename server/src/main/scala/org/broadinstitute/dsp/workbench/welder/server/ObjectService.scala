@@ -8,7 +8,7 @@ import _root_.org.typelevel.log4cats.StructuredLogger
 import ca.mrvisser.sealerate
 import cats.data.Kleisli
 import cats.effect.std.Semaphore
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.io.file.Files
@@ -29,7 +29,7 @@ import scala.concurrent.duration._
 class ObjectService(
     permitsRef: Permits,
     config: ObjectServiceConfig,
-    googleStorageAlg: GoogleStorageAlg,
+    storageAlgRef: Ref[IO, CloudStorageAlg],
     storageLinksAlg: StorageLinksAlg,
     metadataCacheAlg: MetadataCacheAlg
 )(implicit logger: StructuredLogger[IO])
@@ -76,7 +76,8 @@ class ObjectService(
           case DataUri(data) => Stream.emits(data).through(Files[IO].writeAll(fs2Path, writeFileOptions))
           case gsPath: GsPath =>
             for {
-              meta <- googleStorageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
+              storageAlg <- Stream.eval(storageAlgRef.get)
+              meta <- storageAlg.gcsToLocalFile(localAbsolutePath, gsPath, traceId).last
               _ <- meta.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${gsPath} not found")))(m =>
                 Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
               )
@@ -103,12 +104,13 @@ class ObjectService(
   def acquireLock(req: AcquireLockRequest)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val actionToLock = for {
       traceId <- ev.ask[TraceId]
+      storageAlg <- storageAlgRef.get
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- IO.realTimeInstant
       gsPath = getGsPath(req.localObjectPath, context)
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
       newLock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
-      meta <- googleStorageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
+      meta <- storageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath, traceId)
       _ <- meta match {
         case Some(m) =>
           for {
@@ -116,11 +118,11 @@ class ObjectService(
             _ <- m.lock match {
               case Some(lock) =>
                 if (lock.hashedLockedBy == hashedLockedByCurrentUser)
-                  updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
+                  updateGcsMetadataAndCache(storageAlg, req.localObjectPath, gsPath, traceId, newLock).void
                 else
                   IO.raiseError(LockedByOther(traceId, s"lock is already acquired by someone else"))
               case None =>
-                updateGcsMetadataAndCache(req.localObjectPath, gsPath, traceId, newLock).void
+                updateGcsMetadataAndCache(storageAlg, req.localObjectPath, gsPath, traceId, newLock).void
             }
           } yield ()
         case None =>
@@ -131,8 +133,8 @@ class ObjectService(
     preventConcurrentAction(actionToLock, req.localObjectPath)
   }
 
-  private def updateGcsMetadataAndCache(localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
-    googleStorageAlg
+  private def updateGcsMetadataAndCache(storageAlg: CloudStorageAlg, localPath: RelativePath, gsPath: GsPath, traceId: TraceId, lock: Lock): IO[Unit] =
+    storageAlg
       .updateMetadata(gsPath, traceId, lock.toMetadataMap)
       .flatMap(updateMetadataResponse =>
         updateMetadataResponse match {
@@ -154,12 +156,13 @@ class ObjectService(
     for {
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
+      storageAlg <- storageAlgRef.get
       res <- if (context.isSafeMode)
         IO.pure(MetadataResponse.SafeMode(context.storageLink))
       else {
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         val actionToLock = for {
-          metadata <- googleStorageAlg
+          metadata <- storageAlg
             .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.bucketName, fullBlobName), traceId)
           result <- metadata match {
             case None =>
@@ -277,7 +280,8 @@ class ObjectService(
             case None =>
               IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
           }
-          _ <- googleStorageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
+          storageAlg <- storageAlgRef.get
+          _ <- storageAlg.removeObject(gsPath, traceId, Some(generation)).compile.drain.void
           _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
         preventConcurrentAction(actionToLock, req.localObjectPath)
@@ -287,7 +291,8 @@ class ObjectService(
   private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock], traceId: TraceId): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
-      delocalizeResp <- googleStorageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId).recoverWith {
+      storageAlg <- storageAlgRef.get
+      delocalizeResp <- storageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush, traceId).recoverWith {
         case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
           if (generation == 0L)
             IO.raiseError(e)
@@ -295,7 +300,7 @@ class ObjectService(
             // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
             // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
             // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-            googleStorageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush, traceId)
+            storageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush, traceId)
           }
       }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(lock, delocalizeResp.crc32c), delocalizeResp.generation)
@@ -342,12 +347,12 @@ object ObjectService {
   def apply(
       permitsRef: Permits,
       config: ObjectServiceConfig,
-      googleStorageAlg: GoogleStorageAlg,
+      storageAlgRef: Ref[IO, CloudStorageAlg],
       storageLinksAlg: StorageLinksAlg,
       metadataCacheAlg: MetadataCacheAlg
   )(
       implicit logger: StructuredLogger[IO]
-  ): ObjectService = new ObjectService(permitsRef, config, googleStorageAlg, storageLinksAlg, metadataCacheAlg)
+  ): ObjectService = new ObjectService(permitsRef, config, storageAlgRef, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap(str => Action.stringToAction.get(str).toRight("invalid action"))
 

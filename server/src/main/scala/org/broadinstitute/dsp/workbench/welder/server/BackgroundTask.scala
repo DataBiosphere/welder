@@ -1,6 +1,8 @@
 package org.broadinstitute.dsp.workbench.welder
+package server
 
-import cats.effect.IO
+import cats.effect.std.Semaphore
+import cats.effect.{IO, Ref}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
@@ -14,13 +16,13 @@ import org.typelevel.log4cats.StructuredLogger
 import java.io.File
 import java.nio.file.Path
 import java.util.UUID
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class BackgroundTask(
     config: BackgroundTaskConfig,
     metadataCache: MetadataCache,
     storageLinksCache: StorageLinksCache,
-    googleStorageAlg: GoogleStorageAlg,
+    storageAlgRef: Ref[IO, CloudStorageAlg],
     metadataCacheAlg: MetadataCacheAlg
 )(implicit logger: StructuredLogger[IO]) {
 
@@ -45,6 +47,14 @@ class BackgroundTask(
     (Stream.sleep[IO](config.cleanUpLockInterval) ++ Stream.eval(task)).repeat
   }
 
+  def updateStorageAlg(appConfig: AppConfig, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] =
+    appConfig match {
+      case _: AppConfig.Gcp => Stream.eval(IO.unit)
+      case _: AppConfig.Azure =>
+        val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s) >> IO.sleep(50 minutes))
+        Stream.eval(task).repeat
+    }
+
   def flushBothCache(
       storageLinksJsonBlobName: GcsBlobName,
       gcsMetadataJsonBlobName: GcsBlobName
@@ -54,23 +64,26 @@ class BackgroundTask(
   def flushBothCacheOnce(
       storageLinksJsonBlobName: GcsBlobName,
       gcsMetadataJsonBlobName: GcsBlobName
-  )(implicit logger: StructuredLogger[IO]): IO[Unit] = {
-    val flushStorageLinks = flushCache(googleStorageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
-      logger.info(t)("failed to flush storagelinks cache to GCS")
-    }
-    val flushMetadataCache = flushCache(googleStorageAlg, config.stagingBucket, gcsMetadataJsonBlobName, metadataCache).handleErrorWith { t =>
-      logger.info(t)("failed to flush metadata cache to GCS")
-    }
-    List(flushStorageLinks, flushMetadataCache).parSequence_
-  }
+  )(implicit logger: StructuredLogger[IO]): IO[Unit] =
+    for {
+      storageAlg <- storageAlgRef.get
+      flushStorageLinks = flushCache(storageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
+        logger.info(t)("failed to flush storagelinks cache to GCS")
+      }
+      flushMetadataCache = flushCache(storageAlg, config.stagingBucket, gcsMetadataJsonBlobName, metadataCache).handleErrorWith { t =>
+        logger.info(t)("failed to flush metadata cache to GCS")
+      }
+      _ <- List(flushStorageLinks, flushMetadataCache).parSequence_
+    } yield ()
 
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
     val res = for {
+      storageAlg <- storageAlgRef.get
       storageLinks <- storageLinksCache.get
       traceId <- IO(TraceId(UUID.randomUUID().toString))
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
-          (googleStorageAlg
+          (storageAlg
             .localizeCloudDirectory(
               storageLink.localBaseDirectory.path,
               storageLink.cloudStorageDirectory,
@@ -112,7 +125,8 @@ class BackgroundTask(
     for {
       traceId <- ev.ask[TraceId]
       hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
-      bucketMetadata <- googleStorageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
+      storageAlg <- storageAlgRef.get
+      bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
       _ <- bucketMetadata match {
         case meta if meta.nonEmpty => {
           if (meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
@@ -165,7 +179,8 @@ class BackgroundTask(
   ): IO[Unit] = {
     val updatedMetadata = existingMetadata + ("lastModifiedBy" -> hashedOwnerEmail.asString)
     for {
-      delocalizeResp <- googleStorageAlg
+      storageAlg <- storageAlgRef.get
+      delocalizeResp <- storageAlg
         .delocalize(localObjectPath, gsPath, generation, updatedMetadata, traceId)
         .recoverWith {
           case e: GenerationMismatch =>
@@ -175,7 +190,7 @@ class BackgroundTask(
               // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
               // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
               // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-              googleStorageAlg.delocalize(
+              storageAlg.delocalize(
                 localObjectPath,
                 gsPath,
                 0L,
@@ -186,7 +201,7 @@ class BackgroundTask(
         }
         .recoverWith {
           case e: GenerationMismatch =>
-            googleStorageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
+            storageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()

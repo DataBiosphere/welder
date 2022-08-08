@@ -6,7 +6,7 @@ import _root_.io.circe.syntax._
 import _root_.io.circe.{Decoder, Encoder, Printer}
 import _root_.org.typelevel.log4cats.StructuredLogger
 import cats.data.Kleisli
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import cats.effect.implicits._
 import cats.effect.std.Dispatcher
 import cats.implicits._
@@ -23,7 +23,7 @@ import java.nio.file.Path
 
 class StorageLinksService(
     storageLinks: StorageLinksCache,
-    googleStorageAlg: GoogleStorageAlg,
+    storageAlgRef: Ref[IO, CloudStorageAlg],
     metadataCacheAlg: MetadataCacheAlg,
     config: StorageLinksServiceConfig,
     dispatcher: Dispatcher[IO]
@@ -66,7 +66,8 @@ class StorageLinksService(
       }
       _ <- initializeDirectories(storageLink)
       _ <- persistWorkspaceBucket(link.localBaseDirectory, link.localSafeModeBaseDirectory, link.cloudStorageDirectory)
-      localizeFiles = (googleStorageAlg
+      storageAlg <- storageAlgRef.get
+      localizeFiles = (storageAlg
         .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
@@ -154,14 +155,14 @@ final case class StorageLinksServiceConfig(workingDirectory: Path, workspaceBuck
 object StorageLinksService {
   def apply(
       storageLinks: StorageLinksCache,
-      googleStorageAlg: GoogleStorageAlg,
+      storageAlgRef: Ref[IO, CloudStorageAlg],
       metadataCacheAlg: MetadataCacheAlg,
       config: StorageLinksServiceConfig,
       dispatcher: Dispatcher[IO]
   )(
       implicit logger: StructuredLogger[IO]
   ): StorageLinksService =
-    new StorageLinksService(storageLinks, googleStorageAlg, metadataCacheAlg, config, dispatcher)
+    new StorageLinksService(storageLinks, storageAlgRef, metadataCacheAlg, config, dispatcher)
 
   implicit val storageLinksEncoder: Encoder[StorageLinks] = Encoder.forProduct1(
     "storageLinks"
