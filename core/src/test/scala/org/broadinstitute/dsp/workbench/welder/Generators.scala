@@ -42,7 +42,7 @@ object Generators {
     bucketName <- google2.Generators.genGcsBucketName
     blobPath = Gen.uuid.map(x => BlobPath(x.toString))
     blobPathOpt <- Gen.option[BlobPath](blobPath)
-  } yield CloudStorageDirectory(GoogleCloudStorageContainer(bucketName), blobPathOpt)
+  } yield CloudStorageDirectory(CloudStorageContainer(bucketName.value), blobPathOpt)
 
   val genIpynbStorageLink = for {
     localBaseDirectory <- genLocalBaseDirectory

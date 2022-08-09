@@ -34,27 +34,26 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
       GcsBucketName("fakeStagingBucket")
     )
   val fakeGoogleStorageAlg = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
-    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
+    override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def localizeCloudDirectory(
-        localBaseDirectory: RelativePath,
-        cloudStorageDirectory: CloudStorageDirectory,
-        workingDir: Path,
-        pattern: Regex,
-        traceId: TraceId
-    ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+                                         localBaseDirectory: RelativePath,
+                                         cloudStorageDirectory: CloudStorageDirectory,
+                                         workingDir: Path,
+                                         pattern: Regex
+                                       )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
       Files[IO].readAll(fs2.io.file.Path.fromNioPath(localFile)).compile.to(Array).flatMap { body =>
         FakeGoogleStorageInterpreter
-          .createBlob(gsPath.bucketName, gsPath.blobName, body, gcpObjectType, Map.empty, None)
+          .createBlob(gsPath.asInstanceOf[GsPath].bucketName, gsPath.asInstanceOf[GsPath].blobName, body, gcpObjectType, Map.empty, None)
           .void
           .compile
           .lastOrError
       }
-    override def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName): Pipe[IO, Byte, Unit] =
+    override def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
       FakeGoogleStorageInterpreter
-        .streamUploadBlob(bucketName, blobName)
+        .streamUploadBlob(path.asInstanceOf[GsPath].bucketName, path.asInstanceOf[GsPath].blobName)
 
     override def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
       for {
@@ -90,8 +89,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
 
         resp <- cacheService.service.run(request).value
-        gcsMetadata <- storageAlg.getBlob[List[AdaptedGcsMetadataCache]](config.stagingBucketName, config.gcsMetadataJsonBlobName).compile.lastOrError
-        storageLinksCache <- storageAlg.getBlob[List[StorageLink]](config.stagingBucketName, config.storageLinksJsonBlobName).compile.lastOrError
+        gcsMetadata <- storageAlg.getBlob[List[AdaptedGcsMetadataCache]](GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName)).compile.lastOrError
+        storageLinksCache <- storageAlg.getBlob[List[StorageLink]](GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName)).compile.lastOrError
         welderLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/.welder.log")).compile.lastOrError
         jupyterLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/jupyter.log")).compile.lastOrError
         _ <- IO((new File("/tmp/.welder.log")).delete())

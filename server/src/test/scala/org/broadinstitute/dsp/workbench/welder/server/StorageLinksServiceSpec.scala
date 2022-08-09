@@ -8,9 +8,7 @@ import cats.mtl.Ask
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.nio.file.{Path, Paths}
@@ -18,32 +16,30 @@ import java.util.UUID
 import scala.util.matching.Regex
 
 class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
-  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar/baz.zip")))
+  val cloudStorageDirectory = CloudStorageDirectory(CloudStorageContainer("foo"), Some(BlobPath("bar/baz.zip")))
   val baseDir = LocalBaseDirectory(RelativePath(Paths.get("foo")))
   val baseSafeDir = LocalSafeBaseDirectory(RelativePath(Paths.get("bar")))
 
   val googleStorageAlgRef = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
-    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
+    override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
-    override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] = ???
-    override def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] = ???
-    override def gcsToLocalFile(localAbsolutePath: Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] = ???
+    override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
+    override def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] = ???
+    override  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] = ???
     override def delocalize(
-        localObjectPath: RelativePath,
-        gsPath: GsPath,
-        generation: Long,
-        userDefinedMeta: Map[String, String],
-        traceId: TraceId
-    ): IO[DelocalizeResponse] = ???
-    override def localizeCloudDirectory(
-        localBaseDirectory: RelativePath,
-        cloudStorageDirectory: CloudStorageDirectory,
-        workingDir: Path,
-        pattern: Regex,
-        traceId: TraceId
-    ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+                             localObjectPath: RelativePath,
+                             gsPath: SourceUri,
+                             generation: Long,
+                             userDefinedMeta: Map[String, String]
+                           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] = ???
+    override  def localizeCloudDirectory(
+                                          localBaseDirectory: RelativePath,
+                                          cloudStorageDirectory: CloudStorageDirectory,
+                                          workingDir: Path,
+                                          pattern: Regex
+                                        )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   })
   val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
   val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)

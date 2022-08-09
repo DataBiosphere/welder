@@ -64,7 +64,8 @@ class BackgroundTask(
   def flushBothCacheOnce(
       storageLinksJsonBlobName: GcsBlobName,
       gcsMetadataJsonBlobName: GcsBlobName
-  )(implicit logger: StructuredLogger[IO]): IO[Unit] =
+  )(implicit logger: StructuredLogger[IO]): IO[Unit] = {
+    implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
       flushStorageLinks = flushCache(storageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
@@ -75,12 +76,13 @@ class BackgroundTask(
       }
       _ <- List(flushStorageLinks, flushMetadataCache).parSequence_
     } yield ()
+  }
 
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
+    implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     val res = for {
       storageAlg <- storageAlgRef.get
       storageLinks <- storageLinksCache.get
-      traceId <- IO(TraceId(UUID.randomUUID().toString))
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
           (storageAlg
@@ -88,8 +90,7 @@ class BackgroundTask(
               storageLink.localBaseDirectory.path,
               storageLink.cloudStorageDirectory,
               config.workingDirectory,
-              storageLink.pattern,
-              traceId
+              storageLink.pattern
             )
             .through(metadataCacheAlg.updateCachePipe))
             .compile
@@ -126,7 +127,7 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
       storageAlg <- storageAlgRef.get
-      bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
+      bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath)
       _ <- bucketMetadata match {
         case meta if meta.nonEmpty => {
           if (meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
@@ -178,10 +179,11 @@ class BackgroundTask(
       existingMetadata: Map[String, String]
   ): IO[Unit] = {
     val updatedMetadata = existingMetadata + ("lastModifiedBy" -> hashedOwnerEmail.asString)
+    implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](traceId)
     for {
       storageAlg <- storageAlgRef.get
       delocalizeResp <- storageAlg
-        .delocalize(localObjectPath, gsPath, generation, updatedMetadata, traceId)
+        .delocalize(localObjectPath, gsPath, generation, updatedMetadata)
         .recoverWith {
           case e: GenerationMismatch =>
             if (generation == 0L)
@@ -194,16 +196,15 @@ class BackgroundTask(
                 localObjectPath,
                 gsPath,
                 0L,
-                updatedMetadata,
-                traceId
+                updatedMetadata
               )
             }
         }
         .recoverWith {
           case e: GenerationMismatch =>
-            storageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
+            storageAlg.updateMetadata(gsPath, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[Option[DelocalizeResponse]](e)
         }
-      _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
+      _ <- delocalizeResp.traverse(r => metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, r.crc32c), r.generation))
     } yield ()
   }
 
@@ -213,7 +214,7 @@ class BackgroundTask(
       storageLink.localBaseDirectory.path.asPath.resolve(file.toString),
       storageLink.cloudStorageDirectory.blobPath
     )
-    GsPath(storageLink.cloudStorageDirectory.bucketName, fullBlobPath)
+    GsPath(storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobPath)
   }
 }
 

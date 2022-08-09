@@ -34,6 +34,8 @@ class ShutdownService(
   }
 
   val flush: IO[Unit] = {
+
+    implicit val traceIdImplicit = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
 
@@ -42,7 +44,6 @@ class ShutdownService(
 
       // Copy all welder log files and jupyter log file to staging bucket
       flushLogFiles = for {
-        implicit0(ev: Ask[IO, TraceId]) <- IO(Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString)))
         _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
           val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
           storageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))

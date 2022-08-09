@@ -18,8 +18,9 @@ import org.broadinstitute.dsp.workbench.welder.server.StorageLinksService._
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Charset, HttpRoutes}
-
 import java.nio.file.Path
+
+import cats.mtl.Ask
 
 class StorageLinksService(
     storageLinks: StorageLinksCache,
@@ -56,6 +57,7 @@ class StorageLinksService(
 
   //note: first param in the modify is the thing to do, second param is the value to return
   def createStorageLink(storageLink: StorageLink): Kleisli[IO, TraceId, StorageLink] = Kleisli { traceId =>
+    implicit val traceIdImplicit = Ask.const[IO, TraceId](traceId)
     for {
       link <- storageLinks.modify { links =>
         val safeModeDirectory =
@@ -68,7 +70,7 @@ class StorageLinksService(
       _ <- persistWorkspaceBucket(link.localBaseDirectory, link.localSafeModeBaseDirectory, link.cloudStorageDirectory)
       storageAlg <- storageAlgRef.get
       localizeFiles = (storageAlg
-        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern, traceId)
+        .localizeCloudDirectory(storageLink.localBaseDirectory.path, storageLink.cloudStorageDirectory, config.workingDirectory, storageLink.pattern)
         .through(metadataCacheAlg.updateCachePipe))
         .compile
         .drain
@@ -91,7 +93,7 @@ class StorageLinksService(
   ): IO[Unit] = {
     val fileBody =
       RuntimeVariables(
-        s"gs://${cloudStorageDirectory.bucketName.value}/notebooks"
+        s"gs://${cloudStorageDirectory.container.asGcsBucket.value}/notebooks"
       ) //appending notebooks to mimick old jupyter image until we start using new images.
       .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
     val editModeDestinationPath = config.workingDirectory

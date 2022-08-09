@@ -30,7 +30,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
       StorageLink(
         LocalBaseDirectory(RelativePath(Paths.get(""))),
         None,
-        CloudStorageDirectory(GoogleCloudStorageContainer(GcsBucketName("testBucket")), Some(BlobPath("notebooks"))),
+        CloudStorageDirectory(CloudStorageContainer("testBucket"), Some(BlobPath("notebooks"))),
         "\\.Rmd$".r
       )
     val file = new File("test.Rmd")
@@ -46,7 +46,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val defaultGoogleStorageAlg =
-      CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+      CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
     new BackgroundTask(
       backgroundTaskConfig,

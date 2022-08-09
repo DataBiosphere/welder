@@ -18,7 +18,7 @@ trait MetadataCacheAlg {
 
   def removeCache(localPath: RelativePath): IO[Unit]
 
-  def updateCachePipe: Pipe[IO, AdaptedGcsMetadataCache, Unit]
+  def updateCachePipe: Pipe[IO, Option[AdaptedGcsMetadataCache], Unit]
 }
 
 final case class CacheAlgConfig(storageLinksPath: Path, metadataCachePath: Path)

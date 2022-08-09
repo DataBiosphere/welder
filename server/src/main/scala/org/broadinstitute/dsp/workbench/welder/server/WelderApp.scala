@@ -40,6 +40,8 @@ class WelderApp(objectService: ObjectService, storageLinksService: StorageLinksS
                 case InvalidLock(traceId, x, _) => PreconditionFailed(ErrorReport(x, Some(4), Some(traceId)))
                 case InternalException(traceId, x, _) => InternalServerError(ErrorReport(x, None, Some(traceId)))
                 case LockedByOther(traceId, x, _) => Conflict(ErrorReport(x, None, Some(traceId)))
+                case NotImplementedException(traceId, message, _) => InternalServerError(ErrorReport(message, Some(5), Some(traceId)))
+                case InvalidSourceURIException(traceId, message, _) => InternalServerError(ErrorReport(message, Some(6), Some(traceId)))
               }
               logger.error(e.ctx, e)(s"Error response: ${e.getMessage}") >> resp
             case e =>

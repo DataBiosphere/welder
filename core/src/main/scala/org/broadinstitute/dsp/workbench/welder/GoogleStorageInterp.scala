@@ -8,9 +8,8 @@ import cats.mtl.Ask
 import fs2.io.file.Files
 import fs2.{Pipe, Stream, text}
 import org.broadinstitute.dsde.workbench.google2
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 
@@ -19,53 +18,67 @@ import java.time.Instant
 import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
-class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
+class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
     implicit logger: StructuredLogger[IO]
 ) extends CloudStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
-  def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
-    googleStorageService
-      .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
-      .compile
-      .drain
-      .as(UpdateMetadataResponse.DirectMetadataUpdate)
-      .handleErrorWith {
-        case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
-          for {
-            _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
-            bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
-            _ <- (Stream
-              .emits(bytes)
-              .covary[IO] through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId))).compile.drain
-            blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
-          } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
-      }
+  def updateMetadata(gsPath: GsPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
+    ev.ask[TraceId].flatMap { traceId =>
+      googleStorageService
+        .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
+        .compile
+        .drain
+        .as(UpdateMetadataResponse.DirectMetadataUpdate)
+        .handleErrorWith {
+          case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
+            for {
+              _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
+              bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
+              _ <- (Stream
+                .emits(bytes)
+                .covary[IO] through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId))).compile.drain
+              blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
+            } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
+        }
+    }
 
-  def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]] =
+  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] =
+    gsPath match {
+      case GsPath(bucketName, blobName) =>
+        for {
+          traceId <- ev.ask[TraceId]
+          meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
+          res <- meta match {
+            case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
+              adaptMetadata(crc32c, userDefinedMetadata, generation).map(x => Some(x))
+            case _ =>
+              IO.pure(None)
+          }
+        } yield res
+      case _ => super.retrieveAdaptedGcsMetadata(localPath, gsPath)
+    }
+
+  override def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] = gsPath match {
+    case GsPath(bucketName, blobName) =>
+      for {
+        traceId <- ev.ask[TraceId]
+        meta <- googleStorageService.getObjectMetadata(bucketName, blobName, Some(traceId)).compile.last
+        res <- meta match {
+          case Some(google2.GetMetadataResponse.Metadata(_, userDefinedMetadata, _)) =>
+            IO(userDefinedMetadata)
+          case _ =>
+            IO.pure(Map.empty[String, String])
+        }
+      } yield res
+    case _ => super.retrieveUserDefinedMetadata(gsPath)
+  }
+
+  def removeObject(gsPath: GsPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
     for {
-      meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.last
-      res <- meta match {
-        case Some(google2.GetMetadataResponse.Metadata(crc32c, userDefinedMetadata, generation)) =>
-          adaptMetadata(crc32c, userDefinedMetadata, generation).map(x => Some(x))
-        case _ =>
-          IO.pure(None)
-      }
-    } yield res
-
-  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]] =
-    for {
-      meta <- googleStorageService.getObjectMetadata(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.last
-      res <- meta match {
-        case Some(google2.GetMetadataResponse.Metadata(_, userDefinedMetadata, _)) =>
-          IO(userDefinedMetadata)
-        case _ =>
-          IO.pure(Map.empty[String, String])
-      }
-    } yield res
-
-  def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult] =
-    googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, generation, Some(traceId))
+      traceId <- Stream.eval(ev.ask)
+      r <- googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, generation, Some(traceId))
+    } yield r
 
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
     for {
@@ -91,55 +104,58 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
 
   override def delocalize(
       localObjectPath: RelativePath,
-      gsPath: GsPath,
+      gsPath: SourceUri,
       generation: Long,
-      userDefinedMeta: Map[String, String],
-      traceId: TraceId
-  ): IO[DelocalizeResponse] = {
-    val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
-
-    for {
-      _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
-      fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-      _ <- (Files[IO].readAll(fs2path) through googleStorageService.streamUploadBlob(
-        gsPath.bucketName,
-        gsPath.blobName,
-        userDefinedMeta,
-        Some(generation),
-        true,
-        Some(traceId)
-      )).compile.drain.handleErrorWith {
-        case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
-          val msg = s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: ${generation}). ${e.getMessage}"
-          logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString), e)(msg) >> IO.raiseError(GenerationMismatch(traceId, msg))
-        case e =>
-          IO.raiseError(e)
-      }
-      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
-    } yield DelocalizeResponse(blob.getGeneration, Crc32(blob.getCrc32c))
+      userDefinedMeta: Map[String, String]
+  )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] = gsPath match {
+    case GsPath(bucketName, blobName) =>
+      val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
+      for {
+        traceId <- ev.ask[TraceId]
+        _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
+        fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
+        _ <- (Files[IO].readAll(fs2path) through googleStorageService.streamUploadBlob(
+          bucketName,
+          blobName,
+          userDefinedMeta,
+          Some(generation),
+          true,
+          Some(traceId)
+        )).compile.drain.handleErrorWith {
+          case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
+            val msg = s"Remote version has changed for $localAbsolutePath. Generation mismatch (local generation: ${generation}). ${e.getMessage}"
+            logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString), e)(msg) >> IO.raiseError(GenerationMismatch(traceId, msg))
+          case e =>
+            IO.raiseError(e)
+        }
+        blob <- googleStorageService.getBlob(bucketName, blobName, traceId = Some(traceId)).compile.lastOrError
+      } yield Some(DelocalizeResponse(blob.getGeneration, Crc32(blob.getCrc32c)))
+    case _ => super.delocalize(localObjectPath, gsPath, generation, userDefinedMeta)
   }
 
-  override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
-    val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
-    logger.info(s"flushing file ${localFile}") >>
-      (Files[IO].readAll(fs2Path) through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName)).compile.drain
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = gsPath match {
+    case GsPath(bucketName, blobName) =>
+      val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
+      logger.info(s"flushing file ${localFile}") >>
+        (Files[IO].readAll(fs2Path) through googleStorageService.streamUploadBlob(bucketName, blobName)).compile.drain
+    case _ => super.fileToGcsAbsolutePath(localFile, gsPath)
   }
 
   override def localizeCloudDirectory(
       localBaseDirectory: RelativePath,
       cloudStorageDirectory: CloudStorageDirectory,
       workingDir: Path,
-      pattern: Regex,
-      traceId: TraceId
-  ): Stream[IO, AdaptedGcsMetadataCache] = {
-    val res = for {
+      pattern: Regex
+  )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] =
+    for {
+      traceId <- Stream.eval(ev.ask)
       blob <- googleStorageService.listBlobsWithPrefix(
-        cloudStorageDirectory.containerName.asGcsBucket,
+        cloudStorageDirectory.container.asGcsBucket,
         cloudStorageDirectory.blobPath.map(_.asString).getOrElse(""),
         true,
         1000,
@@ -161,21 +177,24 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
         } yield result
       } else Stream(None).covary[IO]
     } yield r
-    res.unNone
+
+  override def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] = path match {
+    case GsPath(bucketName, blobName) => googleStorageService.streamUploadBlob(bucketName, blobName)
+    case _ => super.uploadBlob(path)
   }
 
-  def uploadBlob(bucketName: GcsBucketName, blobName: GcsBlobName): Pipe[IO, Byte, Unit] =
-    googleStorageService.streamUploadBlob(bucketName, blobName)
-
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
-    for {
-      blob <- googleStorageService.getBlob(bucketName, blobName, None)
-      a <- Stream
-        .emits(blob.getContent())
-        .through(text.utf8.decode)
-        .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
-        .through(_root_.io.circe.fs2.decoder)
-    } yield a
+  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = path match {
+    case GsPath(bucketName, blobName) =>
+      for {
+        blob <- googleStorageService.getBlob(bucketName, blobName, None)
+        a <- Stream
+          .emits(blob.getContent())
+          .through(text.utf8.decode)
+          .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+          .through(_root_.io.circe.fs2.decoder)
+      } yield a
+    case _ => super.getBlob(path)
+  }
 
   private def adaptMetadata(crc32c: Crc32, userDefinedMetadata: Map[String, String], generation: Long): IO[AdaptedGcsMetadata] =
     for {
@@ -200,4 +219,6 @@ class GoogleStorageInterp(config: GoogleStorageAlgConfig, googleStorageService: 
     } yield {
       AdaptedGcsMetadata(lock, crc32c, generation)
     }
+
+  override def cloudProvider: CloudProvider = CloudProvider.Gcp
 }

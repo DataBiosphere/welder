@@ -23,7 +23,7 @@ implicit def unsafeLogger = Slf4jLogger.getLogger[IO]
 implicit val lineBacker = Linebacker.fromExecutionContext[IO](global)
 
 import org.broadinstitute.dsp.workbench.welder.CloudStorageAlg
-import org.broadinstitute.dsp.workbench.welder.GoogleStorageAlgConfig
+import org.broadinstitute.dsp.workbench.welder.StorageAlgConfig
 import java.nio.file.Paths
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.broadinstitute.dsp.workbench.welder.CloudStorageDirectory

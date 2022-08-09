@@ -79,7 +79,7 @@ object SourceUri {
     override val cloudProvider: CloudProvider = CloudProvider.Gcp
   }
   final case class AzurePath(containerName: ContainerName, blobName: BlobName) extends SourceUri {
-    override def toString: String = s"gs://${containerName.value}/${blobName.value}"
+    override def toString: String = s"${containerName.value}/${blobName.value}"
 
     override val cloudProvider: CloudProvider = CloudProvider.Azure
   }
@@ -93,22 +93,13 @@ object LocalDirectory {
   final case class LocalSafeBaseDirectory(path: RelativePath) extends LocalDirectory
 }
 
-
-sealed trait CloudStorageContainer {
-  val value: String
+final case class CloudStorageContainer(name: String) {
   //we do not compute this eagerly because the model in wb-libs has a require in the apply
-  lazy val asGcsBucket: GcsBucketName = GcsBucketName(value)
-  val asAzureCloudContainer: ContainerName = ContainerName(value)
+  lazy val asGcsBucket: GcsBucketName = GcsBucketName(name)
+  val asAzureCloudContainer: ContainerName = ContainerName(name)
 }
 
-final case class GoogleCloudStorageContainer(wrappedContainerName: GcsBucketName) extends CloudStorageContainer {
-  override val value: String = wrappedContainerName.value
-}
-final case class AzureCloudStorageContainer(wrappedContainerName: ContainerName) extends CloudStorageContainer {
-  override val value: String = wrappedContainerName.value
-}
-
-final case class CloudStorageDirectory(containerName: CloudStorageContainer, blobPath: Option[BlobPath])
+final case class CloudStorageDirectory(container: CloudStorageContainer, blobPath: Option[BlobPath])
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,

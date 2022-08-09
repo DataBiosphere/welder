@@ -8,17 +8,19 @@ import fs2.{Pipe, Stream}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
-
 import java.io.File
 import java.math.BigInteger
 import java.nio.file.{Path, Paths}
 import java.security.MessageDigest
 import java.util.Base64
+
+import cats.mtl.Ask
+
 import scala.util.matching.Regex
 
 package object welder {
@@ -88,7 +90,7 @@ package object welder {
   def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
     val fullBlobName =
       getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
-    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
+    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobName)
   }
 
   //Note that bucketName below does NOT include the gs:// prefix
@@ -117,7 +119,8 @@ package object welder {
       blobName: GcsBlobName,
       toTuple: B => List[(A, B)]
   )(
-      implicit logger: StructuredLogger[IO]
+      implicit logger: StructuredLogger[IO],
+      ev: Ask[IO, TraceId]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       storageAlg <- Stream.eval(cloudStorageAlgRef.get)
@@ -129,7 +132,7 @@ package object welder {
       cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
       loadedCache <- cacheFromDisk.fold {
         storageAlg
-          .getBlob[List[B]](stagingBucketName, blobName)
+          .getBlob[List[B]](SourceUri.GsPath(stagingBucketName, blobName))
           .last
           .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
       }(x => Stream.eval(IO.pure(x)))
@@ -160,12 +163,12 @@ package object welder {
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
       ref: Ref[IO, Map[A, B]]
-  )(implicit logger: StructuredLogger[IO]): IO[Unit] =
+  )(implicit logger: StructuredLogger[IO], ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       _ <- logger.info(s"flushing cache to ${blobName.value}/${blobName.value}")
       data <- ref.get
       bytes = Stream.emits(data.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")).covary[IO]
-      _ <- (bytes through googleStorageAlg.uploadBlob(stagingBucketName, blobName)).compile.drain
+      _ <- (bytes through googleStorageAlg.uploadBlob(SourceUri.GsPath(stagingBucketName, blobName))).compile.drain
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
       // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs

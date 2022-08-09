@@ -1,12 +1,16 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.util.UUID
+
 import cats.effect.kernel.Ref
 import cats.effect.std.{Dispatcher, Semaphore}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.mtl.Ask
 import fs2.Stream
 import fs2.concurrent.SignallingRef
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, StructuredLogger}
@@ -30,7 +34,9 @@ object Main extends IOApp {
 
   def initStreams(appConfig: AppConfig)(
       implicit logger: StructuredLogger[IO]
-  ): Stream[IO, List[Stream[IO, Unit]]] =
+  ): Stream[IO, List[Stream[IO, Unit]]] = {
+
+    implicit val traceIdImplicit = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
@@ -101,5 +107,6 @@ object Main extends IOApp {
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
+  }
 
 }
