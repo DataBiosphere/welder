@@ -48,9 +48,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
         _ <- googleStorageAlg.updateMetadata(gsPath, TraceId(randomUUID().toString), Map("lastLockedBy" -> "me"))
         meta <- googleStorage.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.lastOrError
-      } yield {
-        meta.asInstanceOf[GetMetadataResponse.Metadata].userDefined.get("lastLockedBy") shouldBe ("me")
-      }
+      } yield meta.asInstanceOf[GetMetadataResponse.Metadata].userDefined.get("lastLockedBy") shouldBe "me"
       res.unsafeRunSync()
     }
   }
@@ -69,11 +67,9 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- Stream.emits(bodyBytes).covary[IO].through(Files[IO].writeAll(fs2.io.file.Path.fromNioPath(localAbsolutePath))).compile.drain //write to local file
         resp <- googleStorage.delocalize(localObjectPath, gsPath, 0L, Map.empty, fakeTraceId).attempt
         _ <- IO((new File(localAbsolutePath.toString)).delete())
-      } yield {
-        resp shouldBe Left(
-          GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null")
-        )
-      }
+      } yield resp shouldBe Left(
+        GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null")
+      )
       res.unsafeRunSync()
     }
   }
@@ -120,7 +116,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       } yield {
         val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
         resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
-        newFileContent should contain theSameElementsAs (bodyBytes)
+        newFileContent should contain theSameElementsAs bodyBytes
       }
       res.compile.drain.unsafeRunSync()
     }
@@ -143,7 +139,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.bucketName, obj, objectBody, objectType).compile.drain)
         _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r, TraceId(UUID.randomUUID().toString)).compile.drain
       } yield {
-        val prefix = (workingDir.resolve(localBaseDir.asPath))
+        val prefix = workingDir.resolve(localBaseDir.asPath)
         val allFiles = allObjects.map { blobName =>
           cloudStorageDirectory.blobPath match {
             case Some(bp) =>
@@ -183,7 +179,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
           .compile
           .drain
       } yield {
-        val prefix = (workingDir.resolve(localBaseDir.asPath))
+        val prefix = workingDir.resolve(localBaseDir.asPath)
         val fileExist = cloudStorageDirectory.blobPath match {
           case Some(bp) =>
             prefix.resolve(Paths.get("test.suffix"))

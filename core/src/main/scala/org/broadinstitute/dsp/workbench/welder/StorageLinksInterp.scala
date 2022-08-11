@@ -11,7 +11,7 @@ class StorageLinksInterp(storageLinksCache: StorageLinksCache) extends StorageLi
       storageLinks <- storageLinksCache.get
       baseDirectories = getPossibleBaseDirectory(localPath.asPath)
       context = baseDirectories.collectFirst {
-        case x if (storageLinks.get(RelativePath(x)).isDefined) =>
+        case x if storageLinks.get(RelativePath(x)).isDefined =>
           val relativePath = RelativePath(x)
           val sl = storageLinks.get(relativePath).get
           val isSafeMode = sl.localSafeModeBaseDirectory.exists(_.path == relativePath)

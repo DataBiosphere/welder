@@ -27,8 +27,8 @@ class StorageLinksService(
     metadataCacheAlg: MetadataCacheAlg,
     config: StorageLinksServiceConfig,
     dispatcher: Dispatcher[IO]
-)(
-    implicit logger: StructuredLogger[IO]
+)(implicit
+    logger: StructuredLogger[IO]
 ) extends WelderService {
   val service: HttpRoutes[IO] =
     withTraceId {
@@ -93,7 +93,7 @@ class StorageLinksService(
       RuntimeVariables(
         s"gs://${cloudStorageDirectory.bucketName.value}/notebooks"
       ) //appending notebooks to mimick old jupyter image until we start using new images.
-      .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
+        .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
     val editModeDestinationPath = config.workingDirectory
       .resolve(baseDirectory.path.asPath)
       .resolve(config.workspaceBucketNameFileName)
@@ -126,13 +126,14 @@ class StorageLinksService(
       val file = dir.toFile()
       for {
         exists <- IO(file.exists())
-        _ <- if (exists) IO.unit
-        else {
-          IO(file.mkdirs()).flatMap { r =>
-            if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
-            else logger.info(s"Successfully created ${file}")
+        _ <-
+          if (exists) IO.unit
+          else {
+            IO(file.mkdirs()).flatMap { r =>
+              if (!r) logger.warn(s"could not initialize dir ${file.getPath()}")
+              else logger.info(s"Successfully created ${file}")
+            }
           }
-        }
       } yield ()
     }.void
   }
@@ -143,9 +144,8 @@ class StorageLinksService(
       (links -- toDelete, ())
     }
 
-  val getStorageLinks: IO[StorageLinks] = {
+  val getStorageLinks: IO[StorageLinks] =
     storageLinks.get.map(links => StorageLinks(links.values.toSet))
-  }
 }
 
 final case class RuntimeVariables(workspaceBucket: String)
@@ -159,8 +159,8 @@ object StorageLinksService {
       metadataCacheAlg: MetadataCacheAlg,
       config: StorageLinksServiceConfig,
       dispatcher: Dispatcher[IO]
-  )(
-      implicit logger: StructuredLogger[IO]
+  )(implicit
+      logger: StructuredLogger[IO]
   ): StorageLinksService =
     new StorageLinksService(storageLinks, storageAlgRef, metadataCacheAlg, config, dispatcher)
 
