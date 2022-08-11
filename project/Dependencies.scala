@@ -2,7 +2,7 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.14.1"
-  val http4sVersion = "1.0.0-M34"
+  val http4sVersion = "1.0.0-M35"
   val grpcCoreVersion = "1.34.0"
   val scalaTestVersion = "3.2.7"
 
