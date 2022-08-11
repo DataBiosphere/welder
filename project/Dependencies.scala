@@ -4,7 +4,7 @@ object Dependencies {
   val circeVersion = "0.14.1"
   val http4sVersion = "1.0.0-M34"
   val grpcCoreVersion = "1.34.0"
-  val scalaTestVersion = "3.2.7"
+  val scalaTestVersion = "3.2.13"
 
   val workbenchLibsHash = "c8edf8e"
   val workbenchGoogle2V = s"0.24-${workbenchLibsHash}"
