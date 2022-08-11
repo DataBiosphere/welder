@@ -23,7 +23,7 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
 ) extends CloudStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
-  def updateMetadata(gsPath: GsPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
+  override def updateMetadata(gsPath: GsPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
     ev.ask[TraceId].flatMap { traceId =>
       googleStorageService
         .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
@@ -74,13 +74,13 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
     case _ => super.retrieveUserDefinedMetadata(gsPath)
   }
 
-  def removeObject(gsPath: GsPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
+  override def removeObject(gsPath: GsPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
     for {
       traceId <- Stream.eval(ev.ask)
       r <- googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, generation, Some(traceId))
     } yield r
 
-  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
+  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
     for {
       blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, None, Some(traceId))
       fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
