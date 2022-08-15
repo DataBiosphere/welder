@@ -19,7 +19,7 @@ object Dependencies {
     "org.http4s" %% "http4s-blaze-client" % http4sVersion,
     "org.http4s" %% "http4s-circe" % http4sVersion,
     "org.http4s" %% "http4s-dsl" % http4sVersion,
-    "org.log4s" %% "log4s" % "1.8.2",
+    "org.log4s" %% "log4s" % "1.10.0",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
     "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
