@@ -32,9 +32,9 @@ jobs:
           sed -i "s/welderHash = .*/welderHash = \"${{ steps.setHash.outputs.git_short_sha }}\"/g" ${FILE_NAME}
       - name: Add ACR credential to docker config
         run: |
-          docker login ${ACR_REGISTRY} \
+          echo ${{ secrets.ACR_SP_PASSWORD }} | docker login ${ACR_REGISTRY} \
           --username ${{ secrets.ACR_SP_USERNAME }} \
-          --password $(echo ${{ secrets.ACR_SP_PASSWORD }})
+          --password-stdin
       - name: Build welder image and push to ACR
         run: |
           sbt server/docker:publish
