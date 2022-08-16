@@ -30,14 +30,6 @@ jobs:
         run: |
           FILE_NAME=$(find . -name 'reference.conf' | grep -v 'automation' | grep -v 'test' | grep -v 'target')
           sed -i "s/welderHash = .*/welderHash = \"${{ steps.setHash.outputs.git_short_sha }}\"/g" ${FILE_NAME}
-      - name: Add ACR credential to docker config
-        run: |
-          echo ${{ secrets.ACR_SP_PASSWORD }} | docker login ${ACR_REGISTRY} \
-          --username ${{ secrets.ACR_SP_USERNAME }} \
-          --password-stdin
-      - name: Build welder image and push to ACR
-        run: |
-          sbt server/docker:publish
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v3
