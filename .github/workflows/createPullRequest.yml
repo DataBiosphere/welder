@@ -2,7 +2,7 @@ name: Create terra-helm Pull Request
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, PR ]
 #  pull_request:
 #    branches:
 #      - master
@@ -32,9 +32,9 @@ jobs:
           sed -i "s/welderHash = .*/welderHash = \"${{ steps.setHash.outputs.git_short_sha }}\"/g" ${FILE_NAME}
       - name: Add ACR credential to docker config
         run: |
-          echo ${{ secrets.ACR_SP_PASSWORD }} | docker login ${ACR_REGISTRY} \
+          docker login ${ACR_REGISTRY} \
           --username ${{ secrets.ACR_SP_USERNAME }} \
-          --password-stdin
+          --password ${{ secrets.ACR_SP_PASSWORD }}
       - name: Build welder image and push to ACR
         run: |
           sbt server/docker:publish
