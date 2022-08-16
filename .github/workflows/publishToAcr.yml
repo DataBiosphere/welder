@@ -1,4 +1,4 @@
-name: Create terra-helm Pull Request
+name: Publish to ACR
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
   ACR_REGISTRY: terradevacrpublic.azurecr.io
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
