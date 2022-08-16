@@ -34,7 +34,7 @@ jobs:
         run: |
           docker login ${ACR_REGISTRY} \
           --username ${{ secrets.ACR_SP_USERNAME }} \
-          --password ${{ secrets.ACR_SP_PASSWORD }}
+          --password $(echo ${{ secrets.ACR_SP_PASSWORD }})
       - name: Build welder image and push to ACR
         run: |
           sbt server/docker:publish
