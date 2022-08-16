@@ -37,7 +37,7 @@ jobs:
           --password-stdin
       - name: Build welder image and push to ACR
         run: |
-          sbt server/docker:publish
+          sbt "project server" docker:publish
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v3
