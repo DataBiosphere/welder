@@ -2,7 +2,7 @@ name: Publish to ACR
 
 on:
   push:
-    branches: [ master, PR ]
+    branches: [ master ]
 #  pull_request:
 #    branches:
 #      - master
