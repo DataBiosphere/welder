@@ -33,8 +33,7 @@ package object server {
           miscHttpClient = new MiscHttpClientInterp(client, conf.miscHttpClientConfig)
           petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
           sasTokenResp <- Resource.eval(miscHttpClient.getSasUrl(petAccessTokenResp.accessToken))
-          //TODO: transform sas token resp into tok[en and url
-          azureConfig = AzureStorageConfig(10 minutes, SasToken(sasTokenResp.uri.toString()), EndpointUrl(sasTokenResp.uri.toString()))
+          azureConfig = AzureStorageConfig(10 minutes, SasToken(sasTokenResp.token.value), EndpointUrl(sasTokenResp.uri.toString()))
           azureStorageService <- AzureStorageService.fromSasToken[IO](azureConfig)
         } yield CloudStorageAlg.forAzure(algConfig, azureStorageService)
     }
