@@ -100,11 +100,19 @@ object Settings {
     Docker / daemonGroup := "users",
     Docker / daemonGroupGid := Some("100"),
     dockerEntrypoint := List(entrypoint),
-    dockerAlias := DockerAlias(
-      Some("us.gcr.io"),
-      None,
-      "broad-dsp-gcr-public/welder-server",
-      git.gitHeadCommit.value.map(_.substring(0, 7))
+    dockerAliases := List(
+      DockerAlias(
+        Some("us.gcr.io"),
+        None,
+        "broad-dsp-gcr-public/welder-server",
+        git.gitHeadCommit.value.map(_.substring(0, 7))
+      ),
+      DockerAlias(
+        Some("terradevacrpublic.azurecr.io"),
+        None,
+        "welder-server",
+        git.gitHeadCommit.value.map(_.substring(0, 7))
+      )
     )
   )
 

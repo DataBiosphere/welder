@@ -22,4 +22,6 @@ jobs:
           --password-stdin
       - name: Build welder image and push to ACR
         run: |
-          sbt server/docker:publish
+          sbt server/docker:publishLocal
+          git_short_sha=$(git rev-parse --short HEAD)
+          docker push terradevacrpublic.azurecr.io/welder-server:$git_short_sha
