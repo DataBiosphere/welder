@@ -23,25 +23,28 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
 ) extends CloudStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
-  override def updateMetadata(gsPath: GsPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
-    ev.ask[TraceId].flatMap { traceId =>
-      googleStorageService
-        .setObjectMetadata(gsPath.bucketName, gsPath.blobName, metadata, Option(traceId))
-        .compile
-        .drain
-        .as(UpdateMetadataResponse.DirectMetadataUpdate)
-        .handleErrorWith {
-          case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
-            for {
-              _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
-              bytes <- googleStorageService.getBlobBody(gsPath.bucketName, gsPath.blobName, Some(traceId)).compile.to(Array)
-              _ <- (Stream
-                .emits(bytes)
-                .covary[IO] through googleStorageService.streamUploadBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId))).compile.drain
-              blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, traceId = Some(traceId)).compile.lastOrError
-            } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
-        }
-    }
+  override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] = gsPath match {
+    case GsPath(bucketName, blobName) =>
+      ev.ask[TraceId].flatMap { traceId =>
+        googleStorageService
+          .setObjectMetadata(bucketName, blobName, metadata, Option(traceId))
+          .compile
+          .drain
+          .as(UpdateMetadataResponse.DirectMetadataUpdate)
+          .handleErrorWith {
+            case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
+              for {
+                _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
+                bytes <- googleStorageService.getBlobBody(bucketName, blobName, Some(traceId)).compile.to(Array)
+                _ <- (Stream
+                  .emits(bytes)
+                  .covary[IO] through googleStorageService.streamUploadBlob(bucketName, blobName, traceId = Some(traceId))).compile.drain
+                blob <- googleStorageService.getBlob(bucketName, blobName, traceId = Some(traceId)).compile.lastOrError
+              } yield UpdateMetadataResponse.ReUploadObject(blob.getGeneration, Crc32(blob.getCrc32c))
+          }
+      }
+    case _ => super.updateMetadata(gsPath, metadata)
+  }
 
   override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] =
     gsPath match {
@@ -74,33 +77,41 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
     case _ => super.retrieveUserDefinedMetadata(gsPath)
   }
 
-  override def removeObject(gsPath: GsPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
-    for {
-      traceId <- Stream.eval(ev.ask)
-      r <- googleStorageService.removeObject(gsPath.bucketName, gsPath.blobName, generation, Some(traceId))
-    } yield r
+  override def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] = gsPath match {
+    case GsPath(bucketName, blobName) =>
+      for {
+        traceId <- Stream.eval(ev.ask)
+        r <- googleStorageService.removeObject(bucketName, blobName, generation, Some(traceId))
+      } yield r
+    case _ => super.removeObject(gsPath, generation)
+  }
 
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata] =
-    for {
-      blob <- googleStorageService.getBlob(gsPath.bucketName, gsPath.blobName, None, Some(traceId))
-      fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-      _ <- (fs2.io
-        .readInputStream[IO](
-          IO(
-            java.nio.channels.Channels
-              .newInputStream {
-                val reader = blob.reader()
-                reader.setChunkSize(chunkSize)
-                reader
-              }
-          ),
-          chunkSize,
-          closeAfterUse = true
-        )
-        .through(Files[IO].writeAll(fs2Path, writeFileOptions))) ++ Stream.eval(IO.unit)
-      userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
-      meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
-    } yield meta
+  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
+    gsPath match {
+      case GsPath(bucketName, blobName) =>
+        for {
+          traceId <- Stream.eval(ev.ask)
+          blob <- googleStorageService.getBlob(bucketName, blobName, None, Some(traceId))
+          fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
+          _ <- (fs2.io
+            .readInputStream[IO](
+              IO(
+                java.nio.channels.Channels
+                  .newInputStream {
+                    val reader = blob.reader()
+                    reader.setChunkSize(chunkSize)
+                    reader
+                  }
+              ),
+              chunkSize,
+              closeAfterUse = true
+            )
+            .through(Files[IO].writeAll(fs2Path, writeFileOptions))) ++ Stream.eval(IO.unit)
+          userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
+          meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
+        } yield Some(meta)
+      case _ => super.gcsToLocalFile(localAbsolutePath, gsPath)
+    }
 
   override def delocalize(
       localObjectPath: RelativePath,
