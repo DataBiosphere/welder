@@ -1,0 +1,25 @@
+name: Create terra-helm Pull Request
+
+on:
+  push:
+    branches: [ master, PR ]
+#  pull_request:
+#    branches:
+#      - master
+
+env:
+  ACR_REGISTRY: terradevacrpublic.azurecr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Add ACR credential to docker config
+        run: |
+          echo ${{ secrets.ACR_SP_PASSWORD }} | docker login ${ACR_REGISTRY} \
+          --username ${{ secrets.ACR_SP_USERNAME }} \
+          --password-stdin
+      - name: Build welder image and push to ACR
+        run: |
+          sbt server/docker:publish
