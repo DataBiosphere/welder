@@ -23,6 +23,8 @@ object Config {
   implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.stringConfigReader.map(WorkbenchEmail)
   implicit val gcsBlobNameReader: ConfigReader[GcsBlobName] = ConfigReader.stringConfigReader.map(GcsBlobName)
   implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.stringConfigReader.map(GcsBucketName)
+  implicit val storageBlobConfigReader: ConfigReader[CloudStorageBlob] = ConfigReader.stringConfigReader.map(CloudStorageBlob)
+  implicit val storageContainerConfigReader: ConfigReader[CloudStorageContainer] = ConfigReader.stringConfigReader.map(CloudStorageContainer)
 
   // pureconfig's auto generated ConfigReader will read AppConfig as a sealed class depending on `type` value in config
   val appConfig = ConfigSource.default.load[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))

@@ -56,7 +56,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   "delocalize" should "fail with GenerationMismatch exception if remote file has changed" in {
     forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
-      val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), GoogleStorageServiceWithFailures)
+      val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/work")), GoogleStorageServiceWithFailures)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
       // Create the local base directory
       val directory = new File(s"${localAbsolutePath.getParent.toString}")
@@ -92,7 +92,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
       } yield {
         val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
-        resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
+        resp shouldBe Some(AdaptedGcsMetadata(None, expectedCrc32c, 0L))
       }
       res.compile.drain.unsafeRunSync()
     }
@@ -117,7 +117,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
       } yield {
         val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
-        resp shouldBe AdaptedGcsMetadata(None, expectedCrc32c, 0L)
+        resp shouldBe Some(AdaptedGcsMetadata(None, expectedCrc32c, 0L))
         newFileContent should contain theSameElementsAs (bodyBytes)
       }
       res.compile.drain.unsafeRunSync()
