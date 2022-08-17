@@ -99,6 +99,12 @@ final case class CloudStorageContainer(name: String) {
   val asAzureCloudContainer: ContainerName = ContainerName(name)
 }
 
+final case class CloudStorageBlob(name: String) {
+  //we do not compute this eagerly because the model in wb-libs has a require in the apply
+  lazy val asGcs: GcsBlobName = GcsBlobName(name)
+  val asAzure: BlobName = BlobName(name)
+}
+
 final case class CloudStorageDirectory(container: CloudStorageContainer, blobPath: Option[BlobPath])
 
 final case class StorageLink(

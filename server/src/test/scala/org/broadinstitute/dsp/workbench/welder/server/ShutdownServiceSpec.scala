@@ -28,10 +28,10 @@ import scala.util.matching.Regex
 class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val config =
     PreshutdownServiceConfig(
-      GcsBlobName("welder-metadata/storagelinks.json"),
-      GcsBlobName("welder-metadata/metadata.json"),
+      CloudStorageBlob("welder-metadata/storagelinks.json"),
+      CloudStorageBlob("welder-metadata/metadata.json"),
       Paths.get("/tmp"),
-      GcsBucketName("fakeStagingBucket")
+      CloudStorageContainer("fakeStagingBucket")
     )
   val fakeGoogleStorageAlg = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
     override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
@@ -89,10 +89,10 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
 
         resp <- cacheService.service.run(request).value
-        gcsMetadata <- storageAlg.getBlob[List[AdaptedGcsMetadataCache]](GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName)).compile.lastOrError
-        storageLinksCache <- storageAlg.getBlob[List[StorageLink]](GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName)).compile.lastOrError
-        welderLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/.welder.log")).compile.lastOrError
-        jupyterLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName, GcsBlobName(s"cluster-log-files/jupyter.log")).compile.lastOrError
+        gcsMetadata <- storageAlg.getBlob[List[AdaptedGcsMetadataCache]](GsPath(config.stagingBucketName.asGcsBucket, config.gcsMetadataJsonBlobName.asGcs)).compile.lastOrError
+        storageLinksCache <- storageAlg.getBlob[List[StorageLink]](GsPath(config.stagingBucketName.asGcsBucket, config.gcsMetadataJsonBlobName.asGcs)).compile.lastOrError
+        welderLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName.asGcsBucket, GcsBlobName(s"cluster-log-files/.welder.log")).compile.lastOrError
+        jupyterLogInGcs <- FakeGoogleStorageInterpreter.getBlob(config.stagingBucketName.asGcsBucket, GcsBlobName(s"cluster-log-files/jupyter.log")).compile.lastOrError
         _ <- IO((new File("/tmp/.welder.log")).delete())
         _ <- IO((new File("/tmp/jupyter.log")).delete())
       } yield {

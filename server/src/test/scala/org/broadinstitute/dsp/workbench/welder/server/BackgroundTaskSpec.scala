@@ -5,7 +5,6 @@ import cats.effect.{IO, Ref}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -16,7 +15,7 @@ import scala.concurrent.duration._
 class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   val backgroundTaskConfig = BackgroundTaskConfig(
     Paths.get("/work"),
-    GcsBucketName("testStagingBucket"),
+    CloudStorageContainer("testStagingBucket"),
     7 minutes,
     10 minutes,
     15 minutes,

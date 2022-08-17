@@ -6,11 +6,8 @@ import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
 import fs2.concurrent.SignallingRef
-import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import org.typelevel.log4cats.StructuredLogger
@@ -39,14 +36,18 @@ class ShutdownService(
     for {
       storageAlg <- storageAlgRef.get
 
-      flushStorageLinks = flushCache(storageAlg, GsPath(config.stagingBucketName, config.storageLinksJsonBlobName), storageLinksCache)
-      flushMetadataCache = flushCache(storageAlg, GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName), metadataCache)
+      storageLinksSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, config.storageLinksJsonBlobName)
+      metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, config.gcsMetadataJsonBlobName)
+      flushStorageLinks = flushCache(storageAlg, storageLinksSourceUri, storageLinksCache)
+      flushMetadataCache = flushCache(storageAlg, metadataSourceUri, metadataCache)
 
       // Copy all welder log files and jupyter log file to staging bucket
       flushLogFiles = for {
         _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
-          val blobName = GcsBlobName(s"cluster-log-files/${file.getName}")
-          storageAlg.fileToGcsAbsolutePath(file.toPath, GsPath(config.stagingBucketName, blobName))
+          val blobName = CloudStorageBlob(s"cluster-log-files/${file.getName}")
+          getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, blobName).flatMap { sourceUri =>
+            storageAlg.fileToGcsAbsolutePath(file.toPath, sourceUri)
+          }
         }
       } yield ()
 
@@ -74,8 +75,8 @@ object ShutdownService {
 }
 
 final case class PreshutdownServiceConfig(
-    storageLinksJsonBlobName: GcsBlobName,
-    gcsMetadataJsonBlobName: GcsBlobName,
+    storageLinksJsonBlobName: CloudStorageBlob,
+    gcsMetadataJsonBlobName: CloudStorageBlob,
     workingDirectory: Path,
-    stagingBucketName: GcsBucketName
+    stagingBucketName: CloudStorageContainer
 )

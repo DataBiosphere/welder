@@ -11,7 +11,7 @@ import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.typelevel.log4cats.StructuredLogger
 import java.io.File
 import java.math.BigInteger
@@ -206,6 +206,17 @@ package object welder {
 
   def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
+
+  def getSourceUriForProvider(cloudProvider: CloudProvider, container: CloudStorageContainer, blob: CloudStorageBlob)(
+      implicit ev: Ask[IO, TraceId]
+  ): IO[SourceUri] =
+    ev.ask[TraceId].flatMap { traceId =>
+      cloudProvider match {
+        case CloudProvider.Gcp => IO(GsPath(container.asGcsBucket, blob.asGcs))
+        case CloudProvider.Azure => IO(AzurePath(container.asAzureCloudContainer, blob.asAzure))
+        case CloudProvider.None => IO.raiseError(InvalidSourceURIException(traceId, "Cannot get sourceURI with no cloud provider", Map.empty))
+      }
+    }
 
   private[welder] val writeFileOptions = Flags.Write
 

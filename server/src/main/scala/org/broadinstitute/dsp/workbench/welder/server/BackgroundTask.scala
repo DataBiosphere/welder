@@ -6,16 +6,14 @@ import cats.effect.{IO, Ref}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.Stream
-import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
-
 import java.io.File
 import java.nio.file.Path
 import java.util.UUID
+
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class BackgroundTask(
@@ -56,24 +54,23 @@ class BackgroundTask(
     }
 
   def flushBothCache(
-      storageLinksJsonBlobName: GcsBlobName,
-      gcsMetadataJsonBlobName: GcsBlobName
+      storageLinksJsonBlobName: CloudStorageBlob,
+      gcsMetadataJsonBlobName: CloudStorageBlob
   )(implicit logger: StructuredLogger[IO]): Stream[IO, Unit] =
     (Stream.sleep[IO](config.flushCacheInterval) ++ Stream.eval(flushBothCacheOnce(storageLinksJsonBlobName, gcsMetadataJsonBlobName))).repeat
 
   def flushBothCacheOnce(
-      storageLinksJsonBlobName: GcsBlobName,
-      gcsMetadataJsonBlobName: GcsBlobName
+      storageLinksJsonBlobName: CloudStorageBlob,
+      gcsMetadataJsonBlobName: CloudStorageBlob
   )(implicit logger: StructuredLogger[IO]): IO[Unit] = {
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
-      flushStorageLinks = flushCache(storageAlg, GsPath(config.stagingBucket, storageLinksJsonBlobName), storageLinksCache).handleErrorWith { t =>
+      sourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, storageLinksJsonBlobName)
+      flushStorageLinks = flushCache(storageAlg, sourceUri, storageLinksCache).handleErrorWith { t =>
         logger.info(t)("failed to flush storagelinks cache to GCS")
       }
-      flushMetadataCache = flushCache(storageAlg, GsPath(config.stagingBucket, gcsMetadataJsonBlobName), metadataCache).handleErrorWith { t =>
-        logger.info(t)("failed to flush metadata cache to GCS")
-      }
+      flushMetadataCache = flushCache(storageAlg, sourceUri, metadataCache).handleErrorWith(t => logger.info(t)("failed to flush metadata cache to GCS"))
       _ <- List(flushStorageLinks, flushMetadataCache).parSequence_
     } yield ()
   }
@@ -220,7 +217,7 @@ class BackgroundTask(
 
 final case class BackgroundTaskConfig(
     workingDirectory: Path,
-    stagingBucket: GcsBucketName,
+    stagingBucket: CloudStorageContainer,
     cleanUpLockInterval: FiniteDuration,
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,

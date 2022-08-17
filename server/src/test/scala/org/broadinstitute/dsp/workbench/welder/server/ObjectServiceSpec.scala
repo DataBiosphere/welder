@@ -1386,7 +1386,7 @@ class MockCloudStorageAlg extends CloudStorageAlg {
         .through(_root_.io.circe.fs2.decoder[IO, A])
     } yield a
 
-  override def cloudProvider: CloudProvider = ???
+  override def cloudProvider: CloudProvider = CloudProvider.Gcp
 
   override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
 
