@@ -3,8 +3,7 @@ package org.broadinstitute.dsp.workbench.welder
 import cats.effect.IO
 import cats.mtl.Ask
 import cats.implicits._
-import fs2.Pipe
-import fs2.Stream
+import fs2.{Pipe, Stream, text}
 import io.circe.Decoder
 import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
 import org.broadinstitute.dsde.workbench.model.TraceId
@@ -14,7 +13,8 @@ import java.nio.file.Path
 import com.azure.storage.blob.models.ListBlobsOptions
 import fs2.io.file.Files
 import org.broadinstitute.dsde.workbench.azure.{AzureStorageService, BlobName}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath}
+import org.broadinstitute.dsp.workbench.welder.SourceUri.AzurePath
+import org.typelevel.jawn.AsyncParser
 
 import scala.util.matching.Regex
 
@@ -146,10 +146,16 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
     case _ => super.uploadBlob(path)
   }
 
-  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, A] =
-    for {
-      traceId <- Stream.eval(ev.ask)
-      error <- Stream.eval(IO.raiseError[A](NotImplementedException(traceId, "getBlob not implemented for azure storage interp")))
-    } yield error
+  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, A] = path match {
+    case AzurePath(containerName, blobName) =>
+      for {
+        blob <- azureStorageService
+          .getBlob(containerName, blobName)
+          .through(text.utf8.decode)
+          .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+          .through(_root_.io.circe.fs2.decoder)
+      } yield blob
+    case _ => super.getBlob(path)
+  }
 
 }
