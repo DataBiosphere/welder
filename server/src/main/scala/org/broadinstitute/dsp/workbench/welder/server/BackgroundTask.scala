@@ -67,10 +67,11 @@ class BackgroundTask(
     for {
       storageAlg <- storageAlgRef.get
       sourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, storageLinksJsonBlobName)
+      metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, gcsMetadataJsonBlobName)
       flushStorageLinks = flushCache(storageAlg, sourceUri, storageLinksCache).handleErrorWith { t =>
         logger.info(t)("failed to flush storagelinks cache to GCS")
       }
-      flushMetadataCache = flushCache(storageAlg, sourceUri, metadataCache).handleErrorWith(t => logger.info(t)("failed to flush metadata cache to GCS"))
+      flushMetadataCache = flushCache(storageAlg, metadataSourceUri, metadataCache).handleErrorWith(t => logger.info(t)("failed to flush metadata cache to GCS"))
       _ <- List(flushStorageLinks, flushMetadataCache).parSequence_
     } yield ()
   }
