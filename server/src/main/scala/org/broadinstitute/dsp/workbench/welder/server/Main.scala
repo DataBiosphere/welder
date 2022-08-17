@@ -44,8 +44,7 @@ object Main extends IOApp {
       storageAlgRef <- Stream.eval(Ref[IO].of(storageAlg2))
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         storageAlgRef,
-        appConfig.stagingBucketName,
-        appConfig.storageLinksJsonBlobName,
+        SourceUri.GsPath(appConfig.stagingBucketName, appConfig.storageLinksJsonBlobName),
         storageLink => {
           val safeModeDirectory =
             storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
@@ -54,8 +53,7 @@ object Main extends IOApp {
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
-        appConfig.stagingBucketName,
-        appConfig.metadataJsonBlobName,
+        SourceUri.GsPath(appConfig.stagingBucketName, appConfig.metadataJsonBlobName),
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))

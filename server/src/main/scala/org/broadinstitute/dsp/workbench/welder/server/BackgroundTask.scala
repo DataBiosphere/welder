@@ -68,10 +68,10 @@ class BackgroundTask(
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
-      flushStorageLinks = flushCache(storageAlg, config.stagingBucket, storageLinksJsonBlobName, storageLinksCache).handleErrorWith { t =>
+      flushStorageLinks = flushCache(storageAlg, GsPath(config.stagingBucket, storageLinksJsonBlobName), storageLinksCache).handleErrorWith { t =>
         logger.info(t)("failed to flush storagelinks cache to GCS")
       }
-      flushMetadataCache = flushCache(storageAlg, config.stagingBucket, gcsMetadataJsonBlobName, metadataCache).handleErrorWith { t =>
+      flushMetadataCache = flushCache(storageAlg, GsPath(config.stagingBucket, gcsMetadataJsonBlobName), metadataCache).handleErrorWith { t =>
         logger.info(t)("failed to flush metadata cache to GCS")
       }
       _ <- List(flushStorageLinks, flushMetadataCache).parSequence_

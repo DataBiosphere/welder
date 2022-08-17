@@ -74,8 +74,9 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
       val res =
         cachedResource[String, String](
           Ref.of[IO, CloudStorageAlg](googleStorageAlg).unsafeRunSync(),
+          SourceUri.GsPath(
           gcsBucketName,
-          GcsBlobName("welder-metadata/storage_links.json"),
+          GcsBlobName("welder-metadata/storage_links.json")),
           s => List((s, s))
         ).compile.lastOrError
           .unsafeRunSync()

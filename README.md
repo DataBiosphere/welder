@@ -16,6 +16,7 @@ path-to-gcs-metadata-json = "gcs_metadata.json"
 object-service.working-directory = "/tmp"
 ```
 
+
 # Publish container image to Google container registry
 * Set up auth for publishing docker image to GCR
 `gcloud auth configure-docker`

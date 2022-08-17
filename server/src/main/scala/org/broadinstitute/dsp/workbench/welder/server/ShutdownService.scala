@@ -39,8 +39,8 @@ class ShutdownService(
     for {
       storageAlg <- storageAlgRef.get
 
-      flushStorageLinks = flushCache(storageAlg, config.stagingBucketName, config.storageLinksJsonBlobName, storageLinksCache)
-      flushMetadataCache = flushCache(storageAlg, config.stagingBucketName, config.gcsMetadataJsonBlobName, metadataCache)
+      flushStorageLinks = flushCache(storageAlg, GsPath(config.stagingBucketName, config.storageLinksJsonBlobName), storageLinksCache)
+      flushMetadataCache = flushCache(storageAlg, GsPath(config.stagingBucketName, config.gcsMetadataJsonBlobName), metadataCache)
 
       // Copy all welder log files and jupyter log file to staging bucket
       flushLogFiles = for {
