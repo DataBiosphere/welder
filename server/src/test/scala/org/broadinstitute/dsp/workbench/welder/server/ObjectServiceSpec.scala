@@ -499,7 +499,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
             IO(localObjectPath.asPath.toString shouldBe (localPath)) >>
               IO(gsPath.cloudProvider shouldBe (CloudProvider.Gcp)) >>
-              IO(gsPath.asInstanceOf[GsPath].bucketName shouldBe (cloudStorageDirectory.container.name)) >>
+              IO(gsPath.asInstanceOf[GsPath].bucketName.value shouldBe (cloudStorageDirectory.container.name)) >>
               IO(gsPath.asInstanceOf[GsPath].blobName shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
               IO(generation shouldBe (111L)) >>
               IO(Some(DelocalizeResponse(112L, Crc32("newHash"))))
@@ -778,7 +778,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
               userDefinedMeta: Map[String, String]
           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
             IO(localObjectPath.asPath.toString shouldBe (localPath)) >>
-              IO(gsPath.asInstanceOf[GsPath].bucketName shouldBe (cloudStorageDirectory.container.name)) >>
+              IO(gsPath.asInstanceOf[GsPath].bucketName.value shouldBe (cloudStorageDirectory.container.name)) >>
               IO(gsPath.asInstanceOf[GsPath].blobName shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
               IO(generation shouldBe (0L)) >>
               IO(Some(DelocalizeResponse(112L, Crc32("newHash"))))
@@ -1396,13 +1396,13 @@ class MockCloudStorageAlg extends CloudStorageAlg {
 
   override def cloudProvider: CloudProvider = CloudProvider.Gcp
 
-  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
+  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = IO(None)
 
-  override def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] = ???
+  override def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] = IO(Map.empty)
 
-  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = ???
+  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = Stream.empty
 
   override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex)(
       implicit ev: Ask[IO, TraceId]
-  ): Stream[IO, Option[AdaptedGcsMetadataCache]] = ???
+  ): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
 }
