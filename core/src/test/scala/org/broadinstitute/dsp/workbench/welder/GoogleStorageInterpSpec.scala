@@ -57,7 +57,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
     forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/work")), GoogleStorageServiceWithFailures)
-      val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
+      val localAbsolutePath = Paths.get(s"/work/${localObjectPath.asPath.toString}")
       // Create the local base directory
       val directory = new File(s"${localAbsolutePath.getParent.toString}")
       if (!directory.exists) {
@@ -69,7 +69,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- IO((new File(localAbsolutePath.toString)).delete())
       } yield {
         resp shouldBe Left(
-          GenerationMismatch(fakeTraceId, s"Remote version has changed for ${localAbsolutePath}. Generation mismatch (local generation: 0). null")
+          GenerationMismatch(fakeTraceId, s"Remote version has changed for $localAbsolutePath. Generation mismatch (local generation: 0). null")
         )
       }
       res.unsafeRunSync()
