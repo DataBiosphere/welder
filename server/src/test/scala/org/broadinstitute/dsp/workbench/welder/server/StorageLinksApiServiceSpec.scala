@@ -28,7 +28,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
         localBaseDirectory: RelativePath,
         cloudStorageDirectory: CloudStorageDirectory,
         workingDir: Path,
-        patter: Regex,
+        patter: Regex
     )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit

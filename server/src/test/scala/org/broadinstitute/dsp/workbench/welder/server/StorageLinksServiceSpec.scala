@@ -25,19 +25,21 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
     override def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] = ???
-    override  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] = ???
+    override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(
+        implicit ev: Ask[IO, TraceId]
+    ): Stream[IO, Option[AdaptedGcsMetadata]] = ???
     override def delocalize(
-                             localObjectPath: RelativePath,
-                             gsPath: SourceUri,
-                             generation: Long,
-                             userDefinedMeta: Map[String, String]
-                           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] = ???
-    override  def localizeCloudDirectory(
-                                          localBaseDirectory: RelativePath,
-                                          cloudStorageDirectory: CloudStorageDirectory,
-                                          workingDir: Path,
-                                          pattern: Regex
-                                        )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
+        localObjectPath: RelativePath,
+        gsPath: SourceUri,
+        generation: Long,
+        userDefinedMeta: Map[String, String]
+    )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] = ???
+    override def localizeCloudDirectory(
+        localBaseDirectory: RelativePath,
+        cloudStorageDirectory: CloudStorageDirectory,
+        workingDir: Path,
+        pattern: Regex
+    )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
     override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   })

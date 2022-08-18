@@ -138,7 +138,9 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       val localBaseDir = RelativePath(Paths.get("edit"))
 
       val res = for {
-        _ <- allObjects.traverse(obj => FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.container.asGcsBucket, obj, objectBody, objectType).compile.drain)
+        _ <- allObjects.traverse(obj =>
+          FakeGoogleStorageInterpreter.createBlob(cloudStorageDirectory.container.asGcsBucket, obj, objectBody, objectType).compile.drain
+        )
         _ <- googleStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r).compile.drain
       } yield {
         val prefix = (workingDir.resolve(localBaseDir.asPath))
