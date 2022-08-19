@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.mtl.Ask
 import fs2.Stream
-import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
+import org.broadinstitute.dsde.workbench.util2.RemoveObjectResult
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
 import org.scalatest.flatspec.AnyFlatSpec

@@ -8,8 +8,9 @@ import cats.mtl.Ask
 import fs2.io.file.Files
 import fs2.{Pipe, Stream, text}
 import org.broadinstitute.dsde.workbench.google2
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsde.workbench.util2.RemoveObjectResult
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.jawn.AsyncParser
 

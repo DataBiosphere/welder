@@ -5,7 +5,6 @@ import cats.mtl.Ask
 import cats.implicits._
 import fs2.{Pipe, Stream, text}
 import io.circe.Decoder
-import org.broadinstitute.dsde.workbench.google2.RemoveObjectResult
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.typelevel.log4cats.StructuredLogger
 import java.nio.file.Path
@@ -15,7 +14,7 @@ import fs2.io.file.Files
 import org.broadinstitute.dsde.workbench.azure.{AzureStorageService, BlobName}
 import org.broadinstitute.dsp.workbench.welder.SourceUri.AzurePath
 import org.typelevel.jawn.AsyncParser
-
+import org.broadinstitute.dsde.workbench.util2.RemoveObjectResult
 import scala.util.matching.Regex
 
 class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureStorageService[IO])(implicit logger: StructuredLogger[IO])

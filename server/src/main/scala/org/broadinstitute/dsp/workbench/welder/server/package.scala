@@ -2,7 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.std.Semaphore
 import cats.effect.{IO, Ref, Resource}
-import org.broadinstitute.dsde.workbench.azure.{AzureStorageConfig, AzureStorageService, EndpointUrl, SasToken}
+import org.broadinstitute.dsde.workbench.azure.{AzureStorageConfig, AzureStorageService, ContainerAuthConfig, EndpointUrl, SasToken}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.http4s.blaze.client
 import org.http4s.client.middleware.{Retry, RetryPolicy, Logger => Http4sLogger}
@@ -33,8 +33,18 @@ package object server {
           miscHttpClient = new MiscHttpClientInterp(client, conf.miscHttpClientConfig)
           petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
           sasTokenResp <- Resource.eval(miscHttpClient.getSasUrl(petAccessTokenResp.accessToken))
-          azureConfig = AzureStorageConfig(10 minutes, SasToken(sasTokenResp.token.value), EndpointUrl(sasTokenResp.uri.toString()))
-          azureStorageService <- AzureStorageService.fromSasToken[IO](azureConfig)
+          azureConfig = AzureStorageConfig(10 minutes, 10 minutes)
+          workspaceContainerAuthConfig = ContainerAuthConfig(SasToken(sasTokenResp.token.value), EndpointUrl(sasTokenResp.uri.toString()))
+          workspaceStagingContainerAuthConfig = ContainerAuthConfig(SasToken(sasTokenResp.token.value), EndpointUrl(sasTokenResp.uri.toString()))
+//          workspaceStagingContainerAuthConfig = ContainerAuthConfig(SasToken("dummy"), EndpointUrl("dummy"))
+          workspaceStorageContainer <- Resource.eval(IO.fromEither(getStorageContainerNameFromUrl(EndpointUrl(sasTokenResp.uri.toString()))))
+          azureStorageService <- AzureStorageService.fromSasToken[IO](
+            azureConfig,
+            Map(
+              workspaceStorageContainer -> workspaceContainerAuthConfig,
+              config.stagingBucketName.asAzureCloudContainer -> workspaceStagingContainerAuthConfig
+            )
+          )
         } yield CloudStorageAlg.forAzure(algConfig, azureStorageService)
     }
   }

@@ -13,13 +13,14 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.typelevel.log4cats.StructuredLogger
+
 import java.io.File
 import java.math.BigInteger
 import java.nio.file.{Path, Paths}
 import java.security.MessageDigest
 import java.util.Base64
-
 import cats.mtl.Ask
+import org.broadinstitute.dsde.workbench.azure.{ContainerName, EndpointUrl}
 
 import scala.util.matching.Regex
 
@@ -217,6 +218,12 @@ package object welder {
         case CloudProvider.None => IO.raiseError(InvalidSourceURIException(traceId, "Cannot get sourceURI with no cloud provider", Map.empty))
       }
     }
+
+  def getStorageContainerNameFromUrl(url: EndpointUrl): Either[Throwable, ContainerName] =
+    for {
+      splittedString <- Either.catchNonFatal(url.value.stripPrefix("https://").split("/")(1))
+      res <- Either.catchNonFatal(splittedString.split("\\?")(0))
+    } yield ContainerName(res)
 
   private[welder] val writeFileOptions = Flags.Write
 

@@ -4,12 +4,13 @@ import cats.effect.IO
 import cats.mtl.Ask
 import fs2.{Pipe, Stream}
 import io.circe.Decoder
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.typelevel.log4cats.StructuredLogger
-import java.nio.file.Path
 
+import java.nio.file.Path
 import org.broadinstitute.dsde.workbench.azure.AzureStorageService
+import org.broadinstitute.dsde.workbench.util2.RemoveObjectResult
 
 import scala.util.matching.Regex
 

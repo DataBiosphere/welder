@@ -2,6 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
+import org.broadinstitute.dsde.workbench.azure.{ContainerName, EndpointUrl}
 
 import java.nio.file.Paths
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
@@ -95,5 +96,13 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
 
     val resIpynb = findFilesWithPattern(parentPath, ".*.ipynb$".r)
     resIpynb.map(_.toString) shouldBe List("/tmp/test.ipynb")
+  }
+
+  "getStorageContainerNameFromUrl" should "parse container name properly" in {
+    val sasUrl =
+      EndpointUrl(
+        "https://sa442c39879ef8ba0c74cd.blob.core.windows.net/ls-saturn-72ca613f-eb77-4bb0-afea-88ed5ef1da85?sp=r&st=2022-08-17T18:59:32Z&se=2022-08-18T02:59:32Z&spr=https&sv=2021-06-08&sr=c&sig=Qmv2ExJwkVtOuSoxi%"
+      )
+    getStorageContainerNameFromUrl(sasUrl) shouldBe (Right(ContainerName("ls-saturn-72ca613f-eb77-4bb0-afea-88ed5ef1da85")))
   }
 }
