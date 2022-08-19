@@ -36,8 +36,8 @@ class ShutdownService(
     for {
       storageAlg <- storageAlgRef.get
 
-      storageLinksSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, config.storageLinksJsonBlobName)
-      metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, config.gcsMetadataJsonBlobName)
+      storageLinksSourceUri = CloudBlobPath(config.stagingBucketName, config.storageLinksJsonBlobName)
+      metadataSourceUri = CloudBlobPath(config.stagingBucketName, config.gcsMetadataJsonBlobName)
       flushStorageLinks = flushCache(storageAlg, storageLinksSourceUri, storageLinksCache)
       flushMetadataCache = flushCache(storageAlg, metadataSourceUri, metadataCache)
 
@@ -45,9 +45,7 @@ class ShutdownService(
       flushLogFiles = for {
         _ <- findFilesWithSuffix(config.workingDirectory, ".log").traverse_ { file =>
           val blobName = CloudStorageBlob(s"cluster-log-files/${file.getName}")
-          getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucketName, blobName).flatMap { sourceUri =>
-            storageAlg.fileToGcsAbsolutePath(file.toPath, sourceUri)
-          }
+          storageAlg.fileToGcsAbsolutePath(file.toPath, CloudBlobPath(config.stagingBucketName, blobName))
         }
       } yield ()
 

@@ -12,10 +12,9 @@ import cats.effect.{IO, Ref, Resource}
 import cats.implicits._
 import cats.mtl.Ask
 import fs2.io.file.Files
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
+import org.broadinstitute.dsp.workbench.welder.SourceUri.{CloudUri, DataUri}
 import org.broadinstitute.dsp.workbench.welder.server.ObjectService._
 import org.broadinstitute.dsp.workbench.welder.server.PostObjectRequest._
 import org.http4s.HttpRoutes
@@ -74,10 +73,10 @@ class ObjectService(
 
         val localizeFile = entry.sourceUri match {
           case DataUri(data) => Stream.emits(data).through(Files[IO].writeAll(fs2Path, writeFileOptions))
-          case _ =>
+          case CloudUri(cloudBlobPath) =>
             for {
               storageAlg <- Stream.eval(storageAlgRef.get)
-              meta <- storageAlg.gcsToLocalFile(localAbsolutePath, entry.sourceUri).last
+              meta <- storageAlg.gcsToLocalFile(localAbsolutePath, cloudBlobPath).last
               _ <- meta.flatten.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${entry.sourceUri} not found")))(m =>
                 Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
               )
@@ -107,8 +106,8 @@ class ObjectService(
       storageAlg <- storageAlgRef.get
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       current <- IO.realTimeInstant
-      gsPath = getGsPath(req.localObjectPath, context)
-      hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+      gsPath = getCloudBlobPath(req.localObjectPath, context)
+      hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.container, config.ownerEmail)))
       newLock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
       meta <- storageAlg.retrieveAdaptedGcsMetadata(req.localObjectPath, gsPath)
       _ <- meta match {
@@ -133,7 +132,7 @@ class ObjectService(
     preventConcurrentAction(actionToLock, req.localObjectPath)
   }
 
-  private def updateGcsMetadataAndCache(storageAlg: CloudStorageAlg, localPath: RelativePath, gsPath: GsPath, lock: Lock)(
+  private def updateGcsMetadataAndCache(storageAlg: CloudStorageAlg, localPath: RelativePath, gsPath: CloudBlobPath, lock: Lock)(
       implicit ev: Ask[IO, TraceId]
   ): IO[Unit] =
     storageAlg
@@ -165,7 +164,7 @@ class ObjectService(
         val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
         val actionToLock = for {
           metadata <- storageAlg
-            .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobName))
+            .retrieveAdaptedGcsMetadata(req.localObjectPath, CloudBlobPath(context.storageLink.cloudStorageDirectory.container, fullBlobName))
           result <- metadata match {
             case None =>
               metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
@@ -221,7 +220,8 @@ class ObjectService(
         val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
         val actionToLock: IO[Unit] = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
-          gsPath = getGsPath(req.localObjectPath, context)
+          gsPath = getCloudBlobPath(req.localObjectPath, context)
+
           now <- IO.realTimeInstant
           calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
@@ -238,7 +238,7 @@ class ObjectService(
                     IO.unit
                   else
                     for {
-                      _ <- lock.traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName))
+                      _ <- lock.traverse(l => checkLock(l, now.toEpochMilli, gsPath.container))
                       //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
                       //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
                       _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), lock)
@@ -247,7 +247,7 @@ class ObjectService(
             case None =>
               // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
               for {
-                hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+                hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.container, config.ownerEmail)))
                 current <- IO.realTimeInstant
                 lock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
                 _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, Some(lock))
@@ -266,7 +266,7 @@ class ObjectService(
       _ <- if (context.isSafeMode)
         IO.raiseError(DeleteSafeModeFileError(traceId, s"${req.localObjectPath} can't be deleted since it's in safe mode"))
       else {
-        val gsPath = getGsPath(req.localObjectPath, context)
+        val gsPath = getCloudBlobPath(req.localObjectPath, context)
         val actionToLock = for {
           previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
           now <- IO.realTimeInstant
@@ -276,7 +276,7 @@ class ObjectService(
                 case RemoteState.NotFound => IO.pure(0L)
                 case RemoteState.Found(lock, _) =>
                   lock
-                    .traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName)) //check if user owns the lock before deleting
+                    .traverse(l => checkLock(l, now.toEpochMilli, gsPath.container)) //check if user owns the lock before deleting
                     .as(meta.localFileGeneration.getOrElse(0L))
               }
             case None =>
@@ -290,13 +290,13 @@ class ObjectService(
       }
     } yield ()
 
-  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock])(
+  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, cloudBlobPath: CloudBlobPath, generation: Long, lock: Option[Lock])(
       implicit ev: Ask[IO, TraceId]
   ): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
       storageAlg <- storageAlgRef.get
-      delocalizeResp <- storageAlg.delocalize(localObjectPath, gsPath, generation, lockMetadataToPush).recoverWith {
+      delocalizeResp <- storageAlg.delocalize(localObjectPath, cloudBlobPath, generation, lockMetadataToPush).recoverWith {
         case e: com.google.cloud.storage.StorageException if e.getCode == 412 =>
           if (generation == 0L)
             IO.raiseError(e)
@@ -304,7 +304,7 @@ class ObjectService(
             // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
             // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
             // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-            storageAlg.delocalize(localObjectPath, gsPath, 0L, lockMetadataToPush)
+            storageAlg.delocalize(localObjectPath, cloudBlobPath, 0L, lockMetadataToPush)
           }
       }
       _ <- delocalizeResp.traverse(r => metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(lock, r.crc32c), r.generation))
@@ -314,7 +314,7 @@ class ObjectService(
   /**
     * If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
     */
-  private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+  private def checkLock(lock: Lock, now: Long, bucketName: CloudStorageContainer)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
       hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(bucketName, config.ownerEmail)))
@@ -497,7 +497,7 @@ final case class ObjectServiceConfig(
     lockExpiration: FiniteDuration
 )
 
-final case class GsPathAndMetadata(gsPath: GsPath, metadata: AdaptedGcsMetadata)
+final case class GsPathAndMetadata(gsPath: CloudBlobPath, metadata: AdaptedGcsMetadata)
 
 final case class AcquireLockRequest(localObjectPath: RelativePath)
 

@@ -6,10 +6,9 @@ object Dependencies {
   val grpcCoreVersion = "1.34.0"
   val scalaTestVersion = "3.2.13"
 
-  val workbenchLibsHash = "c8edf8e"
-  val azureWorkbenchLibsHash = "891b768"
+  val workbenchLibsHash = "b06385e8-SNAP"
   val workbenchGoogle2V = s"0.24-$workbenchLibsHash"
-  val workbenchAzureV = s"0.1-$azureWorkbenchLibsHash"
+  val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.1",

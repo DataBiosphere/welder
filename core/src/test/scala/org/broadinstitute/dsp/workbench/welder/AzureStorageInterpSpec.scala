@@ -2,24 +2,23 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import fs2.Stream
-import org.broadinstitute.dsp.workbench.welder.Generators._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath}
-import org.scalacheck.Gen
-import org.scalatest.flatspec.AnyFlatSpec
-import java.io.File
-import java.nio.file.{Path, Paths}
-
 import cats.mtl.Ask
 import com.azure.storage.blob.models.{BlobItem, ListBlobsOptions}
-import org.broadinstitute.dsde.workbench.azure.{BlobName, ContainerName}
+import fs2.Stream
 import org.broadinstitute.dsde.workbench.azure.mock.FakeAzureStorageService
+import org.broadinstitute.dsde.workbench.azure.{BlobName, ContainerName}
 import org.broadinstitute.dsde.workbench.model.TraceId
+import org.broadinstitute.dsp.workbench.welder.Generators._
+import org.scalacheck.Gen
+import org.scalatest.flatspec.AnyFlatSpec
+
+import java.io.File
+import java.nio.file.{Path, Paths}
 
 class AzureStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
 
   "gcsToLocalFile" should "be able to download a file from gcs and write to local path" in {
-    forAll { (localObjectPath: RelativePath, azurePath: AzurePath) =>
+    forAll { (localObjectPath: RelativePath, azurePath: CloudBlobPath) =>
       val azureStorage = CloudStorageAlg.forAzure(
         StorageAlgConfig(Paths.get("/work")),
         new FakeAzureStorageService {

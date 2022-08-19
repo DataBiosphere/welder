@@ -8,7 +8,6 @@ import cats.mtl.Ask
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
 import java.io.File
 import java.nio.file.Path
@@ -45,13 +44,10 @@ class BackgroundTask(
     (Stream.sleep[IO](config.cleanUpLockInterval) ++ Stream.eval(task)).repeat
   }
 
-  def updateStorageAlg(appConfig: AppConfig, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] =
-    appConfig match {
-      case _: AppConfig.Gcp => Stream.eval(IO.unit)
-      case _: AppConfig.Azure =>
-        val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s) >> IO.sleep(50 minutes))
-        Stream.eval(task).repeat
-    }
+  def updateStorageAlg(appConfig: AppConfig.Azure, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] = {
+    val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s.cloudStorageAlg))
+    (Stream.sleep_[IO](50 minutes) ++ Stream.eval(task)).repeat
+  }
 
   def flushBothCache(
       storageLinksJsonBlobName: CloudStorageBlob,
@@ -66,9 +62,11 @@ class BackgroundTask(
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
-      sourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, storageLinksJsonBlobName)
-      metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, gcsMetadataJsonBlobName)
-      flushStorageLinks = flushCache(storageAlg, sourceUri, storageLinksCache).handleErrorWith { t =>
+
+      storageLinksSourceUri = CloudBlobPath(config.stagingBucket, storageLinksJsonBlobName)
+      metadataSourceUri = CloudBlobPath(config.stagingBucket, gcsMetadataJsonBlobName)
+
+      flushStorageLinks = flushCache(storageAlg, storageLinksSourceUri, storageLinksCache).handleErrorWith { t =>
         logger.info(t)("failed to flush storagelinks cache to GCS")
       }
       flushMetadataCache = flushCache(storageAlg, metadataSourceUri, metadataCache).handleErrorWith(t =>
@@ -122,10 +120,10 @@ class BackgroundTask(
     }
   }
 
-  def checkSyncStatus(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+  def checkSyncStatus(gsPath: CloudBlobPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
-      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.container, config.ownerEmail)))
       storageAlg <- storageAlgRef.get
       bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath)
       _ <- bucketMetadata match {
@@ -141,7 +139,7 @@ class BackgroundTask(
     } yield ()
 
   private def checkCacheBeforeDelocalizing(
-      gsPath: GsPath,
+      gsPath: CloudBlobPath,
       localObjectPath: RelativePath,
       hashedOwnerEmail: HashedLockedBy,
       existingMetadata: Map[String, String]
@@ -172,7 +170,7 @@ class BackgroundTask(
 
   private def delocalizeAndUpdateCache(
       localObjectPath: RelativePath,
-      gsPath: GsPath,
+      gsPath: CloudBlobPath,
       generation: Long,
       traceId: TraceId,
       hashedOwnerEmail: HashedLockedBy,
@@ -208,13 +206,13 @@ class BackgroundTask(
     } yield ()
   }
 
-  def getGsPath(storageLink: StorageLink, file: File): GsPath = {
+  def getGsPath(storageLink: StorageLink, file: File): CloudBlobPath = {
     val fullBlobPath = getFullBlobName(
       storageLink.localBaseDirectory.path,
       storageLink.localBaseDirectory.path.asPath.resolve(file.toString),
       storageLink.cloudStorageDirectory.blobPath
     )
-    GsPath(storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobPath)
+    CloudBlobPath(storageLink.cloudStorageDirectory.container, fullBlobPath)
   }
 }
 
