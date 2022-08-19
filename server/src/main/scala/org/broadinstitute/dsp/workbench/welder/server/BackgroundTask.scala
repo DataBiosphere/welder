@@ -45,13 +45,10 @@ class BackgroundTask(
     (Stream.sleep[IO](config.cleanUpLockInterval) ++ Stream.eval(task)).repeat
   }
 
-  def updateStorageAlg(appConfig: AppConfig, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] =
-    appConfig match {
-      case _: AppConfig.Gcp => Stream.eval(IO.unit)
-      case _: AppConfig.Azure =>
-        val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s) >> IO.sleep(50 minutes))
-        Stream.eval(task).repeat
-    }
+  def updateStorageAlg(appConfig: AppConfig.Azure, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] = {
+    val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s.cloudStorageAlg))
+    (Stream.sleep_[IO](50 minutes) ++ Stream.eval(task)).repeat
+  }
 
   def flushBothCache(
       storageLinksJsonBlobName: CloudStorageBlob,
@@ -66,6 +63,7 @@ class BackgroundTask(
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
+      _ <- logger.info("33333 flushing caches")
       sourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, storageLinksJsonBlobName)
       metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, gcsMetadataJsonBlobName)
       flushStorageLinks = flushCache(storageAlg, sourceUri, storageLinksCache).handleErrorWith { t =>

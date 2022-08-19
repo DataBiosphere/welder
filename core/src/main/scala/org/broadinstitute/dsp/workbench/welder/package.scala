@@ -13,13 +13,14 @@ import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
 import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.typelevel.log4cats.StructuredLogger
+
 import java.io.File
 import java.math.BigInteger
 import java.nio.file.{Path, Paths}
 import java.security.MessageDigest
 import java.util.Base64
-
 import cats.mtl.Ask
+import org.broadinstitute.dsde.workbench.azure.{ContainerName, EndpointUrl}
 
 import scala.util.matching.Regex
 
@@ -52,11 +53,18 @@ package object welder {
         .ensure("objectName can't be empty")(s => s.nonEmpty)
     } yield GsPath(bucketName, GcsBlobName(objectName))
 
-  def getPossibleBaseDirectory(localPath: Path): List[Path] =
-    ((localPath.getNameCount - 1)
+  // When the local path is in the format of "<workspaceName>/<fileName>", this should return List("workspaceName");
+  // When the local path is in the format of "<fileName>", this should return List("")
+  def getPossibleBaseDirectory(localPath: Path): List[Path] = {
+    val res = ((localPath.getNameCount - 1)
       .to(1, -1))
       .map(index => localPath.subpath(0, index))
       .toList
+
+    if (res.size == 0)
+      List(Paths.get(""))
+    else res
+  }
 
   def getFullBlobName(basePath: RelativePath, localPath: Path, blobPath: Option[BlobPath]): GcsBlobName = {
     val subPath = basePath.asPath.relativize(localPath)
@@ -122,6 +130,7 @@ package object welder {
       ev: Ask[IO, TraceId]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
+      ctx <- Stream.eval(ev.ask)
       storageAlg <- Stream.eval(cloudStorageAlgRef.get)
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
       // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
@@ -129,6 +138,7 @@ package object welder {
       // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
       // This change is made on 3/26/2020
       traceId <- Stream.eval(ev.ask)
+      _ <- Stream.eval(logger.info(Map("traceId" -> ctx.asString))(s"Downloading cache from ${sourceUri}"))
       loadedCache <- sourceUri match {
         case _: SourceUri.DataUri => Stream.eval(IO.raiseError(InvalidSourceURIException(traceId, "tried to get cachedresource for data uri", Map.empty)))
         case GsPath(_, blobName) =>
@@ -141,7 +151,7 @@ package object welder {
                 .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
             }(x => Stream.eval(IO.pure(x)))
           } yield loadedCache
-        case SourceUri.AzurePath(_, _) =>
+        case SourceUri.AzurePath(_, blobName) =>
           for {
             loadedCache <- storageAlg
               .getBlob[List[B]](sourceUri)
@@ -214,6 +224,12 @@ package object welder {
         case CloudProvider.None => IO.raiseError(InvalidSourceURIException(traceId, "Cannot get sourceURI with no cloud provider", Map.empty))
       }
     }
+
+  def getStorageContainerNameFromUrl(url: EndpointUrl): Either[Throwable, ContainerName] =
+    for {
+      splittedString <- Either.catchNonFatal(url.value.stripPrefix("https://").split("/")(1))
+      res <- Either.catchNonFatal(splittedString.split("\\?")(0))
+    } yield ContainerName(res)
 
   private[welder] val writeFileOptions = Flags.Write
 

@@ -3,7 +3,6 @@ package server
 
 import java.nio.file.Path
 import java.nio.file.Paths
-
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -14,6 +13,7 @@ import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
 
+import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
 object Config {
@@ -42,7 +42,9 @@ sealed trait AppConfig extends Product with Serializable {
   def stagingBucketName: CloudStorageContainer
   def delocalizeDirectoryInterval: FiniteDuration
   def isRstudioRuntime: Boolean
-  def getSourceUri: SourceUri
+
+  def getStorageLinksJsonUri: SourceUri
+  def getMetadataJsonBlobNameUri: SourceUri
 }
 object AppConfig {
   final case class Gcp(
@@ -58,7 +60,8 @@ object AppConfig {
       delocalizeDirectoryInterval: FiniteDuration,
       isRstudioRuntime: Boolean
   ) extends AppConfig {
-    override def getSourceUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, storageLinksJsonBlobName.asGcs)
+    override def getStorageLinksJsonUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, storageLinksJsonBlobName.asGcs)
+    override def getMetadataJsonBlobNameUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, metadataJsonBlobName.asGcs)
   }
 
   final case class Azure(
@@ -73,9 +76,12 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       miscHttpClientConfig: MiscHttpClientConfig,
-      isRstudioRuntime: Boolean
+      isRstudioRuntime: Boolean,
+      workspaceStorageContainerResourceId: UUID,
+      stagingStorageContainerResourceId: UUID
   ) extends AppConfig {
-    override def getSourceUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, storageLinksJsonBlobName.asAzure)
+    override def getStorageLinksJsonUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, storageLinksJsonBlobName.asAzure)
+    override def getMetadataJsonBlobNameUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, metadataJsonBlobName.asAzure)
   }
 }
 
