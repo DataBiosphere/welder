@@ -123,6 +123,7 @@ package object welder {
       ev: Ask[IO, TraceId]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
+      ctx <- Stream.eval(ev.ask)
       storageAlg <- Stream.eval(cloudStorageAlgRef.get)
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
       // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
@@ -130,9 +131,10 @@ package object welder {
       // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
       // This change is made on 3/26/2020
       traceId <- Stream.eval(ev.ask)
+      _ <- Stream.eval(logger.info(Map("traceId" -> ctx.asString))(s"Downloading cache from ${sourceUri}"))
       loadedCache <- sourceUri match {
         case _: SourceUri.DataUri => Stream.eval(IO.raiseError(InvalidSourceURIException(traceId, "tried to get cachedresource for data uri", Map.empty)))
-        case GsPath(bucketName, blobName) =>
+        case GsPath(_, blobName) =>
           for {
             cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
             loadedCache <- cacheFromDisk.fold {
@@ -142,7 +144,7 @@ package object welder {
                 .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
             }(x => Stream.eval(IO.pure(x)))
           } yield loadedCache
-        case SourceUri.AzurePath(containerName, blobName) =>
+        case SourceUri.AzurePath(_, blobName) =>
           for {
             cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
             loadedCache <- cacheFromDisk.fold {

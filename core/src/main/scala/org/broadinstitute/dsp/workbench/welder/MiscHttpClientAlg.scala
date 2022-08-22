@@ -10,10 +10,10 @@ import org.broadinstitute.dsde.workbench.azure.SasToken
 
 trait MiscHttpClientAlg {
   def getPetAccessToken(): IO[PetAccessTokenResp]
-  def getSasUrl(petAccessToken: PetAccessToken): IO[SasTokenResp]
+  def getSasUrl(petAccessToken: PetAccessToken, storageContainerResourceId: UUID): IO[SasTokenResp]
 }
 
-final case class MiscHttpClientConfig(wsmUrl: Uri, workspaceId: UUID, storageContainerResourceId: UUID)
+final case class MiscHttpClientConfig(wsmUrl: Uri, workspaceId: UUID)
 final case class PetAccessToken(value: String) extends AnyVal
 final case class PetAccessTokenResp(accessToken: PetAccessToken)
 final case class SasTokenResp(uri: Uri, token: SasToken)

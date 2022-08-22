@@ -9,6 +9,8 @@ import org.http4s.circe.CirceEntityCodec.circeEntityDecoder
 import org.http4s.headers.Authorization
 import org.broadinstitute.dsp.workbench.welder.MiscHttpClientAlgCodec.decodeSasTokenResp
 
+import java.util.UUID
+
 class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig) extends MiscHttpClientAlg {
   override def getPetAccessToken(): IO[PetAccessTokenResp] = {
     val uri = (Uri.unsafeFromString("http://169.254.169.254") / "metadata" / "identity" / "oauth2" / "token")
@@ -29,9 +31,9 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
     )
   }
 
-  override def getSasUrl(petAccessToken: PetAccessToken): IO[SasTokenResp] = {
+  override def getSasUrl(petAccessToken: PetAccessToken, storageContainerResourceId: UUID): IO[SasTokenResp] = {
     val uri =
-      (config.wsmUrl / "api" / "workspaces" / "v1" / config.workspaceId.toString / "resources" / "controlled" / "azure" / "storageContainer" / config.storageContainerResourceId.toString / "getSasToken")
+      (config.wsmUrl / "api" / "workspaces" / "v1" / config.workspaceId.toString / "resources" / "controlled" / "azure" / "storageContainer" / storageContainerResourceId.toString / "getSasToken")
     httpClient.expect[SasTokenResp](
       Request[IO](
         method = Method.POST,

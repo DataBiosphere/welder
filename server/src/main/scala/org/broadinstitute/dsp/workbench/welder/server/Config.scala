@@ -3,7 +3,6 @@ package server
 
 import java.nio.file.Path
 import java.nio.file.Paths
-
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
@@ -14,6 +13,7 @@ import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
 
+import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
 object Config {
@@ -73,7 +73,9 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       miscHttpClientConfig: MiscHttpClientConfig,
-      isRstudioRuntime: Boolean
+      isRstudioRuntime: Boolean,
+      workspaceStorageContainerResourceId: UUID,
+      stagingStorageContainerResourceId: UUID
   ) extends AppConfig {
     override def getSourceUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, storageLinksJsonBlobName.asAzure)
   }
