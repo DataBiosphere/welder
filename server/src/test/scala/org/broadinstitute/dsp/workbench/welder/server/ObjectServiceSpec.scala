@@ -1384,7 +1384,8 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
 }
 
 class MockCloudStorageAlg extends CloudStorageAlg {
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
+  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = path match {
+    case GsPath(bucketName, blobName) =>
     for {
       blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
       a <- Stream
@@ -1393,14 +1394,14 @@ class MockCloudStorageAlg extends CloudStorageAlg {
         .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
         .through(_root_.io.circe.fs2.decoder[IO, A])
     } yield a
+    case _ => super.getBlob(path)
+  }
 
   override def cloudProvider: CloudProvider = CloudProvider.Gcp
 
   override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = IO(None)
 
   override def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] = IO(Map.empty)
-
-  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = Stream.empty
 
   override def localizeCloudDirectory(localBaseDirectory: RelativePath, cloudStorageDirectory: CloudStorageDirectory, workingDir: Path, pattern: Regex)(
       implicit ev: Ask[IO, TraceId]

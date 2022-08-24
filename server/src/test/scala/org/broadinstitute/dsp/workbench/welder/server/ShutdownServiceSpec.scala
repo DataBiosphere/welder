@@ -12,7 +12,6 @@ import fs2.{Pipe, Stream}
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
@@ -55,7 +54,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
       FakeGoogleStorageInterpreter
         .streamUploadBlob(path.asInstanceOf[GsPath].bucketName, path.asInstanceOf[GsPath].blobName)
 
-    override def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A] =
+    override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = path match {
+      case GsPath(bucketName, blobName) =>
       for {
         blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
         a <- Stream
@@ -64,6 +64,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
           .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
           .through(_root_.io.circe.fs2.decoder[IO, A])
       } yield a
+      case _ => Stream.eval(IO.raiseError(new RuntimeException("test error, wrong source URI given to getBlob in a MockCloudStorageAlg")))
+    }
   })
 
   "CacheService" should "return flush cache and log files" in {
@@ -79,14 +81,14 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
       )
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/flush"))
 
-      val welderLogContenct = "this is welder!"
-      val jupyterLogContenct = "this is jupyter!"
+      val welderLogContent = "this is welder!"
+      val jupyterLogContent = "this is jupyter!"
 
       val res = for {
         storageAlg <- fakeGoogleStorageAlg.get
         // write two fake log files
-        _ <- Stream.emits(welderLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/.welder.log"))).compile.drain
-        _ <- Stream.emits(jupyterLogContenct.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
+        _ <- Stream.emits(welderLogContent.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/.welder.log"))).compile.drain
+        _ <- Stream.emits(jupyterLogContent.getBytes("UTF-8")).through(Files[IO].writeAll(fs2.io.file.Path("/tmp/jupyter.log"))).compile.drain
 
         resp <- cacheService.service.run(request).value
         gcsMetadata <- storageAlg
@@ -94,7 +96,7 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
           .compile
           .lastOrError
         storageLinksCache <- storageAlg
-          .getBlob[List[StorageLink]](GsPath(config.stagingBucketName.asGcsBucket, config.gcsMetadataJsonBlobName.asGcs))
+          .getBlob[List[StorageLink]](GsPath(config.stagingBucketName.asGcsBucket, config.storageLinksJsonBlobName.asGcs))
           .compile
           .lastOrError
         welderLogInGcs <- FakeGoogleStorageInterpreter
@@ -116,8 +118,8 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         sl.localSafeModeBaseDirectory shouldBe storageLink.localSafeModeBaseDirectory
         sl.cloudStorageDirectory shouldBe storageLink.cloudStorageDirectory
         sl.pattern.toString() shouldBe storageLink.pattern.toString
-        new String(welderLogInGcs.getContent(), StandardCharsets.UTF_8) shouldBe welderLogContenct
-        new String(jupyterLogInGcs.getContent(), StandardCharsets.UTF_8) shouldBe jupyterLogContenct
+        new String(welderLogInGcs.getContent(), StandardCharsets.UTF_8) shouldBe welderLogContent
+        new String(jupyterLogInGcs.getContent(), StandardCharsets.UTF_8) shouldBe jupyterLogContent
       }
       res.unsafeRunSync()
     }
