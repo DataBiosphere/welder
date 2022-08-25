@@ -131,7 +131,7 @@ package object welder {
       traceId <- Stream.eval(ev.ask)
       loadedCache <- sourceUri match {
         case _: SourceUri.DataUri => Stream.eval(IO.raiseError(InvalidSourceURIException(traceId, "tried to get cachedresource for data uri", Map.empty)))
-        case GsPath(bucketName, blobName) =>
+        case GsPath(_, blobName) =>
           for {
             cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
             loadedCache <- cacheFromDisk.fold {
@@ -141,15 +141,12 @@ package object welder {
                 .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
             }(x => Stream.eval(IO.pure(x)))
           } yield loadedCache
-        case SourceUri.AzurePath(containerName, blobName) =>
+        case SourceUri.AzurePath(_, _) =>
           for {
-            cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
-            loadedCache <- cacheFromDisk.fold {
-              storageAlg
-                .getBlob[List[B]](sourceUri)
-                .last
-                .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
-            }(x => Stream.eval(IO.pure(x)))
+            loadedCache <- storageAlg
+              .getBlob[List[B]](sourceUri)
+              .last
+              .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
           } yield loadedCache
       }
 
