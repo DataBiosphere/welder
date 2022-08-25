@@ -16,6 +16,8 @@ package object server {
 
   private[server] def initStorageAlg(config: AppConfig, blockerBound: Semaphore[IO])(implicit logger: StructuredLogger[IO]): Resource[IO, CloudStorageAlg] = {
     val algConfig = StorageAlgConfig(config.objectService.workingDirectory)
+    val retryPolicy = RetryPolicy[IO](RetryPolicy.exponentialBackoff(30 seconds, 5))
+
     config match {
       case _: AppConfig.Gcp =>
         GoogleStorageService
@@ -24,8 +26,31 @@ package object server {
       case conf: AppConfig.Azure =>
         val azureConfig = AzureStorageConfig(10 minutes, 10 minutes)
         for {
-          workspaceContainerAuthConfig <- getContainerAuthConfig(conf.workspaceStorageContainerResourceId, conf.miscHttpClientConfig)
-          workspaceStagingContainerAuthConfig <- getContainerAuthConfig(conf.stagingStorageContainerResourceId, conf.miscHttpClientConfig)
+          httpClient <- client
+            .BlazeClientBuilder[IO]
+            .resource
+          httpClientWithLogging = Http4sLogger[IO](logHeaders = true, logBody = false)(
+            httpClient
+          )
+          client = Retry(retryPolicy)(httpClientWithLogging)
+          miscHttpClient = new MiscHttpClientInterp(client, conf.miscHttpClientConfig)
+          petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
+          workspaceContainerAuthConfig <- getContainerAuthConfig(
+            miscHttpClient,
+            petAccessTokenResp.accessToken,
+            conf.workspaceStorageContainerResourceId
+          )
+          workspaceStagingContainerAuthConfig <- getContainerAuthConfig(
+            miscHttpClient,
+            petAccessTokenResp.accessToken,
+            conf.stagingStorageContainerResourceId
+          )
+//          workspaceContainerAuthConfig = ContainerAuthConfig(
+//            SasToken("sp=r&st=2022-08-24T19:19:30Z&se=2022-08-25T03:19:30Z&spr=https&sv=2021-06-08&sr=c&sig=6HZvCu7FnFmCDML1jqLNxoNDVVftZ96LGPI%2FHS6MaBc%3D"),
+//            EndpointUrl(
+//              "https://sa645b86de374320be204a.blob.core.windows.net/sc-645b86de-7a2b-4c59-aefe-374320be204a?sp=r&st=2022-08-24T19:19:30Z&se=2022-08-25T03:19:30Z&spr=https&sv=2021-06-08&sr=c&sig=6HZvCu7FnFmCDML1jqLNxoNDVVftZ96LGPI%2FHS6MaBc%3D"
+//            )
+//          )
           workspaceStorageContainer <- Resource.eval(
             IO.fromEither(getStorageContainerNameFromUrl(EndpointUrl(workspaceContainerAuthConfig.endpointUrl.value)))
           )
@@ -40,26 +65,19 @@ package object server {
     }
   }
 
-  private def getContainerAuthConfig(containerResourceId: UUID, conf: MiscHttpClientConfig): Resource[IO, ContainerAuthConfig] = {
-    val retryPolicy = RetryPolicy[IO](RetryPolicy.exponentialBackoff(30 seconds, 5))
-
+  private def getContainerAuthConfig(
+      miscHttpClient: MiscHttpClientAlg,
+      accessToken: PetAccessToken,
+      containerResourceId: UUID
+  ): Resource[IO, ContainerAuthConfig] =
     for {
-      httpClient <- client
-        .BlazeClientBuilder[IO]
-        .resource
-      httpClientWithLogging = Http4sLogger[IO](logHeaders = true, logBody = false)(
-        httpClient
-      )
-      client = Retry(retryPolicy)(httpClientWithLogging)
-      miscHttpClient = new MiscHttpClientInterp(client, conf)
-      petAccessTokenResp <- Resource.eval(miscHttpClient.getPetAccessToken())
+
       workspaceStorageContainerSasTokenResp <- Resource.eval(
-        miscHttpClient.getSasUrl(petAccessTokenResp.accessToken, containerResourceId)
+        miscHttpClient.getSasUrl(accessToken, containerResourceId)
       )
       workspaceContainerAuthConfig = ContainerAuthConfig(
         SasToken(workspaceStorageContainerSasTokenResp.token.value),
         EndpointUrl(workspaceStorageContainerSasTokenResp.uri.toString())
       )
     } yield workspaceContainerAuthConfig
-  }
 }

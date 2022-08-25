@@ -2,7 +2,6 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.util.UUID
-
 import cats.effect.kernel.Ref
 import cats.effect.std.{Dispatcher, Semaphore}
 import cats.effect.unsafe.implicits.global
@@ -40,8 +39,8 @@ object Main extends IOApp {
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
-      storageAlg2 <- Stream.resource(initStorageAlg(appConfig, blockerBound))
-      storageAlgRef <- Stream.eval(Ref[IO].of(storageAlg2))
+      cloudStorageAlg <- Stream.resource(initStorageAlg(appConfig, blockerBound))
+      storageAlgRef <- Stream.eval(Ref[IO].of(cloudStorageAlg))
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         storageAlgRef,
         appConfig.getSourceUri,
@@ -51,11 +50,13 @@ object Main extends IOApp {
           List(storageLink.localBaseDirectory.path -> storageLink) ++ safeModeDirectory
         }
       )
+
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
         appConfig.getSourceUri,
         metadata => List(metadata.localPath -> metadata)
       )
+
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
       dispatcher <- Stream.resource(Dispatcher[IO])
       metadataCacheAlg = new MetadataCacheInterp(metadataCache)
@@ -103,7 +104,20 @@ object Main extends IOApp {
         appConfig.storageLinksJsonBlobName,
         appConfig.metadataJsonBlobName
       )
-      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
+
+      appConfig match {
+        case _: AppConfig.Gcp =>
+          List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
+        case x: AppConfig.Azure =>
+          println("2222: azure streams")
+
+          List(
+            flushCache,
+            backGroundTask.syncCloudStorageDirectory,
+            backGroundTask.updateStorageAlg(x, blockerBound, storageAlgRef),
+            serverStream.drain
+          )
+      }
     }
   }
 

@@ -76,7 +76,7 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
         localAbsolutePath <- IO.pure(config.workingDirectory.resolve(localObjectPath.asPath))
         _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
         fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-        _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(containerName, blobName)).compile.drain
+        _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(containerName, blobName, true)).compile.drain
       } yield Option.empty[DelocalizeResponse]
     case _ => super.delocalize(localObjectPath, gsPath, generation, userDefinedMeta)
   }
@@ -95,8 +95,8 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = gsPath match {
     case AzurePath(containerName, blobName) =>
       val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
-      logger.info(s"flushing file ${localFile}") >>
-        (Files[IO].readAll(fs2Path) through azureStorageService.uploadBlob(containerName, blobName)).compile.drain
+      logger.info(s"flushing file ${localFile} to ${gsPath}") >>
+        (Files[IO].readAll(fs2Path) through azureStorageService.uploadBlob(containerName, blobName, true)).compile.drain
     case _ => super.fileToGcsAbsolutePath(localFile, gsPath)
   }
 
@@ -141,7 +141,7 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
     } yield r.flatMap(_ => Option.empty[AdaptedGcsMetadataCache])
 
   override def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] = path match {
-    case AzurePath(containerName, blobName) => azureStorageService.uploadBlob(containerName, blobName)
+    case AzurePath(containerName, blobName) => azureStorageService.uploadBlob(containerName, blobName, true)
     case _ => super.uploadBlob(path)
   }
 

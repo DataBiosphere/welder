@@ -2,11 +2,11 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.14.2"
-  val http4sVersion = "1.0.0-M35"
+  val http4sVersion = "1.0.0-M34"
   val grpcCoreVersion = "1.34.0"
   val scalaTestVersion = "3.2.13"
 
-  val workbenchLibsHash = "1d121319-SNAP"
+  val workbenchLibsHash = "b06385e8-SNAP"
   val workbenchGoogle2V = s"0.24-$workbenchLibsHash"
   val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
