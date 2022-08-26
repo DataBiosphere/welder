@@ -81,7 +81,6 @@ class BackgroundTask(
     val res = for {
       storageAlg <- storageAlgRef.get
       storageLinks <- storageLinksCache.get
-      _ = println("3333 syncingggggg")
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
           (storageAlg

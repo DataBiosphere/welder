@@ -22,6 +22,7 @@ object Settings {
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
     javacOptions ++= Seq("--release", "17"),
+    run / fork := true,
     Compile / console / scalacOptions --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings")
   )
 

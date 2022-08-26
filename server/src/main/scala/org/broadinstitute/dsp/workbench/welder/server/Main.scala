@@ -99,6 +99,7 @@ object Main extends IOApp {
         .bindHttp(appConfig.serverPort, "0.0.0.0")
         .withHttpApp(welderApp.service)
         .serveWhile(shutDownSignal, Ref.unsafe[IO, ExitCode](ExitCode.Success))
+        .drain
 
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
@@ -109,13 +110,11 @@ object Main extends IOApp {
         case _: AppConfig.Gcp =>
           List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
         case x: AppConfig.Azure =>
-          println("2222: azure streams")
-
           List(
             flushCache,
             backGroundTask.syncCloudStorageDirectory,
             backGroundTask.updateStorageAlg(x, blockerBound, storageAlgRef),
-            serverStream.drain
+            serverStream
           )
       }
     }
