@@ -1,90 +1,75 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
-import cats.mtl.Ask
 import cats.implicits._
-import fs2.{Pipe, Stream, text}
-import io.circe.Decoder
-import org.broadinstitute.dsde.workbench.model.TraceId
-import org.typelevel.log4cats.StructuredLogger
-import java.nio.file.Path
-
+import cats.mtl.Ask
 import com.azure.storage.blob.models.ListBlobsOptions
 import fs2.io.file.Files
-import org.broadinstitute.dsde.workbench.azure.{AzureStorageService, BlobName}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.AzurePath
-import org.typelevel.jawn.AsyncParser
+import fs2.{Pipe, Stream, text}
+import io.circe.Decoder
+import org.broadinstitute.dsde.workbench.azure.AzureStorageService
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.util2.RemoveObjectResult
+import org.typelevel.jawn.AsyncParser
+import org.typelevel.log4cats.StructuredLogger
+
+import java.nio.file.Path
 import scala.util.matching.Regex
 
 class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureStorageService[IO])(implicit logger: StructuredLogger[IO])
     extends CloudStorageAlg {
-  override def cloudProvider: CloudProvider = CloudProvider.Azure
 
-  override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] = gsPath match {
-    case _: AzurePath =>
-      ev.ask[TraceId]
-        .flatMap(traceId => IO.raiseError[UpdateMetadataResponse](NotImplementedException(traceId, "update metadata not implemented for azure storage")))
-    case _ => super.updateMetadata(gsPath, metadata)
-  }
+  override def updateMetadata(gsPath: CloudBlobPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
+    ev.ask[TraceId]
+      .flatMap(traceId => IO.raiseError[UpdateMetadataResponse](NotImplementedException(traceId, "update metadata not implemented for azure storage")))
 
-  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] =
+  override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] =
     ev.ask[TraceId]
       .flatMap(traceId =>
         IO.raiseError[Option[AdaptedGcsMetadata]](NotImplementedException(traceId, "retrieveAdaptedGcsMetadata not implemented for azure storage"))
       )
 
-  override def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] =
+  override def retrieveUserDefinedMetadata(gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] =
     ev.ask[TraceId]
       .flatMap(traceId => IO.raiseError[Map[String, String]](NotImplementedException(traceId, "retrieveUserDefinedMetadata not implemented for azure storage")))
 
-  override def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, RemoveObjectResult] =
-    gsPath match {
-      case AzurePath(containerName, blobName) =>
-        for {
-          //TODO: remove asInstanceOf with new wblibs version
-          resp <- Stream.eval(azureStorageService.deleteBlob(containerName, blobName).map(_.asInstanceOf[RemoveObjectResult]))
-        } yield resp
-      case _ => super.removeObject(gsPath, generation)
-    }
+  override def removeObject(gsPath: CloudBlobPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, RemoveObjectResult] =
+    for {
+      resp <- Stream.eval(azureStorageService.deleteBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure))
+    } yield resp
 
   /**
     * Overwrites the file if it already exists locally
     */
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
-    gsPath match {
-      case AzurePath(containerName, blobName) =>
-        for {
-          _ <- Stream
-            .eval(azureStorageService.downloadBlob(containerName, blobName, localAbsolutePath, overwrite = true))
-        } yield Option.empty[AdaptedGcsMetadata]
-      case _ => super.gcsToLocalFile(localAbsolutePath, gsPath)
-    }
+  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
+      implicit ev: Ask[IO, TraceId]
+  ): Stream[IO, Option[AdaptedGcsMetadata]] =
+    for {
+      _ <- Stream
+        .eval(azureStorageService.downloadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, localAbsolutePath, overwrite = true))
+    } yield Option.empty[AdaptedGcsMetadata]
 
   /**
     * Delocalize user's files to GCS.
     */
   override def delocalize(
       localObjectPath: RelativePath,
-      gsPath: SourceUri,
+      gsPath: CloudBlobPath,
       generation: Long,
       userDefinedMeta: Map[String, String]
-  )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] = gsPath match {
-    case AzurePath(containerName, blobName) =>
-      for {
-        traceId <- ev.ask[TraceId]
-        localAbsolutePath <- IO.pure(config.workingDirectory.resolve(localObjectPath.asPath))
-        _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
-        fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-        _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(containerName, blobName, true)).compile.drain
-      } yield Option.empty[DelocalizeResponse]
-    case _ => super.delocalize(localObjectPath, gsPath, generation, userDefinedMeta)
-  }
+  )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
+    for {
+      traceId <- ev.ask[TraceId]
+      localAbsolutePath <- IO.pure(config.workingDirectory.resolve(localObjectPath.asPath))
+      _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
+      fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
+      _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
+    } yield Option.empty[DelocalizeResponse]
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
+  override def fileToGcs(localObjectPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
@@ -92,12 +77,10 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = gsPath match {
-    case AzurePath(containerName, blobName) =>
-      val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
-      logger.info(s"flushing file ${localFile} to ${gsPath}") >>
-        (Files[IO].readAll(fs2Path) through azureStorageService.uploadBlob(containerName, blobName, true)).compile.drain
-    case _ => super.fileToGcsAbsolutePath(localFile, gsPath)
+  override def fileToGcsAbsolutePath(localFile: Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
+    val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
+    logger.info(s"flushing file ${localFile} to ${gsPath}") >>
+      (Files[IO].readAll(fs2Path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
   }
 
   /**
@@ -133,28 +116,23 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
               case true => Stream(None).covary[IO]
               case false =>
                 Stream.eval(mkdirIfNotExist(localAbsolutePath.getParent)) >>
-                  gcsToLocalFile(localAbsolutePath, AzurePath(cloudStorageDirectory.container.asAzureCloudContainer, BlobName(blobName)))
+                  gcsToLocalFile(localAbsolutePath, CloudBlobPath(cloudStorageDirectory.container, CloudStorageBlob(blobName)))
             }
           } yield result
         case None => Stream(None).covary[IO]
       }
     } yield r.flatMap(_ => Option.empty[AdaptedGcsMetadataCache])
 
-  override def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] = path match {
-    case AzurePath(containerName, blobName) => azureStorageService.uploadBlob(containerName, blobName, true)
-    case _ => super.uploadBlob(path)
-  }
+  override def uploadBlob(path: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
+    azureStorageService.uploadBlob(path.container.asAzureCloudContainer, path.blobPath.asAzure, true)
 
-  override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, A] = path match {
-    case AzurePath(containerName, blobName) =>
-      for {
-        blob <- azureStorageService
-          .getBlob(containerName, blobName)
-          .through(text.utf8.decode)
-          .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
-          .through(_root_.io.circe.fs2.decoder)
-      } yield blob
-    case _ => super.getBlob(path)
-  }
+  override def getBlob[A: Decoder](path: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): fs2.Stream[IO, A] =
+    for {
+      blob <- azureStorageService
+        .getBlob(path.container.asAzureCloudContainer, path.blobPath.asAzure)
+        .through(text.utf8.decode)
+        .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+        .through(_root_.io.circe.fs2.decoder)
+    } yield blob
 
 }

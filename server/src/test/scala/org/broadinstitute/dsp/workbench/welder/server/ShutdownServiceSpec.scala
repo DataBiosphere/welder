@@ -14,7 +14,6 @@ import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.Generators._
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.typelevel.jawn.AsyncParser
@@ -33,7 +32,7 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
       CloudStorageContainer("fakeStagingBucket")
     )
   val fakeGoogleStorageAlg = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
-    override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
+    override def updateMetadata(gsPath: CloudBlobPath, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def localizeCloudDirectory(
         localBaseDirectory: RelativePath,
@@ -41,31 +40,28 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
         workingDir: Path,
         pattern: Regex
     )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
       Files[IO].readAll(fs2.io.file.Path.fromNioPath(localFile)).compile.to(Array).flatMap { body =>
         FakeGoogleStorageInterpreter
-          .createBlob(gsPath.asInstanceOf[GsPath].bucketName, gsPath.asInstanceOf[GsPath].blobName, body, gcpObjectType, Map.empty, None)
+          .createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, body, gcpObjectType, Map.empty, None)
           .void
           .compile
           .lastOrError
       }
-    override def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
+    override def uploadBlob(path: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
       FakeGoogleStorageInterpreter
-        .streamUploadBlob(path.asInstanceOf[GsPath].bucketName, path.asInstanceOf[GsPath].blobName)
+        .streamUploadBlob(path.container.asGcsBucket, path.blobPath.asGcs)
 
-    override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = path match {
-      case GsPath(bucketName, blobName) =>
-        for {
-          blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
-          a <- Stream
-            .emits(blob.getContent())
-            .through(fs2.text.utf8.decode)
-            .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
-            .through(_root_.io.circe.fs2.decoder[IO, A])
-        } yield a
-      case _ => Stream.eval(IO.raiseError(new RuntimeException("test error, wrong source URI given to getBlob in a MockCloudStorageAlg")))
-    }
+    override def getBlob[A: Decoder](path: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] =
+      for {
+        blob <- FakeGoogleStorageInterpreter.getBlob(path.container.asGcsBucket, path.blobPath.asGcs, None)
+        a <- Stream
+          .emits(blob.getContent())
+          .through(fs2.text.utf8.decode)
+          .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+          .through(_root_.io.circe.fs2.decoder[IO, A])
+      } yield a
   })
 
   "CacheService" should "return flush cache and log files" in {
@@ -92,11 +88,11 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
         resp <- cacheService.service.run(request).value
         gcsMetadata <- storageAlg
-          .getBlob[List[AdaptedGcsMetadataCache]](GsPath(config.stagingBucketName.asGcsBucket, config.gcsMetadataJsonBlobName.asGcs))
+          .getBlob[List[AdaptedGcsMetadataCache]](CloudBlobPath(config.stagingBucketName, config.gcsMetadataJsonBlobName))
           .compile
           .lastOrError
         storageLinksCache <- storageAlg
-          .getBlob[List[StorageLink]](GsPath(config.stagingBucketName.asGcsBucket, config.storageLinksJsonBlobName.asGcs))
+          .getBlob[List[StorageLink]](CloudBlobPath(config.stagingBucketName, config.storageLinksJsonBlobName))
           .compile
           .lastOrError
         welderLogInGcs <- FakeGoogleStorageInterpreter

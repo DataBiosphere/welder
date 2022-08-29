@@ -8,7 +8,6 @@ import cats.mtl.Ask
 import fs2.Stream
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
 import java.io.File
 import java.nio.file.Path
@@ -63,10 +62,11 @@ class BackgroundTask(
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       storageAlg <- storageAlgRef.get
-      _ <- logger.info("33333 flushing caches")
-      sourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, storageLinksJsonBlobName)
-      metadataSourceUri <- getSourceUriForProvider(storageAlg.cloudProvider, config.stagingBucket, gcsMetadataJsonBlobName)
-      flushStorageLinks = flushCache(storageAlg, sourceUri, storageLinksCache).handleErrorWith { t =>
+
+      storageLinksSourceUri = CloudBlobPath(config.stagingBucket, storageLinksJsonBlobName)
+      metadataSourceUri = CloudBlobPath(config.stagingBucket, gcsMetadataJsonBlobName)
+
+      flushStorageLinks = flushCache(storageAlg, storageLinksSourceUri, storageLinksCache).handleErrorWith { t =>
         logger.info(t)("failed to flush storagelinks cache to GCS")
       }
       flushMetadataCache = flushCache(storageAlg, metadataSourceUri, metadataCache).handleErrorWith(t =>
@@ -120,10 +120,10 @@ class BackgroundTask(
     }
   }
 
-  def checkSyncStatus(gsPath: GsPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+  def checkSyncStatus(gsPath: CloudBlobPath, localObjectPath: RelativePath)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
-      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+      hashedOwnerEmail <- IO.fromEither(hashString(lockedByString(gsPath.container, config.ownerEmail)))
       storageAlg <- storageAlgRef.get
       bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath)
       _ <- bucketMetadata match {
@@ -139,7 +139,7 @@ class BackgroundTask(
     } yield ()
 
   private def checkCacheBeforeDelocalizing(
-      gsPath: GsPath,
+      gsPath: CloudBlobPath,
       localObjectPath: RelativePath,
       hashedOwnerEmail: HashedLockedBy,
       existingMetadata: Map[String, String]
@@ -170,7 +170,7 @@ class BackgroundTask(
 
   private def delocalizeAndUpdateCache(
       localObjectPath: RelativePath,
-      gsPath: GsPath,
+      gsPath: CloudBlobPath,
       generation: Long,
       traceId: TraceId,
       hashedOwnerEmail: HashedLockedBy,
@@ -206,13 +206,13 @@ class BackgroundTask(
     } yield ()
   }
 
-  def getGsPath(storageLink: StorageLink, file: File): GsPath = {
+  def getGsPath(storageLink: StorageLink, file: File): CloudBlobPath = {
     val fullBlobPath = getFullBlobName(
       storageLink.localBaseDirectory.path,
       storageLink.localBaseDirectory.path.asPath.resolve(file.toString),
       storageLink.cloudStorageDirectory.blobPath
     )
-    GsPath(storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobPath)
+    CloudBlobPath(storageLink.cloudStorageDirectory.container, fullBlobPath)
   }
 }
 

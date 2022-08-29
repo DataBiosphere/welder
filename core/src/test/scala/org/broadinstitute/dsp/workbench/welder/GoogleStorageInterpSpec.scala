@@ -15,7 +15,6 @@ import org.broadinstitute.dsde.workbench.google2.{GcsBlobName, GetMetadataRespon
 import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.Generators._
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -25,7 +24,7 @@ import java.nio.file.Paths
 class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   //if one day java emulator supports metadata, we shouldn't ignore this test
   ignore should "be able to set metadata when 403 happens" in {
-    forAll { (gsPath: GsPath) =>
+    forAll { (gsPath: CloudBlobPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val googleStorage = new BaseFakeGoogleStorage {
         override def setObjectMetadata(
@@ -43,9 +42,9 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       }
       val googleStorageAlg = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), googleStorage)
       val res = for {
-        _ <- googleStorage.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
+        _ <- googleStorage.createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, bodyBytes, "text/plain", Map.empty, None, None).compile.drain
         _ <- googleStorageAlg.updateMetadata(gsPath, Map("lastLockedBy" -> "me"))
-        meta <- googleStorage.getObjectMetadata(gsPath.bucketName, gsPath.blobName, None).compile.lastOrError
+        meta <- googleStorage.getObjectMetadata(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, None).compile.lastOrError
       } yield {
         meta.asInstanceOf[GetMetadataResponse.Metadata].userDefined.get("lastLockedBy") shouldBe ("me")
       }
@@ -54,7 +53,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   "delocalize" should "fail with GenerationMismatch exception if remote file has changed" in {
-    forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
+    forAll { (localObjectPath: RelativePath, gsPath: CloudBlobPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/work")), GoogleStorageServiceWithFailures)
       val localAbsolutePath = Paths.get(s"/work/${localObjectPath.asPath.toString}")
@@ -77,7 +76,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   "gcsToLocalFile" should "be able to download a file from gcs and write to local path" in {
-    forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
+    forAll { (localObjectPath: RelativePath, gsPath: CloudBlobPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
@@ -87,7 +86,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         directory.mkdirs
       }
       val res = for {
-        _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
+        _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, bodyBytes, "text/plain", Map.empty, None)
         resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath)
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
       } yield {
@@ -99,7 +98,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   it should "overwrite a file if it already exists " in {
-    forAll { (localObjectPath: RelativePath, gsPath: GsPath) =>
+    forAll { (localObjectPath: RelativePath, gsPath: CloudBlobPath) =>
       val bodyBytes = "this is great!".getBytes("UTF-8")
       val googleStorage = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val localAbsolutePath = Paths.get(s"/tmp/${localObjectPath.asPath.toString}")
@@ -109,7 +108,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         directory.mkdirs
       }
       val res = for {
-        _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.bucketName, gsPath.blobName, bodyBytes, "text/plain", Map.empty, None)
+        _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, bodyBytes, "text/plain", Map.empty, None)
         _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through Files[IO].writeAll(fs2.io.file.Path.fromNioPath(localAbsolutePath))) ++ Stream
           .eval(IO.unit)
         resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath)

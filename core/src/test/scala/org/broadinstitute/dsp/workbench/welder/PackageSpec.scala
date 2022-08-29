@@ -9,29 +9,28 @@ import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.Generators.arbGcsBucketName
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.broadinstitute.dsp.workbench.welder.Generators.arbCloudStorageContainer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   "parseGsPath" should "be able to parse gs path correctly" in {
-    forAll { (bucketName: GcsBucketName) =>
-      val gsPath = s"gs://${bucketName.value}/notebooks/sub/1.ipynb"
-      parseGsPath(gsPath) shouldBe (Right(GsPath(bucketName, GcsBlobName("notebooks/sub/1.ipynb"))))
+    forAll { (bucketName: CloudStorageContainer) =>
+      val gsPath = s"gs://${bucketName.name}/notebooks/sub/1.ipynb"
+      parseCloudBlobPath(gsPath) shouldBe (Right(CloudBlobPath(bucketName, CloudStorageBlob("notebooks/sub/1.ipynb"))))
+
+      val azurePath = s"${bucketName.name}/notebooks/sub/1.ipynb"
+      parseCloudBlobPath(azurePath) shouldBe (Right(CloudBlobPath(bucketName, CloudStorageBlob("notebooks/sub/1.ipynb"))))
     }
   }
 
   it should "fail to parse gs path when input is invalid" in {
-    forAll { (bucketName: GcsBucketName) =>
-      val gsPath = s"gs://${bucketName.value}"
-      parseGsPath(gsPath) shouldBe (Left("objectName can't be empty"))
+    forAll { (bucketName: CloudStorageContainer) =>
+      val gsPath = s"gs://${bucketName.name}"
+      parseCloudBlobPath(gsPath) shouldBe (Left("objectName can't be empty"))
 
       val gsPath2 = s"gs:///"
-      parseGsPath(gsPath2) shouldBe (Left("failed to parse bucket name"))
-
-      val gsPath3 = s"invalidgs://"
-      parseGsPath(gsPath3) shouldBe (Left("gs directory has to be prefixed with gs://"))
+      parseCloudBlobPath(gsPath2) shouldBe (Left("failed to parse bucket name"))
     }
   }
 
@@ -70,12 +69,12 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
   }
 
   "cachedResource" should "load empty cache if it doesn't exist in both local disk and gcs" in {
-    forAll { (gcsBucketName: GcsBucketName) =>
+    forAll { (gcsBucketName: CloudStorageContainer) =>
       val googleStorageAlg = CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), FakeGoogleStorageInterpreter)
       val res =
         cachedResource[String, String](
           Ref.of[IO, CloudStorageAlg](googleStorageAlg).unsafeRunSync(),
-          SourceUri.GsPath(gcsBucketName, GcsBlobName("welder-metadata/storage_links.json")),
+          CloudBlobPath(gcsBucketName, CloudStorageBlob("welder-metadata/storage_links.json")),
           s => List((s, s))
         ).compile.lastOrError
           .unsafeRunSync()

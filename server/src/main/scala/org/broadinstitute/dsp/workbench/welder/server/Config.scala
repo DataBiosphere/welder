@@ -1,18 +1,16 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
-import java.nio.file.Path
-import java.nio.file.Paths
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.http4s.Uri
-import pureconfig.{ConfigReader, ConfigSource}
-import pureconfig.generic.auto._
 import pureconfig.error.ExceptionThrown
+import pureconfig.generic.auto._
+import pureconfig.{ConfigReader, ConfigSource}
 
+import java.nio.file.{Path, Paths}
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
@@ -43,8 +41,8 @@ sealed trait AppConfig extends Product with Serializable {
   def delocalizeDirectoryInterval: FiniteDuration
   def isRstudioRuntime: Boolean
 
-  def getStorageLinksJsonUri: SourceUri
-  def getMetadataJsonBlobNameUri: SourceUri
+  def getStorageLinksJsonUri: CloudBlobPath = CloudBlobPath(stagingBucketName, storageLinksJsonBlobName)
+  def getMetadataJsonBlobNameUri: CloudBlobPath = CloudBlobPath(stagingBucketName, metadataJsonBlobName)
 }
 object AppConfig {
   final case class Gcp(
@@ -59,10 +57,7 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       isRstudioRuntime: Boolean
-  ) extends AppConfig {
-    override def getStorageLinksJsonUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, storageLinksJsonBlobName.asGcs)
-    override def getMetadataJsonBlobNameUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, metadataJsonBlobName.asGcs)
-  }
+  ) extends AppConfig
 
   final case class Azure(
       serverPort: Int,
@@ -79,10 +74,7 @@ object AppConfig {
       isRstudioRuntime: Boolean,
       workspaceStorageContainerResourceId: UUID,
       stagingStorageContainerResourceId: UUID
-  ) extends AppConfig {
-    override def getStorageLinksJsonUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, storageLinksJsonBlobName.asAzure)
-    override def getMetadataJsonBlobNameUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, metadataJsonBlobName.asAzure)
-  }
+  ) extends AppConfig
 }
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
