@@ -9,9 +9,7 @@ import cats.mtl.Ask
 import fs2.{Stream, text}
 import io.circe.parser
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.{Method, Request, Status, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,17 +22,16 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
   val storageLinks = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
   val workingDirectory = Paths.get("/tmp")
   val googleStorageAlg = Ref.unsafe[IO, CloudStorageAlg](new MockCloudStorageAlg {
-    override def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse] =
+    override def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def localizeCloudDirectory(
         localBaseDirectory: RelativePath,
         cloudStorageDirectory: CloudStorageDirectory,
         workingDir: Path,
-        patter: Regex,
-        traceId: TraceId
-    ): Stream[IO, AdaptedGcsMetadataCache] = Stream.empty
-    override def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
-    override def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+        patter: Regex
+    )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]] = Stream.empty
+    override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
+    override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   })
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
   val storageLinksServiceResource = Dispatcher[IO].map(d =>
@@ -46,7 +43,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
       d
     )
   )
-  val cloudStorageDirectory = CloudStorageDirectory(GcsBucketName("foo"), Some(BlobPath("bar")))
+  val cloudStorageDirectory = CloudStorageDirectory(CloudStorageContainer("foo"), Some(BlobPath("bar")))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))
 

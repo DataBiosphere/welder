@@ -8,17 +8,19 @@ import fs2.{Pipe, Stream}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Printer}
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
-import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
+import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsde.workbench.util2
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
+import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.typelevel.log4cats.StructuredLogger
-
 import java.io.File
 import java.math.BigInteger
 import java.nio.file.{Path, Paths}
 import java.security.MessageDigest
 import java.util.Base64
+
+import cats.mtl.Ask
+
 import scala.util.matching.Regex
 
 package object welder {
@@ -88,7 +90,7 @@ package object welder {
   def getGsPath(localObjectPath: RelativePath, basePathAndStorageLink: CommonContext): GsPath = {
     val fullBlobName =
       getFullBlobName(basePathAndStorageLink.basePath, localObjectPath.asPath, basePathAndStorageLink.storageLink.cloudStorageDirectory.blobPath)
-    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.bucketName, fullBlobName)
+    GsPath(basePathAndStorageLink.storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobName)
   }
 
   //Note that bucketName below does NOT include the gs:// prefix
@@ -113,11 +115,11 @@ package object welder {
 
   private[welder] def cachedResource[A, B: Decoder: Encoder](
       cloudStorageAlgRef: Ref[IO, CloudStorageAlg],
-      stagingBucketName: GcsBucketName,
-      blobName: GcsBlobName,
+      sourceUri: SourceUri,
       toTuple: B => List[(A, B)]
   )(
-      implicit logger: StructuredLogger[IO]
+      implicit logger: StructuredLogger[IO],
+      ev: Ask[IO, TraceId]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       storageAlg <- Stream.eval(cloudStorageAlgRef.get)
@@ -126,17 +128,31 @@ package object welder {
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
       // Code for reading from disk can be deleted once we're positive that all user clusters are upgraded or when we no longer care.
       // This change is made on 3/26/2020
-      cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
-      loadedCache <- cacheFromDisk.fold {
-        storageAlg
-          .getBlob[List[B]](stagingBucketName, blobName)
-          .last
-          .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
-      }(x => Stream.eval(IO.pure(x)))
+      traceId <- Stream.eval(ev.ask)
+      loadedCache <- sourceUri match {
+        case _: SourceUri.DataUri => Stream.eval(IO.raiseError(InvalidSourceURIException(traceId, "tried to get cachedresource for data uri", Map.empty)))
+        case GsPath(_, blobName) =>
+          for {
+            cacheFromDisk <- localCache[B](Paths.get(s"/work/.welder/${blobName.value.split("/")(1)}"))
+            loadedCache <- cacheFromDisk.fold {
+              storageAlg
+                .getBlob[List[B]](sourceUri)
+                .last
+                .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
+            }(x => Stream.eval(IO.pure(x)))
+          } yield loadedCache
+        case SourceUri.AzurePath(_, _) =>
+          for {
+            loadedCache <- storageAlg
+              .getBlob[List[B]](sourceUri)
+              .last
+              .map(_.getOrElse(List.empty)) // The first time welder starts up, there won't be any existing cache, hence returning empty list
+          } yield loadedCache
+      }
 
       cached = loadedCache.flatMap(b => toTuple(b)).toMap
       ref <- Stream.resource(
-        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(storageAlg, stagingBucketName, blobName, ref))
+        Resource.make(Ref.of[IO, Map[A, B]](cached))(ref => flushCache(storageAlg, sourceUri, ref))
       )
     } yield ref
 
@@ -157,15 +173,14 @@ package object welder {
 
   def flushCache[A, B: Decoder: Encoder](
       googleStorageAlg: CloudStorageAlg,
-      stagingBucketName: GcsBucketName,
-      blobName: GcsBlobName,
+      sourceUri: SourceUri,
       ref: Ref[IO, Map[A, B]]
-  )(implicit logger: StructuredLogger[IO]): IO[Unit] =
+  )(implicit logger: StructuredLogger[IO], ev: Ask[IO, TraceId]): IO[Unit] =
     for {
-      _ <- logger.info(s"flushing cache to ${blobName.value}/${blobName.value}")
+      _ <- logger.info(s"flushing cache to $sourceUri")
       data <- ref.get
       bytes = Stream.emits(data.values.toSet.asJson.printWith(Printer.noSpaces).getBytes("UTF-8")).covary[IO]
-      _ <- (bytes through googleStorageAlg.uploadBlob(stagingBucketName, blobName)).compile.drain
+      _ <- (bytes through googleStorageAlg.uploadBlob(sourceUri)).compile.drain
       // We're previously reading and persisting cache from/to local disk, but this can be problematic when disk space runs out.
       // Hence we're persisting cache to GCS. Since leonardo tries to automatically upgrade welder version, we'll need to support both cases.
       // We first try to read cache from local disk, if it exists, use it; if not, we read cache from gcs
@@ -188,6 +203,17 @@ package object welder {
 
   def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
+
+  def getSourceUriForProvider(cloudProvider: CloudProvider, container: CloudStorageContainer, blob: CloudStorageBlob)(
+      implicit ev: Ask[IO, TraceId]
+  ): IO[SourceUri] =
+    ev.ask[TraceId].flatMap { traceId =>
+      cloudProvider match {
+        case CloudProvider.Gcp => IO(GsPath(container.asGcsBucket, blob.asGcs))
+        case CloudProvider.Azure => IO(AzurePath(container.asAzureCloudContainer, blob.asAzure))
+        case CloudProvider.None => IO.raiseError(InvalidSourceURIException(traceId, "Cannot get sourceURI with no cloud provider", Map.empty))
+      }
+    }
 
   private[welder] val writeFileOptions = Flags.Write
 

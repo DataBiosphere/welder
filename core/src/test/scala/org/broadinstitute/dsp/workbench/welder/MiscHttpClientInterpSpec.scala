@@ -1,6 +1,7 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import io.circe.parser.decode
+import org.broadinstitute.dsde.workbench.azure.SasToken
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.broadinstitute.dsp.workbench.welder.MiscHttpClientAlgCodec._
@@ -38,7 +39,8 @@ class MiscHttpClientInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks
     val expected = SasTokenResp(
       Uri.unsafeFromString(
         "https://sa445eb6b22667ee38cb8e.blob.core.windows.net/sc-445eb6b2-7452-4d86-a462-2667ee38cb8e?sp=r&st=2022-08-02T20:06:13Z&se=2022-08-03T04:06:13Z&spr=https&sv=2021-06-08&sr=c&sig=asdf"
-      )
+      ),
+      SasToken("sas_token")
     )
     val res = decode[SasTokenResp](inputString)
     res shouldBe (Right(expected))

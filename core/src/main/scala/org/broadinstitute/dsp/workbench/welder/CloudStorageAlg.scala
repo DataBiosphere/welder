@@ -4,46 +4,58 @@ import cats.effect.IO
 import cats.mtl.Ask
 import fs2.{Pipe, Stream}
 import io.circe.Decoder
-import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName, GoogleStorageService, RemoveObjectResult}
+import org.broadinstitute.dsde.workbench.google2.{Crc32, GoogleStorageService, RemoveObjectResult}
 import org.broadinstitute.dsde.workbench.model.TraceId
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
-import org.broadinstitute.dsp.workbench.welder.SourceUri.GsPath
 import org.typelevel.log4cats.StructuredLogger
-
 import java.nio.file.Path
+
+import org.broadinstitute.dsde.workbench.azure.AzureStorageService
+
 import scala.util.matching.Regex
 
 trait CloudStorageAlg {
-  def updateMetadata(gsPath: GsPath, traceId: TraceId, metadata: Map[String, String]): IO[UpdateMetadataResponse]
-  def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: GsPath, traceId: TraceId): IO[Option[AdaptedGcsMetadata]]
-  def retrieveUserDefinedMetadata(gsPath: GsPath, traceId: TraceId): IO[Map[String, String]]
-  def removeObject(gsPath: GsPath, traceId: TraceId, generation: Option[Long]): Stream[IO, RemoveObjectResult]
+  def cloudProvider: CloudProvider
+
+  def updateMetadata(gsPath: SourceUri, metadata: Map[String, String])(implicit ev: Ask[IO, TraceId]): IO[UpdateMetadataResponse] =
+    makeInvalidSourceUriException("retrieveUserDefinedMetadata", gsPath).flatMap(e => IO.raiseError(e))
+
+  def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] =
+    makeInvalidSourceUriException("retrieveAdaptedGcsMetadata", gsPath).flatMap(e => IO.raiseError(e))
+
+  def retrieveUserDefinedMetadata(gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Map[String, String]] =
+    makeInvalidSourceUriException("retrieveUserDefinedMetadata", gsPath).flatMap(e => IO.raiseError(e))
+
+  def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
+    Stream.eval(makeInvalidSourceUriException("removeObject", gsPath).flatMap(e => IO.raiseError(e)))
 
   /**
     * Overwrites the file if it already exists locally
     */
-  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: GsPath, traceId: TraceId): Stream[IO, AdaptedGcsMetadata]
+  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
+    Stream.eval(makeInvalidSourceUriException("gcsToLocalFile", gsPath).flatMap(e => IO.raiseError(e)))
 
   /**
     * Delocalize user's files to GCS.
     */
   def delocalize(
       localObjectPath: RelativePath,
-      gsPath: GsPath,
+      gsPath: SourceUri,
       generation: Long,
-      userDefinedMeta: Map[String, String],
-      traceId: TraceId
-  ): IO[DelocalizeResponse]
+      userDefinedMeta: Map[String, String]
+  )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
+    makeInvalidSourceUriException("delocalize", gsPath).flatMap(e => IO.raiseError(e))
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcs(localObjectPath: RelativePath, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
+  def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+    makeInvalidSourceUriException("fileToGcs", gsPath).flatMap(e => IO.raiseError(e))
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata
     */
-  def fileToGcsAbsolutePath(localFile: Path, gsPath: GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
+  def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
+    makeInvalidSourceUriException("fileToGcsAbsolutePath", gsPath).flatMap(e => IO.raiseError(e))
 
   /**
     * Recursively download files in cloudStorageDirectory to local directory.
@@ -56,28 +68,37 @@ trait CloudStorageAlg {
       localBaseDirectory: RelativePath,
       cloudStorageDirectory: CloudStorageDirectory,
       workingDir: Path,
-      pattern: Regex,
-      traceId: TraceId
-  ): Stream[IO, AdaptedGcsMetadataCache]
+      pattern: Regex
+  )(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadataCache]]
 
-  def uploadBlob(bucketName: GcsBucketName, objectName: GcsBlobName): Pipe[IO, Byte, Unit]
+  def uploadBlob(path: SourceUri)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
+    _ => Stream.eval(makeInvalidSourceUriException("uploadBlob", path).flatMap(e => IO.raiseError(e)))
 
-  def getBlob[A: Decoder](bucketName: GcsBucketName, blobName: GcsBlobName): Stream[IO, A]
+  def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] =
+    Stream.eval(makeInvalidSourceUriException("getBlob", path).flatMap(e => IO.raiseError(e)))
+
+  private def makeInvalidSourceUriException(functionName: String, sourceUri: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[InvalidSourceURIException] =
+    ev.ask[TraceId].map { traceId =>
+      InvalidSourceURIException(
+        traceId,
+        s"storageInterp function $functionName was called for a source URI from an invalid cloud provider. \n\tExpected cloud provider: $cloudProvider. \n\tSourceUri: $sourceUri"
+      )
+    }
+
 }
 
 object CloudStorageAlg {
   def forGoogle(
-      config: GoogleStorageAlgConfig,
+      config: StorageAlgConfig,
       googleStorageService: GoogleStorageService[IO]
   )(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
     new GoogleStorageInterp(config, googleStorageService)
 
-  //TODO: Justin
-  def forAzure()(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
-    new AzureStorageInterp()
+  def forAzure(config: StorageAlgConfig, azureStorageService: AzureStorageService[IO])(implicit logger: StructuredLogger[IO]): CloudStorageAlg =
+    new AzureStorageInterp(config, azureStorageService)
 }
 
-final case class GoogleStorageAlgConfig(workingDirectory: Path)
+final case class StorageAlgConfig(workingDirectory: Path)
 final case class DelocalizeResponse(generation: Long, crc32c: Crc32)
 
 sealed trait UpdateMetadataResponse extends Product with Serializable

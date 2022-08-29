@@ -15,7 +15,7 @@ class JsonCodecSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Welde
       val inputString = s"gs://${bucketName.value}/notebooks/sub"
 
       val res = Json.fromString(inputString).as[CloudStorageDirectory]
-      res shouldBe (Right(CloudStorageDirectory(bucketName, Some(BlobPath("notebooks/sub")))))
+      res shouldBe (Right(CloudStorageDirectory(CloudStorageContainer(bucketName.value), Some(BlobPath("notebooks/sub")))))
     }
   }
 
@@ -24,7 +24,7 @@ class JsonCodecSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Welde
       val inputString = s"gs://${bucketName.value}"
 
       val res = Json.fromString(inputString).as[CloudStorageDirectory]
-      res shouldBe (Right(CloudStorageDirectory(bucketName, None)))
+      res shouldBe (Right(CloudStorageDirectory(CloudStorageContainer(bucketName.value), None)))
     }
   }
 

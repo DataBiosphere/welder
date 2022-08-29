@@ -4,6 +4,7 @@ import java.nio.file.Path
 import java.time.Instant
 
 import ca.mrvisser.sealerate
+import org.broadinstitute.dsde.workbench.azure.{BlobName, ContainerName}
 import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 
@@ -45,11 +46,42 @@ object SyncMode {
 
 final case class BlobPath(asString: String) extends AnyVal
 
-sealed abstract class SourceUri
+sealed abstract class CloudProvider extends Product with Serializable {
+  def asString: String
+}
+object CloudProvider {
+
+  final case object Gcp extends CloudProvider {
+    override val asString = "GCP"
+  }
+
+  final case object Azure extends CloudProvider {
+    override val asString = "AZURE"
+  }
+
+  final case object None extends CloudProvider {
+    override val asString = "None"
+  }
+
+}
+
+sealed abstract class SourceUri {
+  val cloudProvider: CloudProvider
+}
+
 object SourceUri {
-  final case class DataUri(data: Array[Byte]) extends SourceUri
+  final case class DataUri(data: Array[Byte]) extends SourceUri {
+    override val cloudProvider: CloudProvider = CloudProvider.None
+  }
   final case class GsPath(bucketName: GcsBucketName, blobName: GcsBlobName) extends SourceUri {
     override def toString: String = s"gs://${bucketName.value}/${blobName.value}"
+
+    override val cloudProvider: CloudProvider = CloudProvider.Gcp
+  }
+  final case class AzurePath(containerName: ContainerName, blobName: BlobName) extends SourceUri {
+    override def toString: String = s"${containerName.value}/${blobName.value}"
+
+    override val cloudProvider: CloudProvider = CloudProvider.Azure
   }
 }
 
@@ -61,7 +93,19 @@ object LocalDirectory {
   final case class LocalSafeBaseDirectory(path: RelativePath) extends LocalDirectory
 }
 
-final case class CloudStorageDirectory(bucketName: GcsBucketName, blobPath: Option[BlobPath])
+final case class CloudStorageContainer(name: String) {
+  //we do not compute this eagerly because the model in wb-libs has a require in the apply
+  lazy val asGcsBucket: GcsBucketName = GcsBucketName(name)
+  val asAzureCloudContainer: ContainerName = ContainerName(name)
+}
+
+final case class CloudStorageBlob(name: String) {
+  //we do not compute this eagerly because the model in wb-libs has a require in the apply
+  lazy val asGcs: GcsBlobName = GcsBlobName(name)
+  val asAzure: BlobName = BlobName(name)
+}
+
+final case class CloudStorageDirectory(container: CloudStorageContainer, blobPath: Option[BlobPath])
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,

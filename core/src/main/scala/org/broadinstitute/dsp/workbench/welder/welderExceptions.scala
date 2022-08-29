@@ -11,6 +11,8 @@ sealed abstract class WelderException extends NoStackTrace {
   override def getMessage: String = message
 }
 final case class InternalException(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException
+final case class NotImplementedException(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException
+final case class InvalidSourceURIException(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException
 final case class BadRequestException(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException
 final case class GenerationMismatch(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException
 final case class StorageLinkNotFoundException(traceId: TraceId, message: String, additionalCtx: Map[String, String] = Map.empty) extends WelderException

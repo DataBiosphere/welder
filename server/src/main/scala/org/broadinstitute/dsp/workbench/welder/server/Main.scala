@@ -1,12 +1,16 @@
 package org.broadinstitute.dsp.workbench.welder
 package server
 
+import java.util.UUID
+
 import cats.effect.kernel.Ref
 import cats.effect.std.{Dispatcher, Semaphore}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.mtl.Ask
 import fs2.Stream
 import fs2.concurrent.SignallingRef
+import org.broadinstitute.dsde.workbench.model.TraceId
 import org.broadinstitute.dsp.workbench.welder.JsonCodec._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.{Logger, StructuredLogger}
@@ -30,7 +34,9 @@ object Main extends IOApp {
 
   def initStreams(appConfig: AppConfig)(
       implicit logger: StructuredLogger[IO]
-  ): Stream[IO, List[Stream[IO, Unit]]] =
+  ): Stream[IO, List[Stream[IO, Unit]]] = {
+
+    implicit val traceIdImplicit = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
@@ -38,8 +44,7 @@ object Main extends IOApp {
       storageAlgRef <- Stream.eval(Ref[IO].of(storageAlg2))
       storageLinksCache <- cachedResource[RelativePath, StorageLink](
         storageAlgRef,
-        appConfig.stagingBucketName,
-        appConfig.storageLinksJsonBlobName,
+        appConfig.getSourceUri,
         storageLink => {
           val safeModeDirectory =
             storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
@@ -48,8 +53,10 @@ object Main extends IOApp {
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
-        appConfig.stagingBucketName,
-        appConfig.metadataJsonBlobName,
+        SourceUri.GsPath(
+          appConfig.stagingBucketName.asGcsBucket,
+          appConfig.metadataJsonBlobName.asGcs
+        ),
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
@@ -101,5 +108,6 @@ object Main extends IOApp {
       )
       List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
     }
+  }
 
 }

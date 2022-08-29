@@ -3,10 +3,12 @@ package server
 
 import java.nio.file.Path
 import java.nio.file.Paths
+
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
+import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.http4s.Uri
 import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.auto._
@@ -21,6 +23,8 @@ object Config {
   implicit val workbenchEmailConfigReader: ConfigReader[WorkbenchEmail] = ConfigReader.stringConfigReader.map(WorkbenchEmail)
   implicit val gcsBlobNameReader: ConfigReader[GcsBlobName] = ConfigReader.stringConfigReader.map(GcsBlobName)
   implicit val gcsBucketNameConfigReader: ConfigReader[GcsBucketName] = ConfigReader.stringConfigReader.map(GcsBucketName)
+  implicit val storageBlobConfigReader: ConfigReader[CloudStorageBlob] = ConfigReader.stringConfigReader.map(CloudStorageBlob)
+  implicit val storageContainerConfigReader: ConfigReader[CloudStorageContainer] = ConfigReader.stringConfigReader.map(CloudStorageContainer)
 
   // pureconfig's auto generated ConfigReader will read AppConfig as a sealed class depending on `type` value in config
   val appConfig = ConfigSource.default.load[AppConfig].leftMap(failures => new RuntimeException(failures.toList.map(_.description).mkString("\n")))
@@ -31,13 +35,14 @@ sealed trait AppConfig extends Product with Serializable {
   def cleanUpLockInterval: FiniteDuration
   def flushCacheInterval: FiniteDuration
   def syncCloudStorageDirectoryInterval: FiniteDuration
-  def storageLinksJsonBlobName: GcsBlobName
-  def metadataJsonBlobName: GcsBlobName
+  def storageLinksJsonBlobName: CloudStorageBlob
+  def metadataJsonBlobName: CloudStorageBlob
   def workspaceBucketNameFileName: Path
   def objectService: ObjectServiceConfig
-  def stagingBucketName: GcsBucketName
+  def stagingBucketName: CloudStorageContainer
   def delocalizeDirectoryInterval: FiniteDuration
   def isRstudioRuntime: Boolean
+  def getSourceUri: SourceUri
 }
 object AppConfig {
   final case class Gcp(
@@ -45,29 +50,33 @@ object AppConfig {
       cleanUpLockInterval: FiniteDuration,
       flushCacheInterval: FiniteDuration,
       syncCloudStorageDirectoryInterval: FiniteDuration,
-      storageLinksJsonBlobName: GcsBlobName,
-      metadataJsonBlobName: GcsBlobName,
+      storageLinksJsonBlobName: CloudStorageBlob,
+      metadataJsonBlobName: CloudStorageBlob,
       workspaceBucketNameFileName: Path,
       objectService: ObjectServiceConfig,
-      stagingBucketName: GcsBucketName,
+      stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       isRstudioRuntime: Boolean
-  ) extends AppConfig
+  ) extends AppConfig {
+    override def getSourceUri: SourceUri = GsPath(stagingBucketName.asGcsBucket, storageLinksJsonBlobName.asGcs)
+  }
 
   final case class Azure(
       serverPort: Int,
       cleanUpLockInterval: FiniteDuration,
       flushCacheInterval: FiniteDuration,
       syncCloudStorageDirectoryInterval: FiniteDuration,
-      storageLinksJsonBlobName: GcsBlobName,
-      metadataJsonBlobName: GcsBlobName,
+      storageLinksJsonBlobName: CloudStorageBlob,
+      metadataJsonBlobName: CloudStorageBlob,
       workspaceBucketNameFileName: Path,
       objectService: ObjectServiceConfig,
-      stagingBucketName: GcsBucketName,
+      stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       miscHttpClientConfig: MiscHttpClientConfig,
       isRstudioRuntime: Boolean
-  ) extends AppConfig
+  ) extends AppConfig {
+    override def getSourceUri: SourceUri = AzurePath(stagingBucketName.asAzureCloudContainer, storageLinksJsonBlobName.asAzure)
+  }
 }
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
