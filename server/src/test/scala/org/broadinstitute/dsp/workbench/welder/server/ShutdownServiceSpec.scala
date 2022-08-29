@@ -56,14 +56,14 @@ class ShutdownServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
     override def getBlob[A: Decoder](path: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, A] = path match {
       case GsPath(bucketName, blobName) =>
-      for {
-        blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
-        a <- Stream
-          .emits(blob.getContent())
-          .through(fs2.text.utf8.decode)
-          .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
-          .through(_root_.io.circe.fs2.decoder[IO, A])
-      } yield a
+        for {
+          blob <- FakeGoogleStorageInterpreter.getBlob(bucketName, blobName, None)
+          a <- Stream
+            .emits(blob.getContent())
+            .through(fs2.text.utf8.decode)
+            .through(_root_.io.circe.fs2.stringParser[IO](AsyncParser.SingleValue))
+            .through(_root_.io.circe.fs2.decoder[IO, A])
+        } yield a
       case _ => Stream.eval(IO.raiseError(new RuntimeException("test error, wrong source URI given to getBlob in a MockCloudStorageAlg")))
     }
   })

@@ -23,7 +23,6 @@ object Generators {
     objectName <- google2.Generators.genGcsBlobName
   } yield GsPath(bucketName, GcsBlobName(s"a/${objectName.value}"))
 
-
   val genAzureBlobName: Gen[BlobName] = Gen.uuid.map(x => BlobName(s"blob${x.toString}"))
   val genAzureContainerName: Gen[ContainerName] = Gen.uuid.map(x => ContainerName(s"container${x.toString}"))
   val genAzureFileContent: Gen[String] = Gen.stringOfN(10, Gen.alphaLowerChar)

@@ -53,7 +53,10 @@ object Main extends IOApp {
       )
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
-        appConfig.getSourceUri,
+        SourceUri.GsPath(
+          appConfig.stagingBucketName.asGcsBucket,
+          appConfig.metadataJsonBlobName.asGcs
+        ),
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
