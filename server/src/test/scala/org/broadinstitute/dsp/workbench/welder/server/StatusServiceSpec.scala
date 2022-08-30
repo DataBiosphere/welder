@@ -17,7 +17,7 @@ class StatusServiceSpec extends AnyFlatSpec with Matchers {
     resp.status shouldBe (Status.Ok)
 
     val expectedResp = StatusResponse(BuildInfo.buildTime.toString, BuildInfo.gitHeadCommit)
-    resp.as[StatusResponse].unsafeRunSync() shouldBe (expectedResp)
+    resp.as[StatusResponse].unsafeRunSync() shouldBe expectedResp
   }
 }
 

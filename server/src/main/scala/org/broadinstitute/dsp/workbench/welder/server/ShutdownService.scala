@@ -25,9 +25,8 @@ class ShutdownService(
 )(implicit logger: StructuredLogger[IO])
     extends Http4sDsl[IO] {
 
-  val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
-    case POST -> Root / "flush" =>
-      flush >> NoContent()
+  val service: HttpRoutes[IO] = HttpRoutes.of[IO] { case POST -> Root / "flush" =>
+    flush >> NoContent()
   }
 
   val flush: IO[Unit] = {
@@ -69,8 +68,8 @@ object ShutdownService {
       storageLinksCache: StorageLinksCache,
       metadataCache: MetadataCache,
       storageAlgRef: Ref[IO, CloudStorageAlg]
-  )(
-      implicit logger: StructuredLogger[IO]
+  )(implicit
+      logger: StructuredLogger[IO]
   ): ShutdownService = new ShutdownService(config, shutDownSignal, storageLinksCache, metadataCache, storageAlgRef)
 }
 

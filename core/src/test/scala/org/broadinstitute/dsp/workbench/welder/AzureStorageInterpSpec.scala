@@ -38,9 +38,7 @@ class AzureStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         file = new File(localAbsolutePath.toString)
         _ <- Stream.eval(IO.delay(file.exists() shouldBe true))
         _ <- Stream.eval(IO(file.delete()))
-      } yield {
-        resp shouldBe None
-      }
+      } yield resp shouldBe None
       res.compile.drain.unsafeRunSync()
     }
   }
@@ -71,7 +69,7 @@ class AzureStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       val res = for {
         _ <- azureStorage.localizeCloudDirectory(localBaseDir, cloudStorageDirectory, workingDir, "".r).compile.drain
       } yield {
-        val prefix = (workingDir.resolve(localBaseDir.asPath))
+        val prefix = workingDir.resolve(localBaseDir.asPath)
         val allFiles = allObjects.map { blobName =>
           cloudStorageDirectory.blobPath match {
             case Some(bp) =>
@@ -120,7 +118,7 @@ class AzureStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
           .compile
           .drain
       } yield {
-        val prefix = (workingDir.resolve(localBaseDir.asPath))
+        val prefix = workingDir.resolve(localBaseDir.asPath)
         val fileExist = cloudStorageDirectory.blobPath match {
           case Some(bp) =>
             prefix.resolve(Paths.get(matchSuffix))

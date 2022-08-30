@@ -8,10 +8,7 @@ import org.broadinstitute.dsde.workbench.google2.Crc32
 // Adapted from https://github.com/googlearchive/crc32c-java/blob/master/src/com/google/cloud/Crc32c.java, which is the only java implementation for google's crc32c algorithm.
 // Note: The CRC popularly known as CRC32 differs from the CRC32c algorithm used by Cloud Storage.
 
-/**
-  * This class generates a CRC32C checksum, defined by rfc3720 section B.4.
-  *
-  *
+/** This class generates a CRC32C checksum, defined by rfc3720 section B.4.
   */
 object Crc32c {
   private val CRC_TABLE = Array(0x00000000, 0xf26b8303, 0xe13b70f7, 0x1350f3f4, 0xc79a971f, 0x35f1141c, 0x26a1e7e8, 0xd4ca64eb, 0x8ad958cf, 0x78b2dbcc,
@@ -34,7 +31,7 @@ object Crc32c {
     0xb831c993, 0x4a5a4a90, 0x9e902e7b, 0x6cfbad78, 0x7fab5e8c, 0x8dc0dd8f, 0xe330a81a, 0x115b2b19, 0x020bd8ed, 0xf0605bee, 0x24aa3f05, 0xd6c1bc06, 0xc5914ff2,
     0x37faccf1, 0x69e9f0d5, 0x9b8273d6, 0x88d28022, 0x7ab90321, 0xae7367ca, 0x5c18e4c9, 0x4f48173d, 0xbd23943e, 0xf36e6f75, 0x0105ec76, 0x12551f82, 0xe03e9c81,
     0x34f4f86a, 0xc69f7b69, 0xd5cf889d, 0x27a40b9e, 0x79b737ba, 0x8bdcb4b9, 0x988c474d, 0x6ae7c44e, 0xbe2da0a5, 0x4c4623a6, 0x5f16d052, 0xad7d5351)
-  private val LONG_MASK = 0XFFFFFFFFL
+  private val LONG_MASK = 0xffffffffL
   private val BYTE_MASK = 0xff
 
   def calculateCrc32ForFile(path: java.nio.file.Path): IO[Crc32] = {
@@ -52,8 +49,7 @@ object Crc32c {
 final class Crc32c() extends Checksum {
   private var crc = 0L
 
-  /**
-    * Updates the checksum with a new byte.
+  /** Updates the checksum with a new byte.
     *
     * @param b the new byte.
     */
@@ -63,8 +59,7 @@ final class Crc32c() extends Checksum {
     crc = newCrc ^ Crc32c.LONG_MASK
   }
 
-  /**
-    * Updates the checksum with an array of bytes.
+  /** Updates the checksum with an array of bytes.
     *
     * @param bArray the array of bytes.
     * @param off the offset into the array where the update should begin.
@@ -73,7 +68,7 @@ final class Crc32c() extends Checksum {
   override def update(bArray: Array[Byte], off: Int, len: Int): Unit = {
     var newCrc = crc ^ Crc32c.LONG_MASK
     var i = off
-    while ({ i < off + len }) {
+    while (i < off + len) {
       newCrc = updateByte(bArray(i), newCrc)
 
       { i += 1; i - 1 }
@@ -81,15 +76,13 @@ final class Crc32c() extends Checksum {
     crc = newCrc ^ Crc32c.LONG_MASK
   }
 
-  /**
-    * Returns the value of the checksum.
+  /** Returns the value of the checksum.
     *
     * @return the long representation of the checksum (high bits set to zero).
     */
   override def getValue: Long = crc
 
-  /**
-    * Returns the value of the checksum.
+  /** Returns the value of the checksum.
     *
     * @return the 4-byte array representation of the checksum in network byte order (big endian).
     */
@@ -97,8 +90,8 @@ final class Crc32c() extends Checksum {
     var value = crc
     val result = new Array[Byte](4)
     var i = 3
-    while ({ i >= 0 }) {
-      result(i) = (value & 0XFFL).toByte
+    while (i >= 0) {
+      result(i) = (value & 0xffL).toByte
       value >>= 8
 
       { i -= 1; i + 1 }
@@ -106,8 +99,7 @@ final class Crc32c() extends Checksum {
     result
   }
 
-  /**
-    * Resets the crc.
+  /** Resets the crc.
     */
   override def reset(): Unit = crc = 0
   private def updateByte(newByte: Byte, crc: Long) = {

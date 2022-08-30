@@ -28,14 +28,12 @@ trait CloudStorageAlg {
   def removeObject(gsPath: SourceUri, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] =
     Stream.eval(makeInvalidSourceUriException("removeObject", gsPath).flatMap(e => IO.raiseError(e)))
 
-  /**
-    * Overwrites the file if it already exists locally
+  /** Overwrites the file if it already exists locally
     */
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
     Stream.eval(makeInvalidSourceUriException("gcsToLocalFile", gsPath).flatMap(e => IO.raiseError(e)))
 
-  /**
-    * Delocalize user's files to GCS.
+  /** Delocalize user's files to GCS.
     */
   def delocalize(
       localObjectPath: RelativePath,
@@ -45,20 +43,17 @@ trait CloudStorageAlg {
   )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
     makeInvalidSourceUriException("delocalize", gsPath).flatMap(e => IO.raiseError(e))
 
-  /**
-    * Copy file to GCS without checking generation, and adding user metadata
+  /** Copy file to GCS without checking generation, and adding user metadata
     */
   def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     makeInvalidSourceUriException("fileToGcs", gsPath).flatMap(e => IO.raiseError(e))
 
-  /**
-    * Copy file to GCS without checking generation, and adding user metadata
+  /** Copy file to GCS without checking generation, and adding user metadata
     */
   def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     makeInvalidSourceUriException("fileToGcsAbsolutePath", gsPath).flatMap(e => IO.raiseError(e))
 
-  /**
-    * Recursively download files in cloudStorageDirectory to local directory.
+  /** Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     * @param localBaseDirectory: base directory where remote files will be download to
     * @param cloudStorageDirectory: GCS directory where files will be download from

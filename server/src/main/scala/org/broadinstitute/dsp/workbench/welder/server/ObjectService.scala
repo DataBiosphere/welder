@@ -133,8 +133,8 @@ class ObjectService(
     preventConcurrentAction(actionToLock, req.localObjectPath)
   }
 
-  private def updateGcsMetadataAndCache(storageAlg: CloudStorageAlg, localPath: RelativePath, gsPath: GsPath, lock: Lock)(
-      implicit ev: Ask[IO, TraceId]
+  private def updateGcsMetadataAndCache(storageAlg: CloudStorageAlg, localPath: RelativePath, gsPath: GsPath, lock: Lock)(implicit
+      ev: Ask[IO, TraceId]
   ): IO[Unit] =
     storageAlg
       .updateMetadata(gsPath, lock.toMetadataMap)
@@ -147,8 +147,7 @@ class ObjectService(
         }
       )
 
-  /**
-    * In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
+  /** In case you're wondering what Kleisli is, Kleisli is a data type that wraps a function (A => F[B]), and commonly used for abstracting away some type of dependency.
     * For instance, in this method, we're abstracting away the need to pass around `traceId` explicitly.
     * For more information about Kleisli, check out https://typelevel.org/cats/datatypes/kleisli.html.
     * Even though you don't see many Kleisli used explicitly in welder, it's actually used extensively, because it's a fundamental data type
@@ -159,139 +158,143 @@ class ObjectService(
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       storageAlg <- storageAlgRef.get
-      res <- if (context.isSafeMode)
-        IO.pure(MetadataResponse.SafeMode(context.storageLink))
-      else {
-        val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
-        val actionToLock = for {
-          metadata <- storageAlg
-            .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobName))
-          result <- metadata match {
-            case None =>
-              metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
-            case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
-              val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
-              for {
-                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
-                syncStatus <- if (calculatedCrc32c == crc32c)
-                  IO.pure(SyncStatus.Live)
-                else {
-                  for {
-                    metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
-                    loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation).toMap
-                    status <- metaOpt match {
-                      case Some(meta) =>
-                        meta.localFileGeneration match { //TODO: shall we check the file has been localized before calculating crc32c
-                          case Some(previousGeneration) =>
-                            if (previousGeneration == generation)
-                              IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
-                            else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
+      res <-
+        if (context.isSafeMode)
+          IO.pure(MetadataResponse.SafeMode(context.storageLink))
+        else {
+          val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
+          val actionToLock = for {
+            metadata <- storageAlg
+              .retrieveAdaptedGcsMetadata(req.localObjectPath, GsPath(context.storageLink.cloudStorageDirectory.container.asGcsBucket, fullBlobName))
+            result <- metadata match {
+              case None =>
+                metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
+              case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
+                val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
+                for {
+                  calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
+                  syncStatus <-
+                    if (calculatedCrc32c == crc32c)
+                      IO.pure(SyncStatus.Live)
+                    else {
+                      for {
+                        metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
+                        loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation).toMap
+                        status <- metaOpt match {
+                          case Some(meta) =>
+                            meta.localFileGeneration match { //TODO: shall we check the file has been localized before calculating crc32c
+                              case Some(previousGeneration) =>
+                                if (previousGeneration == generation)
+                                  IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
+                                else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
+                              case None =>
+                                IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
+                                  "We don't find local generation for a localized file. Was this file localized manually?"
+                                )
+                            }
                           case None =>
                             IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
-                              "We don't find local generation for a localized file. Was this file localized manually?"
+                              "We don't find local cache for a localized file. Did you update metadata cache file directly?"
                             )
+                          //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
                         }
-                      case None =>
-                        IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
-                          "We don't find local cache for a localized file. Did you update metadata cache file directly?"
-                        )
-                      //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
+                      } yield status
                     }
-                  } yield status
-                }
-                _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(lock, crc32c))
-              } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
-          }
-        } yield result
-        preventConcurrentAction(actionToLock, req.localObjectPath)
-      }
+                  _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(lock, crc32c))
+                } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
+            }
+          } yield result
+          preventConcurrentAction(actionToLock, req.localObjectPath)
+        }
     } yield res
 
   def safeDelocalize(req: SafeDelocalize)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
-      _ <- if (context.isSafeMode)
-        IO.raiseError(SafeDelocalizeSafeModeFileError(traceId, s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
-      else if (context.storageLink.pattern.findFirstIn(req.localObjectPath.asPath.toString).isEmpty)
-        logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(
-          s"ignore ${req.localObjectPath} because it doesn't satisfy ${context.storageLink.pattern} pattern"
-        )
-      else {
-        val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
-        val actionToLock: IO[Unit] = for {
-          previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
-          gsPath = getGsPath(req.localObjectPath, context)
-          now <- IO.realTimeInstant
-          calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
+      _ <-
+        if (context.isSafeMode)
+          IO.raiseError(SafeDelocalizeSafeModeFileError(traceId, s"${req.localObjectPath} can't be delocalized since it's in safe mode"))
+        else if (context.storageLink.pattern.findFirstIn(req.localObjectPath.asPath.toString).isEmpty)
+          logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(
+            s"ignore ${req.localObjectPath} because it doesn't satisfy ${context.storageLink.pattern} pattern"
+          )
+        else {
+          val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
+          val actionToLock: IO[Unit] = for {
+            previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
+            gsPath = getGsPath(req.localObjectPath, context)
+            now <- IO.realTimeInstant
+            calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
-          // If we have lock info in local cache, we check cache to see if we hold a valid lock.
-          // local cache should be updated pretty frequently since acquireLock is called much more often than lock expires.
-          // Hence, we should be able to rely on cache for checking lock
-          _ <- previousMeta match {
-            case Some(meta) =>
-              meta.remoteState match {
-                case RemoteState.NotFound =>
-                  delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, None)
-                case RemoteState.Found(lock, crc32c) =>
-                  if (calculatedCrc32c == crc32c)
-                    IO.unit
-                  else
-                    for {
-                      _ <- lock.traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName))
-                      //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
-                      //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
-                      _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), lock)
-                    } yield ()
-              }
-            case None =>
-              // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
-              for {
-                hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
-                current <- IO.realTimeInstant
-                lock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
-                _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, Some(lock))
-              } yield ()
-          }
-        } yield ()
+            // If we have lock info in local cache, we check cache to see if we hold a valid lock.
+            // local cache should be updated pretty frequently since acquireLock is called much more often than lock expires.
+            // Hence, we should be able to rely on cache for checking lock
+            _ <- previousMeta match {
+              case Some(meta) =>
+                meta.remoteState match {
+                  case RemoteState.NotFound =>
+                    delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, None)
+                  case RemoteState.Found(lock, crc32c) =>
+                    if (calculatedCrc32c == crc32c)
+                      IO.unit
+                    else
+                      for {
+                        _ <- lock.traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName))
+                        //here, generation should always exist, but there's no risk in setting it to 0L since delocalize will be rejected by GSC if the file actually exist in GCS
+                        //push previously existing lock if it exists so that we don't overwrite remote lock when we delocalize file
+                        _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, meta.localFileGeneration.getOrElse(0L), lock)
+                      } yield ()
+                }
+              case None =>
+                // If this is a new file, acquire lock for current user; If the file actually exists in GCE, delocalize will fail with generation mismatch.
+                for {
+                  hashedLockedByCurrentUser <- IO.fromEither(hashString(lockedByString(gsPath.bucketName, config.ownerEmail)))
+                  current <- IO.realTimeInstant
+                  lock = Lock(hashedLockedByCurrentUser, Instant.ofEpochMilli(current.toEpochMilli + config.lockExpiration.toMillis))
+                  _ <- delocalizeAndUpdateCache(req.localObjectPath, gsPath, 0L, Some(lock))
+                } yield ()
+            }
+          } yield ()
 
-        preventConcurrentAction(actionToLock, req.localObjectPath)
-      }
+          preventConcurrentAction(actionToLock, req.localObjectPath)
+        }
     } yield ()
 
   def delete(req: Delete)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
-      _ <- if (context.isSafeMode)
-        IO.raiseError(DeleteSafeModeFileError(traceId, s"${req.localObjectPath} can't be deleted since it's in safe mode"))
-      else {
-        val gsPath = getGsPath(req.localObjectPath, context)
-        val actionToLock = for {
-          previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
-          now <- IO.realTimeInstant
-          generation <- previousMeta match {
-            case Some(meta) =>
-              meta.remoteState match {
-                case RemoteState.NotFound => IO.pure(0L)
-                case RemoteState.Found(lock, _) =>
-                  lock
-                    .traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName)) //check if user owns the lock before deleting
-                    .as(meta.localFileGeneration.getOrElse(0L))
-              }
-            case None =>
-              IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
-          }
-          storageAlg <- storageAlgRef.get
-          _ <- storageAlg.removeObject(gsPath, Some(generation)).compile.drain.void
-          _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
-        } yield ()
-        preventConcurrentAction(actionToLock, req.localObjectPath)
-      }
+      _ <-
+        if (context.isSafeMode)
+          IO.raiseError(DeleteSafeModeFileError(traceId, s"${req.localObjectPath} can't be deleted since it's in safe mode"))
+        else {
+          val gsPath = getGsPath(req.localObjectPath, context)
+          val actionToLock = for {
+            previousMeta <- metadataCacheAlg.getCache(req.localObjectPath)
+            now <- IO.realTimeInstant
+            generation <- previousMeta match {
+              case Some(meta) =>
+                meta.remoteState match {
+                  case RemoteState.NotFound => IO.pure(0L)
+                  case RemoteState.Found(lock, _) =>
+                    lock
+                      .traverse(l => checkLock(l, now.toEpochMilli, gsPath.bucketName)) //check if user owns the lock before deleting
+                      .as(meta.localFileGeneration.getOrElse(0L))
+                }
+              case None =>
+                IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
+            }
+            storageAlg <- storageAlgRef.get
+            _ <- storageAlg.removeObject(gsPath, Some(generation)).compile.drain.void
+            _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
+          } yield ()
+          preventConcurrentAction(actionToLock, req.localObjectPath)
+        }
     } yield ()
 
-  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock])(
-      implicit ev: Ask[IO, TraceId]
+  private def delocalizeAndUpdateCache(localObjectPath: RelativePath, gsPath: GsPath, generation: Long, lock: Option[Lock])(implicit
+      ev: Ask[IO, TraceId]
   ): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
     for {
@@ -311,8 +314,7 @@ class ObjectService(
     } yield ()
   }
 
-  /**
-    * If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
+  /** If lock exists and it hasn't expired, we return IO[Unit]; Otherwise, raise error
     */
   private def checkLock(lock: Lock, now: Long, bucketName: GcsBucketName)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
     for {
@@ -354,8 +356,8 @@ object ObjectService {
       storageAlgRef: Ref[IO, CloudStorageAlg],
       storageLinksAlg: StorageLinksAlg,
       metadataCacheAlg: MetadataCacheAlg
-  )(
-      implicit logger: StructuredLogger[IO]
+  )(implicit
+      logger: StructuredLogger[IO]
   ): ObjectService = new ObjectService(permitsRef, config, storageAlgRef, storageLinksAlg, metadataCacheAlg)
 
   implicit val actionDecoder: Decoder[Action] = Decoder.decodeString.emap(str => Action.stringToAction.get(str).toRight("invalid action"))
