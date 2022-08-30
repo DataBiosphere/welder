@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val circeVersion = "0.14.2"
   val http4sVersion = "1.0.0-M35"
-  val grpcCoreVersion = "1.34.0"
+  val grpcCoreVersion = "1.34.1"
   val scalaTestVersion = "3.2.13"
 
   val workbenchLibsHash = "0096bac"
@@ -27,7 +27,7 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV % "test" classifier "tests", //for generators/mocks
     "ca.mrvisser" %% "sealerate" % "0.0.6",
-    "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test",
+    "com.google.cloud" % "google-cloud-nio" % "0.124.14" % "test",
     "ch.qos.logback" % "logback-classic" % "1.4.0",
     "net.logstash.logback" % "logstash-logback-encoder" % "7.2" // for structured logging in logback
   )
