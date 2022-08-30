@@ -25,7 +25,7 @@ class StorageLinksInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks w
       val localPath = RelativePath(Paths.get(s"${storageLink.localSafeModeBaseDirectory.get.path.toString}/test.ipynb"))
       val res = storageLinksAlg.findStorageLink(localPath)
       val expectedResult = CommonContext(true, storageLink.localSafeModeBaseDirectory.get.path, storageLink)
-      res.unsafeRunSync() shouldBe expectedResult
+      res.unsafeRunSync() shouldBe (expectedResult)
     }
   }
 
@@ -36,7 +36,7 @@ class StorageLinksInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks w
       val localPath = RelativePath(Paths.get(s"${storageLink.localBaseDirectory.path.toString}/test.ipynb"))
       val res = storageLinksAlg.findStorageLink(localPath)
       val expectedResult = CommonContext(false, storageLink.localBaseDirectory.path, storageLink)
-      res.unsafeRunSync() shouldBe expectedResult
+      res.unsafeRunSync() shouldBe (expectedResult)
     }
   }
 }

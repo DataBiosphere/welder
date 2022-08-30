@@ -128,12 +128,13 @@ class BackgroundTask(
       storageAlg <- storageAlgRef.get
       bucketMetadata <- storageAlg.retrieveUserDefinedMetadata(gsPath, traceId)
       _ <- bucketMetadata match {
-        case meta if meta.nonEmpty =>
+        case meta if meta.nonEmpty => {
           if (meta.get(hashedOwnerEmail.asString).contains("doNotSync")) {
             logger.info(s"skipping file ${localObjectPath.toString} doNotSync!")
           } else {
             checkCacheBeforeDelocalizing(gsPath, localObjectPath, hashedOwnerEmail, bucketMetadata)
           }
+        }
         case _ => checkCacheBeforeDelocalizing(gsPath, localObjectPath, hashedOwnerEmail, bucketMetadata)
       }
     } yield ()
@@ -143,8 +144,8 @@ class BackgroundTask(
       localObjectPath: RelativePath,
       hashedOwnerEmail: HashedLockedBy,
       existingMetadata: Map[String, String]
-  )(implicit
-      ev: Ask[IO, TraceId]
+  )(
+      implicit ev: Ask[IO, TraceId]
   ): IO[Unit] =
     for {
       traceId <- ev.ask[TraceId]
@@ -181,24 +182,26 @@ class BackgroundTask(
       storageAlg <- storageAlgRef.get
       delocalizeResp <- storageAlg
         .delocalize(localObjectPath, gsPath, generation, updatedMetadata, traceId)
-        .recoverWith { case e: GenerationMismatch =>
-          if (generation == 0L)
-            IO.raiseError(e)
-          else {
-            // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
-            // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
-            // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
-            storageAlg.delocalize(
-              localObjectPath,
-              gsPath,
-              0L,
-              updatedMetadata,
-              traceId
-            )
-          }
+        .recoverWith {
+          case e: GenerationMismatch =>
+            if (generation == 0L)
+              IO.raiseError(e)
+            else {
+              // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
+              // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
+              // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
+              storageAlg.delocalize(
+                localObjectPath,
+                gsPath,
+                0L,
+                updatedMetadata,
+                traceId
+              )
+            }
         }
-        .recoverWith { case e: GenerationMismatch =>
-          storageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
+        .recoverWith {
+          case e: GenerationMismatch =>
+            storageAlg.updateMetadata(gsPath, traceId, Map(hashedOwnerEmail.asString -> "outdated")) >> IO.raiseError[DelocalizeResponse](e)
         }
       _ <- metadataCacheAlg.updateLocalFileStateCache(localObjectPath, RemoteState.Found(None, delocalizeResp.crc32c), delocalizeResp.generation)
     } yield ()

@@ -28,8 +28,8 @@ object Main extends IOApp {
       .as(ExitCode.Error)
   }
 
-  def initStreams(appConfig: AppConfig)(implicit
-      logger: StructuredLogger[IO]
+  def initStreams(appConfig: AppConfig)(
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, List[Stream[IO, Unit]]] =
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))

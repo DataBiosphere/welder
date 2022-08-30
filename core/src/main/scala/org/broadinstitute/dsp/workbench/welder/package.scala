@@ -64,7 +64,8 @@ package object welder {
     }
   }
 
-  /** @param localBaseDirectory local base directory
+  /**
+    * @param localBaseDirectory local base directory
     * @param blobPath blob path defined in CloudStorageDirectory
     * @param blobName actual blob name
     * @return
@@ -115,8 +116,8 @@ package object welder {
       stagingBucketName: GcsBucketName,
       blobName: GcsBlobName,
       toTuple: B => List[(A, B)]
-  )(implicit
-      logger: StructuredLogger[IO]
+  )(
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, Ref[IO, Map[A, B]]] =
     for {
       storageAlg <- Stream.eval(cloudStorageAlgRef.get)
@@ -139,20 +140,19 @@ package object welder {
       )
     } yield ref
 
-  private def localCache[B: Decoder](path: Path)(implicit
-      logger: StructuredLogger[IO]
+  private def localCache[B: Decoder](path: Path)(
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, Option[List[B]]] =
     for {
-      res <-
-        if (path.toFile.exists()) {
-          for {
-            cached <- util2.readJsonFileToA[IO, List[B]](path).handleErrorWith { error =>
-              error match {
-                case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.raiseError[IO](e)
-              }
+      res <- if (path.toFile.exists()) {
+        for {
+          cached <- util2.readJsonFileToA[IO, List[B]](path).handleErrorWith { error =>
+            error match {
+              case e => Stream.eval(logger.info(e)(s"Error reading $path")) >> Stream.raiseError[IO](e)
             }
-          } yield Some(cached)
-        } else Stream.eval(IO.pure(none[List[B]]))
+          }
+        } yield Some(cached)
+      } else Stream.eval(IO.pure(none[List[B]]))
     } yield res
 
   def flushCache[A, B: Decoder: Encoder](
@@ -173,13 +173,13 @@ package object welder {
       // This change is made on 3/26/2020
       legacyCacheDir = new File(s"/work/.welder")
       files = legacyCacheDir.listFiles()
-      _ <-
-        if (files != null)
-          IO(files.toList.foreach(_.delete()))
-        else IO.unit
+      _ <- if (files != null)
+        IO(files.toList.foreach(_.delete()))
+      else IO.unit
     } yield ()
 
-  /** Example:
+  /**
+    * Example:
     * scala> findFilesWithSuffix(res1, ".log")
     * res5: List[java.io.File] = List(/tmp/d.log, /tmp/f.log)
     */

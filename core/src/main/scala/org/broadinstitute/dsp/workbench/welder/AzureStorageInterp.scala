@@ -21,11 +21,13 @@ class AzureStorageInterp(implicit logger: StructuredLogger[IO]) extends CloudSto
 
   override def removeObject(gsPath: SourceUri.GsPath, traceId: TraceId, generation: Option[Long]): fs2.Stream[IO, RemoveObjectResult] = ???
 
-  /** Overwrites the file if it already exists locally
+  /**
+    * Overwrites the file if it already exists locally
     */
   override def gcsToLocalFile(localAbsolutePath: Path, gsPath: SourceUri.GsPath, traceId: TraceId): fs2.Stream[IO, AdaptedGcsMetadata] = ???
 
-  /** Delocalize user's files to GCS.
+  /**
+    * Delocalize user's files to GCS.
     */
   override def delocalize(
       localObjectPath: RelativePath,
@@ -35,15 +37,18 @@ class AzureStorageInterp(implicit logger: StructuredLogger[IO]) extends CloudSto
       traceId: TraceId
   ): IO[DelocalizeResponse] = ???
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri.GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = ???
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri.GsPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = logger.info("TODO")
 
-  /** Recursively download files in cloudStorageDirectory to local directory.
+  /**
+    * Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     *
     * @param localBaseDirectory    : base directory where remote files will be download to
