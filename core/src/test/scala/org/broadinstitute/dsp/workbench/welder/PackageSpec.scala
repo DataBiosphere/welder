@@ -5,7 +5,6 @@ import cats.effect.unsafe.implicits.global
 import org.broadinstitute.dsde.workbench.azure.{ContainerName, EndpointUrl}
 
 import java.nio.file.Paths
-import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
@@ -38,13 +37,13 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
     val localPath = Paths.get("workspaces/ws1/sub/notebook1.ipynb")
     getPossibleBaseDirectory(localPath).map(_.toString) shouldBe (List("workspaces/ws1/sub", "workspaces/ws1", "workspaces"))
     val basePath = RelativePath(Paths.get("workspaces/ws1"))
-    getFullBlobName(basePath, localPath, Some(BlobPath("notebooks"))) shouldBe (GcsBlobName("notebooks/sub/notebook1.ipynb"))
+    getFullBlobName(basePath, localPath, Some(BlobPath("notebooks"))) shouldBe (CloudStorageBlob("notebooks/sub/notebook1.ipynb"))
   }
 
   it should "parse path correctly when blobPath doesn't exist" in {
     val localPath = Paths.get("workspaces/ws1/sub/notebook1.ipynb")
     val basePath = RelativePath(Paths.get("workspaces/ws1"))
-    getFullBlobName(basePath, localPath, None) shouldBe (GcsBlobName("sub/notebook1.ipynb"))
+    getFullBlobName(basePath, localPath, None) shouldBe (CloudStorageBlob("sub/notebook1.ipynb"))
   }
 
   "getLocalPath" should "calculate local path correctly when blobPath exists" in {

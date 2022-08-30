@@ -96,7 +96,9 @@ final case class CloudStorageDirectory(container: CloudStorageContainer, blobPat
     case None => s"${container.name}"
   }
 }
-final case class CloudBlobPath(container: CloudStorageContainer, blobPath: CloudStorageBlob)
+final case class CloudBlobPath(container: CloudStorageContainer, blobPath: CloudStorageBlob) {
+  override def toString: String = s"${container.name}/${blobPath.name}"
+}
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,

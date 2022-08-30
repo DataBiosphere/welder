@@ -132,7 +132,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val res = for {
         resp <- objectService.service.run(request).value.attempt
       } yield {
-        resp shouldBe Left(NotFoundException(fakeTraceId, s"gs://${bucketName.value}/${blobName.value} not found"))
+        resp shouldBe Left(NotFoundException(fakeTraceId, s"${bucketName.value}/${blobName.value} not found"))
       }
 
       res.unsafeRunSync()
@@ -168,7 +168,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+        s"""{"syncMode":"EDIT","syncStatus":"REMOTE_NOT_FOUND","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
       val res = for {
         resp <- objectService.service.run(request).value
         body <- resp.get.body.through(text.utf8.decode).compile.foldMonoid
@@ -194,7 +194,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+        s"""{"syncMode":"SAFE","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
       val res = for {
         resp <- objectService.service.run(request).value
         body <- resp.get.body.through(text.utf8.decode).compile.foldMonoid
@@ -224,7 +224,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+        s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
       // Create the local base directory
       val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
       if (!directory.exists) {
@@ -274,7 +274,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+        s"""{"syncMode":"EDIT","syncStatus":"LOCAL_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
       // Create the local base directory
       val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
       if (!directory.exists) {
@@ -317,7 +317,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+        s"""{"syncMode":"EDIT","syncStatus":"REMOTE_CHANGED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
       // Create the local base directory
       val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
       if (!directory.exists) {
@@ -353,7 +353,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
       val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
       val expectedBody =
-        s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb$$"}}"""
+        s"""{"syncMode":"EDIT","syncStatus":"DESYNCHRONIZED","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb$$"}}"""
       // Create the local base directory
       val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
       if (!directory.exists) {
@@ -395,7 +395,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
         val expectedBody =
-          s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+          s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":"${lockedBy.value}","storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -441,7 +441,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
         val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/metadata")).withEntity(requestBodyJson)
         val expectedBlobPath = cloudStorageDirectory.blobPath.fold("")(s => s"/${s.asString}")
         val expectedBody =
-          s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"gs://${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
+          s"""{"syncMode":"EDIT","syncStatus":"LIVE","lastLockedBy":null,"storageLink":{"localBaseDirectory":"${localBaseDirectory.path.toString}","localSafeModeBaseDirectory":"${localSafeDirectory.path.toString}","cloudStorageDirectory":"${cloudStorageDirectory.container.name}${expectedBlobPath}","pattern":"\\\\.ipynb"}}"""
         // Create the local base directory
         val directory = new File(s"/tmp/${localBaseDirectory.path.toString}")
         if (!directory.exists) {
@@ -470,8 +470,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
       (
           cloudStorageDirectory: CloudStorageDirectory,
           localBaseDirectory: LocalBaseDirectory,
-          localSafeDirectory: LocalSafeBaseDirectory,
-          lockedBy: WorkbenchEmail
+          localSafeDirectory: LocalSafeBaseDirectory
       ) =>
         val storageLink = StorageLink(localBaseDirectory, Some(localSafeDirectory), cloudStorageDirectory, "\\.ipynb".r)
         val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map(localBaseDirectory.path -> storageLink))
@@ -499,7 +498,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
             IO(localObjectPath.asPath.toString shouldBe (localPath)) >>
               IO(gsPath.container.name shouldBe (cloudStorageDirectory.container.name)) >>
-              IO(gsPath.blobPath.name shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
+              IO(gsPath.blobPath shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
               IO(generation shouldBe (111L)) >>
               IO(Some(DelocalizeResponse(112L, Crc32("newHash"))))
           override def localizeCloudDirectory(
@@ -778,7 +777,7 @@ class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
           )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]] =
             IO(localObjectPath.asPath.toString shouldBe (localPath)) >>
               IO(gsPath.container.name shouldBe (cloudStorageDirectory.container.name)) >>
-              IO(gsPath.blobPath.name shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
+              IO(gsPath.blobPath shouldBe (getFullBlobName(localBaseDirectory.path, Paths.get(localPath), cloudStorageDirectory.blobPath))) >>
               IO(generation shouldBe (0L)) >>
               IO(Some(DelocalizeResponse(112L, Crc32("newHash"))))
           override def fileToGcs(localObjectPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit

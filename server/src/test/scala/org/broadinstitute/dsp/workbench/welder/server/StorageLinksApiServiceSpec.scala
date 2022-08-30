@@ -69,7 +69,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     val request = Request[IO](method = Method.GET, uri = Uri.unsafeFromString("/"))
 
     val expectedBody =
-      """{"storageLinks":[{"localBaseDirectory":"foo","localSafeModeBaseDirectory":"bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}]}"""
+      """{"storageLinks":[{"localBaseDirectory":"foo","localSafeModeBaseDirectory":"bar","cloudStorageDirectory":"foo/bar","pattern":".zip"}]}"""
 
     val linkToAdd = StorageLink(LocalBaseDirectory(baseDir), Some(LocalSafeBaseDirectory(baseSafeDir)), cloudStorageDirectory, ".zip".r)
 
@@ -91,7 +91,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
   }
 
   "POST /storageLinks" should "return 200 and the storage link created when called with a valid storage link" in {
-    val requestBody = """{"localBaseDirectory":"/foo","localSafeModeBaseDirectory":"/bar","cloudStorageDirectory":"gs://foo/bar","pattern":".zip"}"""
+    val requestBody = """{"localBaseDirectory":"/foo","localSafeModeBaseDirectory":"/bar","cloudStorageDirectory":"foo/bar","pattern":".zip"}"""
 
     val requestBodyJson = parser.parse(requestBody).getOrElse(throw new Exception(s"invalid request body $requestBody"))
     val request = Request[IO](method = Method.POST, uri = Uri.unsafeFromString("/")).withEntity(requestBodyJson)

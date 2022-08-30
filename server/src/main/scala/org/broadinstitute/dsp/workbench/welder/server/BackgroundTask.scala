@@ -106,7 +106,7 @@ class BackgroundTask(
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
           findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
-            val gsPath = getGsPath(storageLink, new File(file.getName))
+            val gsPath = getCloudBlobPath(storageLink, new File(file.getName))
             checkSyncStatus(
               gsPath,
               RelativePath(java.nio.file.Paths.get(file.getName))
@@ -206,7 +206,7 @@ class BackgroundTask(
     } yield ()
   }
 
-  def getGsPath(storageLink: StorageLink, file: File): CloudBlobPath = {
+  def getCloudBlobPath(storageLink: StorageLink, file: File): CloudBlobPath = {
     val fullBlobPath = getFullBlobName(
       storageLink.localBaseDirectory.path,
       storageLink.localBaseDirectory.path.asPath.resolve(file.toString),

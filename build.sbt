@@ -1,4 +1,4 @@
-coverageMinimum := 15 //Update this once there're more tests
+coverageMinimumStmtTotal := 15 //Update this once there're more tests
 coverageFailOnMinimum := false //Make this true once we have more tests
 
 lazy val welder = project
