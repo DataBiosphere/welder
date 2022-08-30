@@ -197,17 +197,6 @@ package object welder {
   def findFilesWithPattern(parent: Path, pattern: Regex): List[File] =
     parent.toFile.listFiles().filter(f => f.isFile && pattern.findFirstIn(f.getName).isDefined).toList
 
-//  def getSourceUriForProvider(cloudProvider: CloudProvider, container: CloudStorageContainer, blob: CloudStorageBlob)(
-//      implicit ev: Ask[IO, TraceId]
-//  ): IO[SourceUri] =
-//    ev.ask[TraceId].flatMap { traceId =>
-//      cloudProvider match {
-//        case CloudProvider.Gcp => IO(GsPath(container.asGcsBucket, blob.asGcs))
-//        case CloudProvider.Azure => IO(AzurePath(container.asAzureCloudContainer, blob.asAzure))
-//        case CloudProvider.None => IO.raiseError(InvalidSourceURIException(traceId, "Cannot get sourceURI with no cloud provider", Map.empty))
-//      }
-//    }
-
   def getStorageContainerNameFromUrl(url: EndpointUrl): Either[Throwable, ContainerName] =
     for {
       splittedString <- Either.catchNonFatal(url.value.stripPrefix("https://").split("/")(1))
