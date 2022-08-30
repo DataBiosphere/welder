@@ -5,7 +5,6 @@ import cats.effect.{IO, Ref}
 import org.broadinstitute.dsde.workbench.google2.GoogleStorageService
 import org.broadinstitute.dsde.workbench.google2.mock.FakeGoogleStorageInterpreter
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.LocalBaseDirectory
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -16,7 +15,7 @@ import scala.concurrent.duration._
 class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
   val backgroundTaskConfig = BackgroundTaskConfig(
     Paths.get("/work"),
-    GcsBucketName("testStagingBucket"),
+    CloudStorageContainer("testStagingBucket"),
     7 minutes,
     10 minutes,
     15 minutes,
@@ -30,7 +29,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
       StorageLink(
         LocalBaseDirectory(RelativePath(Paths.get(""))),
         None,
-        CloudStorageDirectory(GcsBucketName("testBucket"), Some(BlobPath("notebooks"))),
+        CloudStorageDirectory(CloudStorageContainer("testBucket"), Some(BlobPath("notebooks"))),
         "\\.Rmd$".r
       )
     val file = new File("test.Rmd")
@@ -46,7 +45,7 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
     val storageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](storageLinks)
     val metaCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](metadata)
     val defaultGoogleStorageAlg =
-      CloudStorageAlg.forGoogle(GoogleStorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
+      CloudStorageAlg.forGoogle(StorageAlgConfig(Paths.get("/tmp")), googleStorageService.getOrElse(FakeGoogleStorageInterpreter))
     val metadataCacheAlg = new MetadataCacheInterp(metaCache)
     new BackgroundTask(
       backgroundTaskConfig,

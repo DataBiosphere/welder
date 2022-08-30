@@ -38,8 +38,8 @@ class MetadataCacheInterp(metadataCache: MetadataCache) extends MetadataCacheAlg
       (newCache, ())
     }
 
-  val updateCachePipe: Pipe[IO, AdaptedGcsMetadataCache, Unit] = in => {
-    in.flatMap { metadata =>
+  val updateCachePipe: Pipe[IO, Option[AdaptedGcsMetadataCache], Unit] = in => {
+    in.unNone.flatMap { metadata =>
       val res = metadataCache.modify { mp =>
         val newCache = mp + (metadata.localPath -> metadata)
         (newCache, ())

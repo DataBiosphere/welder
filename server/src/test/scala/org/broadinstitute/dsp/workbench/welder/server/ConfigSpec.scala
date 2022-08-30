@@ -2,9 +2,7 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.nio.file.Paths
-import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
-import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.http4s.Uri
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,11 +45,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       7 minutes,
       1 minutes,
       15 minutes,
-      GcsBlobName("welder-metadata/storage_links.json"),
-      GcsBlobName("welder-metadata/gcs_metadata.json"),
+      CloudStorageBlob("welder-metadata/storage_links.json"),
+      CloudStorageBlob("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
-      GcsBucketName("fakeBucket"),
+      CloudStorageContainer("fakeBucket"),
       30 seconds,
       false
     )
@@ -97,11 +95,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       7 minutes,
       1 minutes,
       15 minutes,
-      GcsBlobName("welder-metadata/storage_links.json"),
-      GcsBlobName("welder-metadata/gcs_metadata.json"),
+      CloudStorageBlob("welder-metadata/storage_links.json"),
+      CloudStorageBlob("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
-      GcsBucketName("fakeBucket"),
+      CloudStorageContainer("fakeBucket"),
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
@@ -122,11 +120,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       7 minutes,
       1 minutes,
       15 minutes,
-      GcsBlobName("welder-metadata/storage_links.json"),
-      GcsBlobName("welder-metadata/gcs_metadata.json"),
+      CloudStorageBlob("welder-metadata/storage_links.json"),
+      CloudStorageBlob("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
-      GcsBucketName("fakeBucket"),
+      CloudStorageContainer("fakeBucket"),
       30 seconds,
       false
     )
@@ -142,11 +140,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       7 minutes,
       1 minutes,
       15 minutes,
-      GcsBlobName("welder-metadata/storage_links.json"),
-      GcsBlobName("welder-metadata/gcs_metadata.json"),
+      CloudStorageBlob("welder-metadata/storage_links.json"),
+      CloudStorageBlob("welder-metadata/gcs_metadata.json"),
       Paths.get(".delocalize.json"),
       objectServiceConfig,
-      GcsBucketName("fakeBucket"),
+      CloudStorageContainer("fakeBucket"),
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),

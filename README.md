@@ -4,10 +4,18 @@ Welder is a lightweight webservice intended to be run on Dataproc Clusters and G
 
 # Try it out
 
-* export OWNER_EMAIL="fake@gmail.com"
-* export STAGING_BUCKET=<bucket-that-you-have-access-to>
-* export IS_RSTUDIO_RUNTIME=true # false if you don't want the Rmd file syncing background process to run
-* Run `gcloud auth application-default login`
+Setup env vars and auth
+```bash
+export OWNER_EMAIL="fake@gmail.com"
+export STAGING_BUCKET="jc-sample-bucket"
+export IS_RSTUDIO_RUNTIME=false # false if you don't want the Rmd file syncing background process to run
+export CLOUD_PROVIDER=gcp
+export WSM_URL="dummy" # if doesn't work use the real WSM url
+export WORKSPACE_ID="dummy"
+export STORAGE_CONTAINER_RESOURCE_ID="dummy"
+gcloud auth application-default login
+```
+
 * Start welder-api-server `sbt server/run`
 ** you may want to create `server/src/main/resources/application.conf` with the following content
 ```bash
@@ -15,6 +23,7 @@ path-to-storage-links-json = "storage_links.json"
 path-to-gcs-metadata-json = "gcs_metadata.json"
 object-service.working-directory = "/tmp"
 ```
+
 
 # Publish container image to Google container registry
 * Set up auth for publishing docker image to GCR
@@ -45,8 +54,12 @@ Make sure all builds are green after you merge PR. Look for `welder-update-hash`
 Set up environment variables
 ```
 export OWNER_EMAIL="fake@gmail.com"
-export STAGING_BUCKET="fakeBucket"
-export IS_RSTUDIO_RUNTIME=false // true if Rmd file syncing background process is wanted
+export STAGING_BUCKET="jc-sample-bucket"
+export IS_RSTUDIO_RUNTIME=false # false if you don't want the Rmd file syncing background process to run
+export CLOUD_PROVIDER=gcp
+export WSM_URL="dummy" # if doesn't work use the real WSM url
+export WORKSPACE_ID="dummy"
+export STORAGE_CONTAINER_RESOURCE_ID="dummy"
 ```
 Run tests
 ```
