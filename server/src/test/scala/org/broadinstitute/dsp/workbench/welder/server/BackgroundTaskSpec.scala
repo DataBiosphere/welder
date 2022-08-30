@@ -33,8 +33,9 @@ class BackgroundTaskSpec extends AnyFlatSpec with WelderTestSuite {
         "\\.Rmd$".r
       )
     val file = new File("test.Rmd")
-    val res = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None).getGsPath(storageLink, file)
-    res.toString shouldBe s"gs://testBucket/notebooks/test.Rmd"
+    val backgroundTask = initBackgroundTask(Map(storageLink.localBaseDirectory.path -> storageLink), Map.empty, None)
+    val res = backgroundTask.getCloudBlobPath(storageLink, file)
+    res.toString shouldBe s"testBucket/notebooks/test.Rmd"
   }
 
   private def initBackgroundTask(

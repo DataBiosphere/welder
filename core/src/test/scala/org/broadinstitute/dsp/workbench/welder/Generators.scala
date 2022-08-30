@@ -1,16 +1,15 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import java.nio.file.{Path, Paths}
-
 import org.broadinstitute.dsde.workbench.azure.{BlobName, ContainerName}
 import org.broadinstitute.dsde.workbench.google2
 import org.broadinstitute.dsde.workbench.google2.GcsBlobName
 import org.broadinstitute.dsde.workbench.model.WorkbenchEmail
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{AzurePath, GsPath}
 import org.http4s.Uri
 import org.scalacheck.{Arbitrary, Gen}
+
+import java.nio.file.{Path, Paths}
 
 object Generators {
   val genGsPathUri = for {
@@ -18,19 +17,16 @@ object Generators {
     objectName <- google2.Generators.genGcsBlobName
   } yield Uri.unsafeFromString(s"gs://${bucketName.value}/a/${objectName.value}")
 
-  val genGsPath = for {
-    bucketName <- google2.Generators.genGcsBucketName
-    objectName <- google2.Generators.genGcsBlobName
-  } yield GsPath(bucketName, GcsBlobName(s"a/${objectName.value}"))
+  val genCloudStorageContainer = google2.Generators.genGcsBucketName.map(b => CloudStorageContainer(b.value))
+  val genCloudStorageBlob = google2.Generators.genGcsBucketName.map(b => CloudStorageBlob(b.value))
+  val genCloudBlobPath = for {
+    bucketName <- genCloudStorageContainer
+    objectName <- genCloudStorageBlob
+  } yield CloudBlobPath(bucketName, objectName)
 
   val genAzureBlobName: Gen[BlobName] = Gen.uuid.map(x => BlobName(s"blob${x.toString}"))
   val genAzureContainerName: Gen[ContainerName] = Gen.uuid.map(x => ContainerName(s"container${x.toString}"))
   val genAzureFileContent: Gen[String] = Gen.stringOfN(10, Gen.alphaLowerChar)
-
-  val genAzurePath = for {
-    blobName <- genAzureBlobName
-    containerName <- genAzureContainerName
-  } yield AzurePath(containerName, blobName)
 
   val genFilePath = Gen.uuid.map(uuid => Paths.get(s"dir/${uuid}"))
   val genRelativePath = Gen.uuid.map(uuid => RelativePath(Paths.get(s"dir/${uuid}")))
@@ -72,8 +68,8 @@ object Generators {
   val genWorkbenchEmail = Gen.uuid.map(x => WorkbenchEmail(s"$x@gmail.com"))
 
   implicit val arbGsPathUri: Arbitrary[Uri] = Arbitrary(genGsPathUri)
-  implicit val arbGsPath: Arbitrary[GsPath] = Arbitrary(genGsPath)
-  implicit val arbAzurePath: Arbitrary[AzurePath] = Arbitrary(genAzurePath)
+  implicit val arbGsPath: Arbitrary[CloudBlobPath] = Arbitrary(genCloudBlobPath)
+  implicit val arbCloudStorageContainer: Arbitrary[CloudStorageContainer] = Arbitrary(genCloudStorageContainer)
   implicit val arbGcsBucketName: Arbitrary[GcsBucketName] = Arbitrary(google2.Generators.genGcsBucketName)
   implicit val arbGcsBlobName: Arbitrary[GcsBlobName] = Arbitrary(google2.Generators.genGcsBlobName)
   implicit val arbFilePath: Arbitrary[Path] = Arbitrary(genFilePath)

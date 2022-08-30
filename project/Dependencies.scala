@@ -2,14 +2,13 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.14.2"
-  val http4sVersion = "1.0.0-M34"
-  val grpcCoreVersion = "1.34.0"
+  val http4sVersion = "1.0.0-M35"
+  val grpcCoreVersion = "1.34.1"
   val scalaTestVersion = "3.2.13"
 
-  val workbenchLibsHash = "c8edf8e"
-  val azureWorkbenchLibsHash = "891b768"
+  val workbenchLibsHash = "0096bac"
   val workbenchGoogle2V = s"0.24-$workbenchLibsHash"
-  val workbenchAzureV = s"0.1-$azureWorkbenchLibsHash"
+  val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.1",
@@ -28,7 +27,7 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV % "test" classifier "tests", //for generators/mocks
     "ca.mrvisser" %% "sealerate" % "0.0.6",
-    "com.google.cloud" % "google-cloud-nio" % "0.123.28" % "test",
+    "com.google.cloud" % "google-cloud-nio" % "0.124.14" % "test",
     "ch.qos.logback" % "logback-classic" % "1.4.0",
     "net.logstash.logback" % "logstash-logback-encoder" % "7.2" // for structured logging in logback
   )
