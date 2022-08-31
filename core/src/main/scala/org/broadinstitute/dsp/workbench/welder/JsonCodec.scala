@@ -12,7 +12,7 @@ import org.broadinstitute.dsde.workbench.google2.{Crc32, GcsBlobName}
 import org.broadinstitute.dsde.workbench.model.{TraceId, WorkbenchEmail}
 import org.broadinstitute.dsde.workbench.model.google.GcsBucketName
 import org.broadinstitute.dsp.workbench.welder.LocalDirectory.{LocalBaseDirectory, LocalSafeBaseDirectory}
-import org.broadinstitute.dsp.workbench.welder.SourceUri.{DataUri, GsPath}
+import org.broadinstitute.dsp.workbench.welder.SourceUri.{CloudUri, DataUri}
 import org.http4s.Uri
 
 import scala.util.matching.Regex
@@ -34,24 +34,22 @@ object JsonCodec {
   implicit val syncStatusEncoder: Encoder[SyncStatus] = Encoder.encodeString.contramap(_.toString)
   implicit val gcsBucketNameDecoder: Decoder[GcsBucketName] = Decoder.decodeString.map(GcsBucketName)
   implicit val gcsBlobNameDecoder: Decoder[GcsBlobName] = Decoder.decodeString.map(GcsBlobName)
-  implicit val gsPathDecoder: Decoder[GsPath] = Decoder.decodeString.emap(parseGsPath)
-  implicit val gsPathEncoder: Encoder[GsPath] = Encoder.encodeString.contramap(_.toString)
+  implicit val gsPathDecoder: Decoder[CloudUri] = Decoder.decodeString.emap(parseCloudBlobPath).map(CloudUri)
+  implicit val gsPathEncoder: Encoder[CloudUri] = Encoder.encodeString.contramap(_.toString)
   implicit val cloudStorageDirectoryDecoder: Decoder[CloudStorageDirectory] = Decoder.decodeString.emap { s =>
-    parseBucketName(s) match {
-      case Left(error) => Left(error)
+    val parsed = s.replaceAll("gs://", "")
+
+    parseCloudStorageContainer(parsed) match {
+      case Left(error) =>
+        Left(error)
       case Right(bucket) =>
-        val length = s"gs://${bucket.value}/".length
-        val blobPathString = s.drop(length)
+        val length = s"${bucket.name}/".length
+        val blobPathString = parsed.drop(length)
         val blobPath = if (blobPathString.isEmpty) None else Some(BlobPath(blobPathString))
-        Right(CloudStorageDirectory(CloudStorageContainer(bucket.value), blobPath))
+        Right(CloudStorageDirectory(CloudStorageContainer(bucket.name), blobPath))
     }
   }
-  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap { x =>
-    x.blobPath match {
-      case Some(bp) => s"gs://${x.container.name}/${bp.asString}"
-      case None => s"gs://${x.container.name}"
-    }
-  }
+  implicit val cloudStorageDirectoryEncoder: Encoder[CloudStorageDirectory] = Encoder.encodeString.contramap(x => x.asString)
   implicit val sourceUriDecoder: Decoder[SourceUri] = Decoder.decodeString.emap { s =>
     if (s.startsWith("data:application/json;base64,")) {
       val res = for {
@@ -60,7 +58,7 @@ object JsonCodec {
       } yield DataUri(data)
 
       res.leftMap(_.getMessage)
-    } else parseGsPath(s)
+    } else parseCloudBlobPath(s).map(SourceUri.CloudUri)
   }
   implicit val localBasePathEncoder: Encoder[LocalDirectory] = pathEncoder.contramap(_.path.asPath)
 

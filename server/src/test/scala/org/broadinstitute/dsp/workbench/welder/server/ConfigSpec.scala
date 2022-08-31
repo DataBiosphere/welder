@@ -71,8 +71,9 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |misc-http-client-config = {
         |  wsm-url = "https://workspace.dsde-dev.broadinstitute.org/"
         |  workspace-id = "a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"
-        |  storage-container-resource-id = "9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"
         |}
+        |workspace-storage-container-resource-id = "9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"
+        |staging-storage-container-resource-id = "7406737a-7001-45f8-a3bb-aad8577ecd4c"
         |is-rstudio-runtime = false
         |object-service {
         |  working-directory = "/work"
@@ -103,10 +104,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
-        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
-        UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174")
+        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02")
       ),
-      false
+      false,
+      UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"),
+      UUID.fromString("7406737a-7001-45f8-a3bb-aad8577ecd4c")
     )
     ConfigSource.string(configString).load[AppConfig.Azure] shouldBe Right(expectedConfig)
   }
@@ -148,10 +150,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
-        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
-        UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174")
+        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02")
       ),
-      false
+      false,
+      UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"),
+      UUID.fromString("7406737a-7001-45f8-a3bb-aad8577ecd4c")
     )
     config shouldBe Right(expectedConfig)
   }
