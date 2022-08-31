@@ -58,30 +58,15 @@ object CloudProvider {
   final case object Azure extends CloudProvider {
     override val asString = "AZURE"
   }
-
-  final case object None extends CloudProvider {
-    override val asString = "None"
-  }
-
 }
 
-sealed abstract class SourceUri {
-  val cloudProvider: CloudProvider
-}
+sealed abstract class SourceUri
 
 object SourceUri {
-  final case class DataUri(data: Array[Byte]) extends SourceUri {
-    override val cloudProvider: CloudProvider = CloudProvider.None
-  }
-  final case class GsPath(bucketName: GcsBucketName, blobName: GcsBlobName) extends SourceUri {
-    override def toString: String = s"gs://${bucketName.value}/${blobName.value}"
+  final case class DataUri(data: Array[Byte]) extends SourceUri
 
-    override val cloudProvider: CloudProvider = CloudProvider.Gcp
-  }
-  final case class AzurePath(containerName: ContainerName, blobName: BlobName) extends SourceUri {
-    override def toString: String = s"${containerName.value}/${blobName.value}"
-
-    override val cloudProvider: CloudProvider = CloudProvider.Azure
+  final case class CloudUri(cloudBlobPath: CloudBlobPath) extends SourceUri {
+    override def toString: String = s"${cloudBlobPath.container.name}/${cloudBlobPath.blobPath.name}"
   }
 }
 
@@ -105,7 +90,15 @@ final case class CloudStorageBlob(name: String) {
   val asAzure: BlobName = BlobName(name)
 }
 
-final case class CloudStorageDirectory(container: CloudStorageContainer, blobPath: Option[BlobPath])
+final case class CloudStorageDirectory(container: CloudStorageContainer, blobPath: Option[BlobPath]) {
+  def asString = blobPath match {
+    case Some(value) => s"${container.name}/${value.asString}"
+    case None => s"${container.name}"
+  }
+}
+final case class CloudBlobPath(container: CloudStorageContainer, blobPath: CloudStorageBlob) {
+  override def toString: String = s"${container.name}/${blobPath.name}"
+}
 
 final case class StorageLink(
     localBaseDirectory: LocalDirectory,

@@ -6,7 +6,7 @@ import com.typesafe.sbt.packager.docker.{Cmd, ExecCmd}
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport.scalafmtOnCompile
 import sbt.Keys.{scalacOptions, _}
 import sbt._
-import com.typesafe.sbt.GitPlugin.autoImport._
+import com.github.sbt.git.GitPlugin.autoImport._
 import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
 
@@ -22,6 +22,7 @@ object Settings {
   lazy val commonBuildSettings = Defaults.coreDefaultSettings ++ Defaults.defaultConfigs ++ Seq(
     javaOptions += "-Xmx2G",
     javacOptions ++= Seq("--release", "17"),
+    run / fork := true,
     Compile / console / scalacOptions --= Seq("-Ywarn-unused:imports", "-Xfatal-warnings")
   )
 

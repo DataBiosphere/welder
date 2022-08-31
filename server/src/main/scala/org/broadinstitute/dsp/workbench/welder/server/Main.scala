@@ -2,7 +2,6 @@ package org.broadinstitute.dsp.workbench.welder
 package server
 
 import java.util.UUID
-
 import cats.effect.kernel.Ref
 import cats.effect.std.{Dispatcher, Semaphore}
 import cats.effect.unsafe.implicits.global
@@ -40,23 +39,29 @@ object Main extends IOApp {
     for {
       permits <- Stream.eval(Ref[IO].of(Map.empty[RelativePath, Semaphore[IO]]))
       blockerBound <- Stream.eval(Semaphore[IO](255))
-      storageAlg2 <- Stream.resource(initStorageAlg(appConfig, blockerBound))
-      storageAlgRef <- Stream.eval(Ref[IO].of(storageAlg2))
-      storageLinksCache <- cachedResource[RelativePath, StorageLink](
-        storageAlgRef,
-        appConfig.getSourceUri,
-        storageLink => {
-          val safeModeDirectory =
-            storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
-          List(storageLink.localBaseDirectory.path -> storageLink) ++ safeModeDirectory
-        }
-      )
+      initStorageAlgResp <- Stream.resource(initStorageAlg(appConfig, blockerBound))
+      storageAlgRef <- Stream.eval(Ref[IO].of(initStorageAlgResp.cloudStorageAlg))
+      storageLinksCache <- appConfig match {
+        case _: AppConfig.Azure =>
+//        For Azure, all ipynb files will exist under home directory for jupyter. Hence we don't need to dynamically define storagelinks
+          Stream.eval(
+            Ref.of[IO, Map[RelativePath, StorageLink]](Map(initStorageAlgResp.storageLink.get.localBaseDirectory.path -> initStorageAlgResp.storageLink.get))
+          )
+        case conf: AppConfig.Gcp =>
+          cachedResource[RelativePath, StorageLink](
+            storageAlgRef,
+            conf.getStorageLinksJsonUri,
+            storageLink => {
+              val safeModeDirectory =
+                storageLink.localSafeModeBaseDirectory.fold[List[Tuple2[RelativePath, StorageLink]]](List.empty)(l => List(l.path -> storageLink))
+              List(storageLink.localBaseDirectory.path -> storageLink) ++ safeModeDirectory
+            }
+          )
+      }
+
       metadataCache <- cachedResource[RelativePath, AdaptedGcsMetadataCache](
         storageAlgRef,
-        SourceUri.GsPath(
-          appConfig.stagingBucketName.asGcsBucket,
-          appConfig.metadataJsonBlobName.asGcs
-        ),
+        appConfig.getMetadataJsonBlobNameUri,
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
@@ -101,12 +106,24 @@ object Main extends IOApp {
         .bindHttp(appConfig.serverPort, "0.0.0.0")
         .withHttpApp(welderApp.service)
         .serveWhile(shutDownSignal, Ref.unsafe[IO, ExitCode](ExitCode.Success))
+        .drain
 
       val flushCache = backGroundTask.flushBothCache(
         appConfig.storageLinksJsonBlobName,
         appConfig.metadataJsonBlobName
       )
-      List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
+
+      appConfig match {
+        case _: AppConfig.Gcp =>
+          List(backGroundTask.cleanUpLock, flushCache, backGroundTask.syncCloudStorageDirectory, backGroundTask.delocalizeBackgroundProcess, serverStream.drain)
+        case x: AppConfig.Azure =>
+          List(
+            flushCache,
+            backGroundTask.syncCloudStorageDirectory,
+            backGroundTask.updateStorageAlg(x, blockerBound, storageAlgRef),
+            serverStream
+          )
+      }
     }
   }
 
