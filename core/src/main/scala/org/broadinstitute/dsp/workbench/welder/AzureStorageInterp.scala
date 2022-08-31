@@ -49,7 +49,8 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       case _ => super.removeObject(gsPath, generation)
     }
 
-  /** Overwrites the file if it already exists locally
+  /**
+    * Overwrites the file if it already exists locally
     */
   override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]] =
     gsPath match {
@@ -61,7 +62,8 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       case _ => super.gcsToLocalFile(localAbsolutePath, gsPath)
     }
 
-  /** Delocalize user's files to GCS.
+  /**
+    * Delocalize user's files to GCS.
     */
   override def delocalize(
       localObjectPath: RelativePath,
@@ -80,14 +82,16 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
     case _ => super.delocalize(localObjectPath, gsPath, generation, userDefinedMeta)
   }
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcs(localObjectPath: RelativePath, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: SourceUri)(implicit ev: Ask[IO, TraceId]): IO[Unit] = gsPath match {
     case AzurePath(containerName, blobName) =>
@@ -97,7 +101,8 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
     case _ => super.fileToGcsAbsolutePath(localFile, gsPath)
   }
 
-  /** Recursively download files in cloudStorageDirectory to local directory.
+  /**
+    * Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     *
     * @param localBaseDirectory    : base directory where remote files will be download to

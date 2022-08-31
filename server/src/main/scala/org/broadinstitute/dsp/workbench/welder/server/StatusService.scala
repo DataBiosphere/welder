@@ -14,13 +14,14 @@ object StatusService extends Http4sDsl[IO] {
       "gitHeadCommit"
     )(x => StatusResponse.unapply(x).get)
 
-  val service: HttpRoutes[IO] = HttpRoutes.of[IO] { case GET -> Root =>
-    val response = StatusResponse(
-      BuildInfo.buildTime.toString,
-      BuildInfo.gitHeadCommit
-    )
+  val service: HttpRoutes[IO] = HttpRoutes.of[IO] {
+    case GET -> Root =>
+      val response = StatusResponse(
+        BuildInfo.buildTime.toString,
+        BuildInfo.gitHeadCommit
+      )
 
-    Ok(response)
+      Ok(response)
   }
 }
 
