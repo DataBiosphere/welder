@@ -106,7 +106,7 @@ class PackageSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderT
 
   "getPossibleBaseDirectory" should "get the base directory for a file" in {
     val path1 = Paths.get("Untitled.ipynb")
-    getPossibleBaseDirectory(path1).size shouldBe (1)
+    getPossibleBaseDirectory(path1).size shouldBe 1
 
     val path2 = Paths.get("ws1/Untitled.ipynb")
     getPossibleBaseDirectory(path2) shouldBe (List(Paths.get("ws1")))

@@ -18,8 +18,8 @@ import java.time.Instant
 import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex
 
-class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: GoogleStorageService[IO])(
-    implicit logger: StructuredLogger[IO]
+class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: GoogleStorageService[IO])(implicit
+    logger: StructuredLogger[IO]
 ) extends CloudStorageAlg {
   private val chunkSize = 1024 * 1024 * 2 // com.google.cloud.storage.BlobReadChannel.DEFAULT_CHUNK_SIZE
 
@@ -31,7 +31,7 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
         .drain
         .as(UpdateMetadataResponse.DirectMetadataUpdate)
         .handleErrorWith {
-          case e: com.google.cloud.storage.StorageException if (e.getCode == 403) =>
+          case e: com.google.cloud.storage.StorageException if e.getCode == 403 =>
             for {
               _ <- logger.warn(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Fail to update lock due to 403. Going to download the blob and re-upload")
               bytes <- googleStorageService.getBlobBody(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, Some(traceId)).compile.to(Array)
@@ -74,8 +74,8 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
       r <- googleStorageService.removeObject(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, generation, Some(traceId))
     } yield r
 
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
-      implicit ev: Ask[IO, TraceId]
+  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit
+      ev: Ask[IO, TraceId]
   ): Stream[IO, Option[AdaptedGcsMetadata]] =
     for {
       traceId <- Stream.eval(ev.ask)
@@ -154,21 +154,23 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
         1000,
         Some(traceId)
       )
-      r <- if (pattern.findFirstIn(blob.getName).isDefined) {
-        for {
-          localPath <- Stream.eval(IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName)))
-          localAbsolutePath <- Stream.fromEither[IO](Either.catchNonFatal(workingDir.resolve(localPath.asPath)))
-          result <- if (localAbsolutePath.toFile.exists()) Stream(None).covary[IO]
-          else {
-            val res = for {
-              metadata <- adaptMetadata(Crc32(blob.getCrc32c), Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty), blob.getGeneration)
-              _ <- mkdirIfNotExist(localAbsolutePath.getParent)
-              _ <- IO(blob.downloadTo(localAbsolutePath))
-            } yield Some(AdaptedGcsMetadataCache(localPath, RemoteState.Found(metadata.lock, metadata.crc32c), Some(metadata.generation)))
-            Stream.eval(res)
-          }
-        } yield result
-      } else Stream(None).covary[IO]
+      r <-
+        if (pattern.findFirstIn(blob.getName).isDefined) {
+          for {
+            localPath <- Stream.eval(IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName)))
+            localAbsolutePath <- Stream.fromEither[IO](Either.catchNonFatal(workingDir.resolve(localPath.asPath)))
+            result <-
+              if (localAbsolutePath.toFile.exists()) Stream(None).covary[IO]
+              else {
+                val res = for {
+                  metadata <- adaptMetadata(Crc32(blob.getCrc32c), Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty), blob.getGeneration)
+                  _ <- mkdirIfNotExist(localAbsolutePath.getParent)
+                  _ <- IO(blob.downloadTo(localAbsolutePath))
+                } yield Some(AdaptedGcsMetadataCache(localPath, RemoteState.Found(metadata.lock, metadata.crc32c), Some(metadata.generation)))
+                Stream.eval(res)
+              }
+          } yield result
+        } else Stream(None).covary[IO]
     } yield r
 
   override def uploadBlob(path: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Pipe[IO, Byte, Unit] =
@@ -204,7 +206,5 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
             none[Lock] //we don't care who held lock if it has expired
         }
       }
-    } yield {
-      AdaptedGcsMetadata(lock, crc32c, generation)
-    }
+    } yield AdaptedGcsMetadata(lock, crc32c, generation)
 }
