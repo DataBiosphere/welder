@@ -276,17 +276,19 @@ class ObjectService(
           generation <- previousMeta match {
             case Some(meta) =>
               meta.remoteState match {
-                case RemoteState.NotFound => IO.pure(0L)
+                case RemoteState.NotFound => IO.pure(Some(0L))
                 case RemoteState.Found(lock, _) =>
                   lock
                     .traverse(l => checkLock(l, now.toEpochMilli, gsPath.container)) //check if user owns the lock before deleting
-                    .as(meta.localFileGeneration.getOrElse(0L))
+                    .as(Some(meta.localFileGeneration.getOrElse(0L)))
               }
             case None =>
-              IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
+              if (config.isLockingEnabled)
+                IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
+              else IO.pure(none[Long])
           }
           storageAlg <- storageAlgRef.get
-          _ <- storageAlg.removeObject(gsPath, Some(generation)).compile.drain.void
+          _ <- storageAlg.removeObject(gsPath, generation).compile.drain.void
           _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
         preventConcurrentAction(actionToLock, req.localObjectPath)
