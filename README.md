@@ -14,6 +14,7 @@ export WSM_URL="dummy" # if doesn't work use the real WSM url
 export WORKSPACE_ID="dummy"
 export STORAGE_CONTAINER_RESOURCE_ID="dummy"
 export PORT=8080
+export LOCKING_ENABLED=true
 gcloud auth application-default login
 ```
 

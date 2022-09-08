@@ -29,6 +29,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
         |  owner-email = "fake@gmail.com"
+        |  is-locking-enabled = true
         |}
         |staging-bucket-name = "fakeBucket"
         |clean-up-lock-interval = 7 minutes
@@ -79,6 +80,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
         |  owner-email = "fake@gmail.com"
+        |  is-locking-enabled = true
         |}
         |
         |staging-bucket-name = "fakeBucket"
