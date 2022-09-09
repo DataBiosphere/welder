@@ -23,11 +23,13 @@ trait CloudStorageAlg {
 
   def removeObject(gsPath: CloudBlobPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult]
 
-  /** Overwrites the file if it already exists locally
+  /**
+    * Overwrites the file if it already exists locally
     */
   def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]]
 
-  /** Delocalize user's files to GCS.
+  /**
+    * Delocalize user's files to GCS.
     */
   def delocalize(
       localObjectPath: RelativePath,
@@ -36,15 +38,18 @@ trait CloudStorageAlg {
       userDefinedMeta: Map[String, String]
   )(implicit ev: Ask[IO, TraceId]): IO[Option[DelocalizeResponse]]
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   def fileToGcs(localObjectPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
 
-  /** Copy file to GCS without checking generation, and adding user metadata
+  /**
+    * Copy file to GCS without checking generation, and adding user metadata
     */
   def fileToGcsAbsolutePath(localFile: Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit]
 
-  /** Recursively download files in cloudStorageDirectory to local directory.
+  /**
+    * Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     * @param localBaseDirectory: base directory where remote files will be download to
     * @param cloudStorageDirectory: GCS directory where files will be download from

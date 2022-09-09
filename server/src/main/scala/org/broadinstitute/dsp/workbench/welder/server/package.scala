@@ -16,8 +16,8 @@ import scala.concurrent.duration.DurationInt
 package object server {
   type Permits = Ref[IO, Map[RelativePath, Semaphore[IO]]]
 
-  private[server] def initStorageAlg(config: AppConfig, blockerBound: Semaphore[IO])(implicit
-      logger: StructuredLogger[IO]
+  private[server] def initStorageAlg(config: AppConfig, blockerBound: Semaphore[IO])(
+      implicit logger: StructuredLogger[IO]
   ): Resource[IO, InitStorageAlgResp] = {
     val algConfig = StorageAlgConfig(config.objectService.workingDirectory)
 

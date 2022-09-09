@@ -31,8 +31,8 @@ object Main extends IOApp {
       .as(ExitCode.Error)
   }
 
-  def initStreams(appConfig: AppConfig)(implicit
-      logger: StructuredLogger[IO]
+  def initStreams(appConfig: AppConfig)(
+      implicit logger: StructuredLogger[IO]
   ): Stream[IO, List[Stream[IO, Unit]]] = {
 
     implicit val traceIdImplicit = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))

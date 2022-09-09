@@ -109,7 +109,8 @@ final case class StorageLink(
 
 final case class HashedLockedBy(asString: String) extends AnyVal
 
-/** Data type represents a lock that hasn't expired
+/**
+  * Data type represents a lock that hasn't expired
   * @param hashedLockedBy hash of who owns the lock welder knows about most recently
   * @param lockExpiresAt Instant of when lock expires
   */
@@ -121,7 +122,8 @@ final case class Lock(hashedLockedBy: HashedLockedBy, lockExpiresAt: Instant) {
 }
 
 // This case class doesn't mirror exactly metadata from GCS, we adapted raw metadata from GCS and only keep fields we care
-/** @param lock lock related info; This should get updated every time welder interacts with Google
+/**
+  * @param lock lock related info; This should get updated every time welder interacts with Google
   * @param crc32c previous hash of a local file when it gets localized; We don't update this value every time we interact with Google because we need to know local file's crc32c when it was pulled from GCS
   * @param generation previous generation of a local file when it gets localized; We don't update this value every time we interact with Google because we need to know local file's crc32c when it was pulled from GCS
   */
@@ -130,14 +132,16 @@ final case class AdaptedGcsMetadata(lock: Option[Lock], crc32c: Crc32, generatio
 sealed abstract class RemoteState
 object RemoteState {
 
-  /** @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
+  /**
+    * @param lock lock related info. lockExpiresAt is only populated when lock is held by current user; This should get updated every time welder interacts with Google
     * @param crc32c latest crc32c we know in GCS
     */
   final case class Found(lock: Option[Lock], crc32c: Crc32) extends RemoteState
   final case object NotFound extends RemoteState
 }
 
-/** @param localPath local relative path to a file
+/**
+  * @param localPath local relative path to a file
   * @param remoteState File state in GCS as far as Welder is aware. Updated every time we interacts with GCS
   * @param localFileGeneration Some() when a file is localized or delocalized; None when the file has not been localized
   */
