@@ -38,19 +38,17 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       resp <- Stream.eval(azureStorageService.deleteBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure))
     } yield resp
 
-  /**
-    * Overwrites the file if it already exists locally
+  /** Overwrites the file if it already exists locally
     */
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
-      implicit ev: Ask[IO, TraceId]
+  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit
+      ev: Ask[IO, TraceId]
   ): Stream[IO, Option[AdaptedGcsMetadata]] =
     for {
       _ <- Stream
         .eval(azureStorageService.downloadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, localAbsolutePath, overwrite = true))
     } yield Option.empty[AdaptedGcsMetadata]
 
-  /**
-    * Delocalize user's files to GCS.
+  /** Delocalize user's files to GCS.
     */
   override def delocalize(
       localObjectPath: RelativePath,
@@ -63,19 +61,18 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       localAbsolutePath <- IO.pure(config.workingDirectory.resolve(localObjectPath.asPath))
       _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
       fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-      _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
+      _ <- (Files[IO]
+        .readAll(fs2path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
     } yield none[DelocalizeResponse]
 
-  /**
-    * Copy file to GCS without checking generation, and adding user metadata
+  /** Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcs(localObjectPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     fileToGcsAbsolutePath(localAbsolutePath, gsPath)
   }
 
-  /**
-    * Copy file to GCS without checking generation, and adding user metadata
+  /** Copy file to GCS without checking generation, and adding user metadata
     */
   override def fileToGcsAbsolutePath(localFile: Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = {
     val fs2Path = fs2.io.file.Path.fromNioPath(localFile)
@@ -83,8 +80,7 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       (Files[IO].readAll(fs2Path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
   }
 
-  /**
-    * Recursively download files in cloudStorageDirectory to local directory.
+  /** Recursively download files in cloudStorageDirectory to local directory.
     * If file exists locally, we don't download the file
     *
     * @param localBaseDirectory    : base directory where remote files will be download to

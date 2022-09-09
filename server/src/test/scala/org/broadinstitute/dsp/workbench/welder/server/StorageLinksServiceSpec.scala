@@ -25,8 +25,8 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
     override def removeObject(gsPath: CloudBlobPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] = ???
-    override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
-        implicit ev: Ask[IO, TraceId]
+    override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit
+        ev: Ask[IO, TraceId]
     ): Stream[IO, Option[AdaptedGcsMetadata]] = ???
     override def delocalize(
         localObjectPath: RelativePath,
