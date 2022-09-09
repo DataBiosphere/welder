@@ -15,7 +15,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
   it should "read GCP configuration correctly" in {
     import pureconfig.generic.auto._
     import org.broadinstitute.dsp.workbench.welder.server.Config._
-    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes)
+    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes, true)
 
     val configString =
       """
@@ -29,6 +29,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
         |  owner-email = "fake@gmail.com"
+        |  is-locking-enabled = true
         |}
         |staging-bucket-name = "fakeBucket"
         |clean-up-lock-interval = 7 minutes
@@ -59,7 +60,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
   it should "read Azure configuration correctly" in {
     import pureconfig.generic.auto._
     import org.broadinstitute.dsp.workbench.welder.server.Config._
-    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes)
+    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes, true)
 
     val configString =
       """
@@ -79,6 +80,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
         |  owner-email = "fake@gmail.com"
+        |  is-locking-enabled = true
         |}
         |
         |staging-bucket-name = "fakeBucket"
@@ -115,7 +117,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
 
   it should "read AppConfig configuration correctly when it's gcp" ignore {
     val config = Config.appConfig
-    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes)
+    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes, true)
 
     val expectedConfig = AppConfig.Gcp(
       8080,
@@ -135,7 +137,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
 
   it should "read AppConfig configuration correctly when it's azure" in {
     val config = Config.appConfig
-    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes)
+    val objectServiceConfig = ObjectServiceConfig(Paths.get("/work"), WorkbenchEmail("fake@gmail.com"), 3 minutes, true)
 
     val expectedConfig = AppConfig.Azure(
       8080,

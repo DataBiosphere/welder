@@ -64,7 +64,7 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
       fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
       _ <- (Files[IO].readAll(fs2path) through azureStorageService.uploadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, true)).compile.drain
-    } yield Option.empty[DelocalizeResponse]
+    } yield none[DelocalizeResponse]
 
   /**
     * Copy file to GCS without checking generation, and adding user metadata

@@ -158,52 +158,55 @@ class ObjectService(
       traceId <- ev.ask[TraceId]
       context <- storageLinksAlg.findStorageLink(req.localObjectPath)
       storageAlg <- storageAlgRef.get
-      res <- if (context.isSafeMode)
-        IO.pure(MetadataResponse.SafeMode(context.storageLink))
-      else {
-        val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
-        val actionToLock = for {
-          metadata <- storageAlg
-            .retrieveAdaptedGcsMetadata(req.localObjectPath, CloudBlobPath(context.storageLink.cloudStorageDirectory.container, fullBlobName))
-          result <- metadata match {
-            case None =>
-              metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
-            case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
-              val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
-              for {
-                calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
-                syncStatus <- if (calculatedCrc32c == crc32c)
-                  IO.pure(SyncStatus.Live)
-                else {
-                  for {
-                    metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
-                    loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation).toMap
-                    status <- metaOpt match {
-                      case Some(meta) =>
-                        meta.localFileGeneration match { //TODO: shall we check the file has been localized before calculating crc32c
-                          case Some(previousGeneration) =>
-                            if (previousGeneration == generation)
-                              IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
-                            else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
-                          case None =>
-                            IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
-                              "We don't find local generation for a localized file. Was this file localized manually?"
-                            )
-                        }
-                      case None =>
-                        IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
-                          "We don't find local cache for a localized file. Did you update metadata cache file directly?"
-                        )
-                      //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
-                    }
-                  } yield status
-                }
-                _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(lock, crc32c))
-              } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
-          }
-        } yield result
-        preventConcurrentAction(actionToLock, req.localObjectPath)
-      }
+      res <- if (config.isLockingEnabled) {
+
+        if (context.isSafeMode)
+          IO.pure(MetadataResponse.SafeMode(context.storageLink))
+        else {
+          val fullBlobName = getFullBlobName(context.basePath, req.localObjectPath.asPath, context.storageLink.cloudStorageDirectory.blobPath)
+          val actionToLock = for {
+            metadata <- storageAlg
+              .retrieveAdaptedGcsMetadata(req.localObjectPath, CloudBlobPath(context.storageLink.cloudStorageDirectory.container, fullBlobName))
+            result <- metadata match {
+              case None =>
+                metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.NotFound).as(MetadataResponse.RemoteNotFound(context.storageLink))
+              case Some(AdaptedGcsMetadata(lock, crc32c, generation)) =>
+                val localAbsolutePath = config.workingDirectory.resolve(req.localObjectPath.asPath)
+                for {
+                  calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
+                  syncStatus <- if (calculatedCrc32c == crc32c)
+                    IO.pure(SyncStatus.Live)
+                  else {
+                    for {
+                      metaOpt <- metadataCacheAlg.getCache(req.localObjectPath)
+                      loggingContext = MetaLoggingContext(traceId, "checkMetadata", context, metaOpt.flatMap(_.localFileGeneration), generation).toMap
+                      status <- metaOpt match {
+                        case Some(meta) =>
+                          meta.localFileGeneration match { //TODO: shall we check the file has been localized before calculating crc32c
+                            case Some(previousGeneration) =>
+                              if (previousGeneration == generation)
+                                IO.pure(SyncStatus.LocalChanged) <* logger.warn(loggingContext)(s"local file has changed, but it hasn't been delocalized yet")
+                              else IO.pure(SyncStatus.RemoteChanged) <* logger.warn(loggingContext)("remote has changed")
+                            case None =>
+                              IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
+                                "We don't find local generation for a localized file. Was this file localized manually?"
+                              )
+                          }
+                        case None =>
+                          IO.pure(SyncStatus.Desynchronized) <* logger.error(loggingContext)(
+                            "We don't find local cache for a localized file. Did you update metadata cache file directly?"
+                          )
+                        //TODO: this shouldn't be possible because we should have the file in cache if it has been localized
+                      }
+                    } yield status
+                  }
+                  _ <- metadataCacheAlg.updateRemoteStateCache(req.localObjectPath, RemoteState.Found(lock, crc32c))
+                } yield MetadataResponse.EditMode(syncStatus, lock.map(_.hashedLockedBy), generation, context.storageLink)
+            }
+          } yield result
+          preventConcurrentAction(actionToLock, req.localObjectPath)
+        }
+      } else IO.pure(MetadataResponse.EditMode(SyncStatus.Live, None, 0L, context.storageLink))
     } yield res
 
   def safeDelocalize(req: SafeDelocalize)(implicit ev: Ask[IO, TraceId]): IO[Unit] =
@@ -273,17 +276,19 @@ class ObjectService(
           generation <- previousMeta match {
             case Some(meta) =>
               meta.remoteState match {
-                case RemoteState.NotFound => IO.pure(0L)
+                case RemoteState.NotFound => IO.pure(Some(0L))
                 case RemoteState.Found(lock, _) =>
                   lock
                     .traverse(l => checkLock(l, now.toEpochMilli, gsPath.container)) //check if user owns the lock before deleting
-                    .as(meta.localFileGeneration.getOrElse(0L))
+                    .as(Some(meta.localFileGeneration.getOrElse(0L)))
               }
             case None =>
-              IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
+              if (config.isLockingEnabled)
+                IO.raiseError(InvalidLock(traceId, s"Local GCS metadata for ${req.localObjectPath} not found"))
+              else IO.pure(none[Long])
           }
           storageAlg <- storageAlgRef.get
-          _ <- storageAlg.removeObject(gsPath, Some(generation)).compile.drain.void
+          _ <- storageAlg.removeObject(gsPath, generation).compile.drain.void
           _ <- metadataCacheAlg.removeCache(req.localObjectPath) // remove the object from cache
         } yield ()
         preventConcurrentAction(actionToLock, req.localObjectPath)
@@ -494,7 +499,8 @@ final case class LocalizeRequest(entries: List[Entry])
 final case class ObjectServiceConfig(
     workingDirectory: Path, //root directory where all local files will be mounted
     ownerEmail: WorkbenchEmail,
-    lockExpiration: FiniteDuration
+    lockExpiration: FiniteDuration,
+    isLockingEnabled: Boolean
 )
 
 final case class GsPathAndMetadata(gsPath: CloudBlobPath, metadata: AdaptedGcsMetadata)
