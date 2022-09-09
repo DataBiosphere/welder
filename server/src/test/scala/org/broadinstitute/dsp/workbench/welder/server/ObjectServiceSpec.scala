@@ -28,7 +28,7 @@ import scala.concurrent.duration._
 import scala.util.matching.Regex
 
 class ObjectServiceSpec extends AnyFlatSpec with WelderTestSuite {
-  val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes)
+  val objectServiceConfig = ObjectServiceConfig(Paths.get("/tmp"), WorkbenchEmail("me@gmail.com"), 20 minutes, true)
   val objectService = initObjectService(Map.empty, Map.empty, None)
 
   "localize" should "be able to localize a file" in {

@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val circeVersion = "0.14.2"
   val http4sVersion = "1.0.0-M35"
-  val grpcCoreVersion = "1.34.1"
+  val grpcCoreVersion = "1.49.0"
   val scalaTestVersion = "3.2.13"
 
   val workbenchLibsHash = "0096bac"
@@ -12,7 +12,7 @@ object Dependencies {
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.1",
-    "co.fs2" %% "fs2-io" % "3.2.12",
+    "co.fs2" %% "fs2-io" % "3.2.14",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
     "io.circe" %% "circe-parser" % circeVersion,
