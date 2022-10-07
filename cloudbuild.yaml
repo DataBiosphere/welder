@@ -6,7 +6,7 @@ steps:
       - 'IS_RSTUDIO_RUNTIME=false'
     args:
       - |
-        test; server/docker:publishLocal
+        sbt test; server/docker:publishLocal
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'image', 'tag', 'us.gcr.io/broad-dsp-gcr-public/welder-server:latest', 'us.gcr.io/broad-dsp-gcr-public/welder-server:$SHORT_SHA']
 images: [
