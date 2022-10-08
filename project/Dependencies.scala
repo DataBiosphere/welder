@@ -27,7 +27,7 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV % "test" classifier "tests", //for generators/mocks
     "ca.mrvisser" %% "sealerate" % "0.0.6",
-    "com.google.cloud" % "google-cloud-nio" % "0.124.14" % "test",
+    "com.google.cloud" % "google-cloud-nio" % "0.124.17" % "test",
     "ch.qos.logback" % "logback-classic" % "1.4.0",
     "net.logstash.logback" % "logstash-logback-encoder" % "7.2" // for structured logging in logback
   )
