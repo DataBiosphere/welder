@@ -43,7 +43,7 @@ package object welder {
       length = s"${bucketName.name}/".length
       objectName <- Either
         .catchNonFatal(parsed.drop(length))
-        .leftMap(_ => s"failed to parse object name")
+        .leftMap(_ => s"failed to parse object name.")
         .ensure("objectName can't be empty")(s => s.nonEmpty)
     } yield CloudBlobPath(bucketName, CloudStorageBlob(objectName))
   }
