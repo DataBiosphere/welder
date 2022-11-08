@@ -11,7 +11,7 @@ object Dependencies {
   val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
   val common = List(
-    "com.github.pureconfig" %% "pureconfig" % "0.17.1",
+    "com.github.pureconfig" %% "pureconfig" % "0.17.2",
     "co.fs2" %% "fs2-io" % "3.2.14",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
