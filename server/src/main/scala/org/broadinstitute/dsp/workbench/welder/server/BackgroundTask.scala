@@ -223,12 +223,12 @@ class BackgroundTask(
 }
 
 final case class BackgroundTaskConfig(
-                                       workingDirectory: Path,
-                                       stagingBucket: CloudStorageContainer,
-                                       cleanUpLockInterval: FiniteDuration,
-                                       flushCacheInterval: FiniteDuration,
-                                       syncCloudStorageDirectoryInterval: FiniteDuration,
-                                       delocalizeDirectoryInterval: FiniteDuration,
-                                       shouldBackgroundSync: Boolean,
-                                       ownerEmail: WorkbenchEmail
+    workingDirectory: Path,
+    stagingBucket: CloudStorageContainer,
+    cleanUpLockInterval: FiniteDuration,
+    flushCacheInterval: FiniteDuration,
+    syncCloudStorageDirectoryInterval: FiniteDuration,
+    delocalizeDirectoryInterval: FiniteDuration,
+    shouldBackgroundSync: Boolean,
+    ownerEmail: WorkbenchEmail
 )

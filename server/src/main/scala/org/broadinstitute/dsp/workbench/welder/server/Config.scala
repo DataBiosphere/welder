@@ -46,34 +46,34 @@ sealed trait AppConfig extends Product with Serializable {
 }
 object AppConfig {
   final case class Gcp(
-                        serverPort: Int,
-                        cleanUpLockInterval: FiniteDuration,
-                        flushCacheInterval: FiniteDuration,
-                        syncCloudStorageDirectoryInterval: FiniteDuration,
-                        storageLinksJsonBlobName: CloudStorageBlob,
-                        metadataJsonBlobName: CloudStorageBlob,
-                        workspaceBucketNameFileName: Path,
-                        objectService: ObjectServiceConfig,
-                        stagingBucketName: CloudStorageContainer,
-                        delocalizeDirectoryInterval: FiniteDuration,
-                        shouldBackgroundSync: Boolean
+      serverPort: Int,
+      cleanUpLockInterval: FiniteDuration,
+      flushCacheInterval: FiniteDuration,
+      syncCloudStorageDirectoryInterval: FiniteDuration,
+      storageLinksJsonBlobName: CloudStorageBlob,
+      metadataJsonBlobName: CloudStorageBlob,
+      workspaceBucketNameFileName: Path,
+      objectService: ObjectServiceConfig,
+      stagingBucketName: CloudStorageContainer,
+      delocalizeDirectoryInterval: FiniteDuration,
+      shouldBackgroundSync: Boolean
   ) extends AppConfig
 
   final case class Azure(
-                          serverPort: Int,
-                          cleanUpLockInterval: FiniteDuration,
-                          flushCacheInterval: FiniteDuration,
-                          syncCloudStorageDirectoryInterval: FiniteDuration,
-                          storageLinksJsonBlobName: CloudStorageBlob,
-                          metadataJsonBlobName: CloudStorageBlob,
-                          workspaceBucketNameFileName: Path,
-                          objectService: ObjectServiceConfig,
-                          stagingBucketName: CloudStorageContainer,
-                          delocalizeDirectoryInterval: FiniteDuration,
-                          miscHttpClientConfig: MiscHttpClientConfig,
-                          shouldBackgroundSync: Boolean,
-                          workspaceStorageContainerResourceId: UUID,
-                          stagingStorageContainerResourceId: UUID
+      serverPort: Int,
+      cleanUpLockInterval: FiniteDuration,
+      flushCacheInterval: FiniteDuration,
+      syncCloudStorageDirectoryInterval: FiniteDuration,
+      storageLinksJsonBlobName: CloudStorageBlob,
+      metadataJsonBlobName: CloudStorageBlob,
+      workspaceBucketNameFileName: Path,
+      objectService: ObjectServiceConfig,
+      stagingBucketName: CloudStorageContainer,
+      delocalizeDirectoryInterval: FiniteDuration,
+      miscHttpClientConfig: MiscHttpClientConfig,
+      shouldBackgroundSync: Boolean,
+      workspaceStorageContainerResourceId: UUID,
+      stagingStorageContainerResourceId: UUID
   ) extends AppConfig
 }
 
