@@ -39,41 +39,41 @@ sealed trait AppConfig extends Product with Serializable {
   def objectService: ObjectServiceConfig
   def stagingBucketName: CloudStorageContainer
   def delocalizeDirectoryInterval: FiniteDuration
-  def isRstudioRuntime: Boolean
+  def shouldBackgroundSync: Boolean
 
   def getStorageLinksJsonUri: CloudBlobPath = CloudBlobPath(stagingBucketName, storageLinksJsonBlobName)
   def getMetadataJsonBlobNameUri: CloudBlobPath = CloudBlobPath(stagingBucketName, metadataJsonBlobName)
 }
 object AppConfig {
   final case class Gcp(
-      serverPort: Int,
-      cleanUpLockInterval: FiniteDuration,
-      flushCacheInterval: FiniteDuration,
-      syncCloudStorageDirectoryInterval: FiniteDuration,
-      storageLinksJsonBlobName: CloudStorageBlob,
-      metadataJsonBlobName: CloudStorageBlob,
-      workspaceBucketNameFileName: Path,
-      objectService: ObjectServiceConfig,
-      stagingBucketName: CloudStorageContainer,
-      delocalizeDirectoryInterval: FiniteDuration,
-      isRstudioRuntime: Boolean
+                        serverPort: Int,
+                        cleanUpLockInterval: FiniteDuration,
+                        flushCacheInterval: FiniteDuration,
+                        syncCloudStorageDirectoryInterval: FiniteDuration,
+                        storageLinksJsonBlobName: CloudStorageBlob,
+                        metadataJsonBlobName: CloudStorageBlob,
+                        workspaceBucketNameFileName: Path,
+                        objectService: ObjectServiceConfig,
+                        stagingBucketName: CloudStorageContainer,
+                        delocalizeDirectoryInterval: FiniteDuration,
+                        shouldBackgroundSync: Boolean
   ) extends AppConfig
 
   final case class Azure(
-      serverPort: Int,
-      cleanUpLockInterval: FiniteDuration,
-      flushCacheInterval: FiniteDuration,
-      syncCloudStorageDirectoryInterval: FiniteDuration,
-      storageLinksJsonBlobName: CloudStorageBlob,
-      metadataJsonBlobName: CloudStorageBlob,
-      workspaceBucketNameFileName: Path,
-      objectService: ObjectServiceConfig,
-      stagingBucketName: CloudStorageContainer,
-      delocalizeDirectoryInterval: FiniteDuration,
-      miscHttpClientConfig: MiscHttpClientConfig,
-      isRstudioRuntime: Boolean,
-      workspaceStorageContainerResourceId: UUID,
-      stagingStorageContainerResourceId: UUID
+                          serverPort: Int,
+                          cleanUpLockInterval: FiniteDuration,
+                          flushCacheInterval: FiniteDuration,
+                          syncCloudStorageDirectoryInterval: FiniteDuration,
+                          storageLinksJsonBlobName: CloudStorageBlob,
+                          metadataJsonBlobName: CloudStorageBlob,
+                          workspaceBucketNameFileName: Path,
+                          objectService: ObjectServiceConfig,
+                          stagingBucketName: CloudStorageContainer,
+                          delocalizeDirectoryInterval: FiniteDuration,
+                          miscHttpClientConfig: MiscHttpClientConfig,
+                          shouldBackgroundSync: Boolean,
+                          workspaceStorageContainerResourceId: UUID,
+                          stagingStorageContainerResourceId: UUID
   ) extends AppConfig
 }
 

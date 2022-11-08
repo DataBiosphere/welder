@@ -106,7 +106,7 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
-    if (config.isRstudioRuntime) {
+    if (config.shouldBackgroundSync) {
       val res = (for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
@@ -122,7 +122,7 @@ class BackgroundTask(
       } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
     } else {
-      Stream.eval(logger.info("Not running rmd sync process because this is not an Rstudio runtime"))
+      Stream.eval(logger.info("Not running background sync process because this is not a runtime which requires it (ex: Azure, RStudio)"))
     }
   }
 
@@ -223,12 +223,12 @@ class BackgroundTask(
 }
 
 final case class BackgroundTaskConfig(
-    workingDirectory: Path,
-    stagingBucket: CloudStorageContainer,
-    cleanUpLockInterval: FiniteDuration,
-    flushCacheInterval: FiniteDuration,
-    syncCloudStorageDirectoryInterval: FiniteDuration,
-    delocalizeDirectoryInterval: FiniteDuration,
-    isRstudioRuntime: Boolean,
-    ownerEmail: WorkbenchEmail
+                                       workingDirectory: Path,
+                                       stagingBucket: CloudStorageContainer,
+                                       cleanUpLockInterval: FiniteDuration,
+                                       flushCacheInterval: FiniteDuration,
+                                       syncCloudStorageDirectoryInterval: FiniteDuration,
+                                       delocalizeDirectoryInterval: FiniteDuration,
+                                       shouldBackgroundSync: Boolean,
+                                       ownerEmail: WorkbenchEmail
 )
