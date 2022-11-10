@@ -49,11 +49,12 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       loggingCtx = Map("traceId" -> traceId.asString)
       _ <- azureStorageService
         .downloadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, localAbsolutePath, overwrite = true)
+        // catch the error and rethrow just so we know the file path that's causing problem
         .handleErrorWith {
           case e: com.azure.storage.blob.models.BlobStorageException if e.getStatusCode == 404 =>
-            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} because blob does not exist.")
+            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} because blob does not exist.") >> IO.raiseError(e)
           case e =>
-            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} due to ${e.getMessage}")
+            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} due to ${e.getMessage}") >> IO.raiseError(e)
         }
     } yield Option.empty[AdaptedGcsMetadata]
 
