@@ -87,7 +87,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
       }
       val res = for {
         _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, bodyBytes, "text/plain", Map.empty, None)
-        resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath)
+        resp <- Stream.eval(googleStorage.cloudToLocalFile(localAbsolutePath, gsPath))
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
       } yield {
         val expectedCrc32c = Crc32c.calculateCrc32c(bodyBytes)
@@ -111,7 +111,7 @@ class GoogleStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         _ <- FakeGoogleStorageInterpreter.createBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, bodyBytes, "text/plain", Map.empty, None)
         _ <- (Stream.emits("oldContent".getBytes("UTF-8")).covary[IO] through Files[IO].writeAll(fs2.io.file.Path.fromNioPath(localAbsolutePath))) ++ Stream
           .eval(IO.unit)
-        resp <- googleStorage.gcsToLocalFile(localAbsolutePath, gsPath)
+        resp <- Stream.eval(googleStorage.cloudToLocalFile(localAbsolutePath, gsPath))
         newFileContent <- Files[IO].readAll(fs2.io.file.Path.fromNioPath(localAbsolutePath)).map(x => List(x)).foldMonoid
         _ <- Stream.eval(IO((new File(localAbsolutePath.toString)).delete()))
       } yield {
