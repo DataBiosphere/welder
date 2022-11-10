@@ -74,13 +74,14 @@ class ObjectService(
         val localizeFile = entry.sourceUri match {
           case DataUri(data) => Stream.emits(data).through(Files[IO].writeAll(fs2Path, writeFileOptions))
           case CloudUri(cloudBlobPath) =>
-            for {
-              storageAlg <- Stream.eval(storageAlgRef.get)
-              meta <- storageAlg.gcsToLocalFile(localAbsolutePath, cloudBlobPath).last
-              _ <- meta.flatten.fold[Stream[IO, Unit]](Stream.raiseError[IO](NotFoundException(traceId, s"${entry.sourceUri} not found")))(m =>
-                Stream.eval(metadataCacheAlg.updateCache(entry.localObjectPath, m))
+            val res = for {
+              storageAlg <- storageAlgRef.get
+              meta <- storageAlg.cloudToLocalFile(localAbsolutePath, cloudBlobPath)
+              _ <- meta.fold[IO[Unit]](IO.raiseError(NotFoundException(traceId, s"${entry.sourceUri} not found")))(m =>
+                metadataCacheAlg.updateCache(entry.localObjectPath, m)
               )
             } yield ()
+            Stream.eval(res)
         }
 
         Stream.eval(mkdirIfNotExist(localAbsolutePath.getParent)) >> localizeFile

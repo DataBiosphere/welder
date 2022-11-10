@@ -74,30 +74,38 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
       r <- googleStorageService.removeObject(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, generation, Some(traceId))
     } yield r
 
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
+  override def cloudToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
       implicit ev: Ask[IO, TraceId]
-  ): Stream[IO, Option[AdaptedGcsMetadata]] =
+  ): IO[Option[AdaptedGcsMetadata]] =
     for {
-      traceId <- Stream.eval(ev.ask)
-      blob <- googleStorageService.getBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, None, Some(traceId))
-      fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
-      _ <- (fs2.io
-        .readInputStream[IO](
-          IO(
-            java.nio.channels.Channels
-              .newInputStream {
-                val reader = blob.reader()
-                reader.setChunkSize(chunkSize)
-                reader
-              }
-          ),
-          chunkSize,
-          closeAfterUse = true
-        )
-        .through(Files[IO].writeAll(fs2Path, writeFileOptions))) ++ Stream.eval(IO.unit)
-      userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
-      meta <- Stream.eval(adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration))
-    } yield Some(meta)
+      traceId <- ev.ask[TraceId]
+      blobOpt <- googleStorageService.getBlob(gsPath.container.asGcsBucket, gsPath.blobPath.asGcs, None, Some(traceId)).compile.last
+      res <- blobOpt match {
+        case Some(blob) =>
+          val fs2Path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
+
+          val donwloadFile = (fs2.io
+            .readInputStream[IO](
+              IO(
+                java.nio.channels.Channels
+                  .newInputStream {
+                    val reader = blob.reader()
+                    reader.setChunkSize(chunkSize)
+                    reader
+                  }
+              ),
+              chunkSize,
+              closeAfterUse = true
+            )
+            .through(Files[IO].writeAll(fs2Path, writeFileOptions))) ++ Stream.eval(IO.unit)
+          for {
+            _ <- donwloadFile.compile.drain
+            userDefinedMetadata = Option(blob.getMetadata).map(_.asScala.toMap).getOrElse(Map.empty)
+            meta <- adaptMetadata(Crc32(blob.getCrc32c), userDefinedMetadata, blob.getGeneration)
+          } yield Some(meta)
+        case None => IO.pure(none[AdaptedGcsMetadata])
+      }
+    } yield res
 
   override def delocalize(
       localObjectPath: RelativePath,

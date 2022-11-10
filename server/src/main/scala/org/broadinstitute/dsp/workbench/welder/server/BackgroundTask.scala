@@ -79,8 +79,10 @@ class BackgroundTask(
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     val res = for {
+      traceId <- traceIdImplicit.ask[TraceId]
       storageAlg <- storageAlgRef.get
       storageLinks <- storageLinksCache.get
+      loggingCtx = Map("traceId" -> traceId.asString)
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
           (storageAlg
@@ -93,6 +95,10 @@ class BackgroundTask(
             .through(metadataCacheAlg.updateCachePipe))
             .compile
             .drain
+            .handleErrorWith {
+              case e =>
+                logger.error(loggingCtx, e)(s"Fail to sync cloud storage")
+            }
       }
     } yield ()
 
