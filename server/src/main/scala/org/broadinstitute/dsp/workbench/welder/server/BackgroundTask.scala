@@ -46,7 +46,7 @@ class BackgroundTask(
 
   def updateStorageAlg(appConfig: AppConfig.Azure, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] = {
     val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s.cloudStorageAlg))
-    (Stream.sleep_[IO](50 minutes) ++ Stream.eval(task)).repeat
+    (Stream.sleep_[IO](appConfig.miscHttpClientConfig.sasTokenExpiresIn.minus(5 minutes)) ++ Stream.eval(task)).repeat // Refresh sas token a few minutes before it's about to expire
   }
 
   def flushBothCache(
