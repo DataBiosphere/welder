@@ -12,7 +12,7 @@ object Dependencies {
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.1",
-    "co.fs2" %% "fs2-io" % "3.2.14",
+    "co.fs2" %% "fs2-io" % "3.4.0",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
     "io.circe" %% "circe-parser" % circeVersion,
