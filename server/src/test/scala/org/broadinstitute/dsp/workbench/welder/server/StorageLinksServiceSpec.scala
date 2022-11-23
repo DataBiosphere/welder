@@ -49,7 +49,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
@@ -64,7 +64,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "not create duplicate storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
@@ -81,7 +81,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "initialize directories" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val safeAbsolutePath = config.workingDirectory.resolve(baseSafeDir.path.asPath)
@@ -110,7 +110,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "list storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
 
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
       for {
         initialListResult <- storageLinksService.getStorageLinks
@@ -128,7 +128,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "delete a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       for {
@@ -155,7 +155,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "gracefully handle deleting a storage link that doesn't exist" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
 
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       for {
