@@ -39,7 +39,7 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
       storageLinks,
       googleStorageAlg,
       metadataCacheAlg,
-      StorageLinksServiceConfig(workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")),
+      StorageLinksServiceConfig(CloudProvider.Gcp, workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")),
       d
     )
   )

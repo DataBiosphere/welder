@@ -45,7 +45,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   })
   val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
   val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)
-  val config = StorageLinksServiceConfig(Paths.get("/tmp"), Paths.get("/tmp/WORKSPACE_BUCKET"))
+  val config = StorageLinksServiceConfig(CloudProvider.Gcp, Paths.get("/tmp"), Paths.get("/tmp/WORKSPACE_BUCKET"))
 
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
