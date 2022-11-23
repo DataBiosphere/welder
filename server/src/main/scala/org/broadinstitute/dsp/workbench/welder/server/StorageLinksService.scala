@@ -91,9 +91,13 @@ class StorageLinksService(
       safeModeDirectory: Option[LocalDirectory],
       cloudStorageDirectory: CloudStorageDirectory
   ): IO[Unit] = {
+    val workspaceAnalysesDestinationFullPath = config.cloudProvider match {
+      case CloudProvider.Gcp => s"gs://${cloudStorageDirectory.container.asGcsBucket.value}/notebooks"
+      case CloudProvider.Azure => s"${cloudStorageDirectory.container.asAzureCloudContainer.value}/analyses"
+    }
     val fileBody =
       RuntimeVariables(
-        s"gs://${cloudStorageDirectory.container.asGcsBucket.value}/notebooks"
+        workspaceAnalysesDestinationFullPath
       ) //appending notebooks to mimick old jupyter image until we start using new images.
       .asJson.printWith(Printer.noSpaces).getBytes(Charset.`UTF-8`.toString())
     val editModeDestinationPath = config.workingDirectory
@@ -153,7 +157,7 @@ class StorageLinksService(
 final case class RuntimeVariables(workspaceBucket: String)
 
 final case class StorageLinks(storageLinks: Set[StorageLink])
-final case class StorageLinksServiceConfig(workingDirectory: Path, workspaceBucketNameFileName: Path)
+final case class StorageLinksServiceConfig(cloudProvider: CloudProvider, workingDirectory: Path, workspaceBucketNameFileName: Path)
 object StorageLinksService {
   def apply(
       storageLinks: StorageLinksCache,

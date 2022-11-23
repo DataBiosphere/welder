@@ -29,6 +29,8 @@ object Config {
 }
 
 sealed trait AppConfig extends Product with Serializable {
+  def cloudProvider: CloudProvider
+
   def serverPort: Int
   def cleanUpLockInterval: FiniteDuration
   def flushCacheInterval: FiniteDuration
@@ -57,7 +59,9 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       shouldBackgroundSync: Boolean
-  ) extends AppConfig
+  ) extends AppConfig {
+    override def cloudProvider: CloudProvider = CloudProvider.Gcp
+  }
 
   final case class Azure(
       serverPort: Int,
@@ -74,7 +78,9 @@ object AppConfig {
       shouldBackgroundSync: Boolean,
       workspaceStorageContainerResourceId: UUID,
       stagingStorageContainerResourceId: UUID
-  ) extends AppConfig
+  ) extends AppConfig {
+    override def cloudProvider: CloudProvider = CloudProvider.Azure
+  }
 }
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)
