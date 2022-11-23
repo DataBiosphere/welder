@@ -65,7 +65,7 @@ object Main extends IOApp {
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
-      dispatcher <- Stream.resource(Dispatcher[IO])
+      dispatcher <- Stream.resource(Dispatcher.parallel[IO])
       metadataCacheAlg = new MetadataCacheInterp(metadataCache)
 
       backGroundTaskConfig = BackgroundTaskConfig(
