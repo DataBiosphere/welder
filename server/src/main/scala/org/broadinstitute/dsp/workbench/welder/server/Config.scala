@@ -39,7 +39,7 @@ sealed trait AppConfig extends Product with Serializable {
   def objectService: ObjectServiceConfig
   def stagingBucketName: CloudStorageContainer
   def delocalizeDirectoryInterval: FiniteDuration
-  def isRstudioRuntime: Boolean
+  def shouldBackgroundSync: Boolean
 
   def getStorageLinksJsonUri: CloudBlobPath = CloudBlobPath(stagingBucketName, storageLinksJsonBlobName)
   def getMetadataJsonBlobNameUri: CloudBlobPath = CloudBlobPath(stagingBucketName, metadataJsonBlobName)
@@ -56,7 +56,7 @@ object AppConfig {
       objectService: ObjectServiceConfig,
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
-      isRstudioRuntime: Boolean
+      shouldBackgroundSync: Boolean
   ) extends AppConfig
 
   final case class Azure(
@@ -71,7 +71,7 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       miscHttpClientConfig: MiscHttpClientConfig,
-      isRstudioRuntime: Boolean,
+      shouldBackgroundSync: Boolean,
       workspaceStorageContainerResourceId: UUID,
       stagingStorageContainerResourceId: UUID
   ) extends AppConfig

@@ -75,7 +75,7 @@ object Main extends IOApp {
         appConfig.flushCacheInterval,
         appConfig.syncCloudStorageDirectoryInterval,
         appConfig.delocalizeDirectoryInterval,
-        appConfig.isRstudioRuntime,
+        appConfig.shouldBackgroundSync,
         appConfig.objectService.ownerEmail
       )
       backGroundTask = new BackgroundTask(backGroundTaskConfig, metadataCache, storageLinksCache, storageAlgRef, metadataCacheAlg)

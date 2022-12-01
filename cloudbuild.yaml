@@ -3,7 +3,7 @@ steps:
     env:
       - 'OWNER_EMAIL=fake@gmail.com'
       - 'STAGING_BUCKET=fakeBucket'
-      - 'IS_RSTUDIO_RUNTIME=false'
+      - 'SHOULD_BACKGROUND_SYNC=false'
     args:
       - |
         test; server/docker:publishLocal
