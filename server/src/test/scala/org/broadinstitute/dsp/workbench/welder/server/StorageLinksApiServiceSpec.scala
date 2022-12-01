@@ -34,15 +34,17 @@ class StorageLinksApiServiceSpec extends AnyFlatSpec with WelderTestSuite {
     override def fileToGcsAbsolutePath(localFile: Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Unit] = IO.unit
   })
   val metadataCacheAlg = new MetadataCacheInterp(Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty))
-  val storageLinksServiceResource = Dispatcher[IO].map(d =>
-    StorageLinksService(
-      storageLinks,
-      googleStorageAlg,
-      metadataCacheAlg,
-      StorageLinksServiceConfig(workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")),
-      d
+  val storageLinksServiceResource = Dispatcher
+    .parallel[IO]
+    .map(d =>
+      StorageLinksService(
+        storageLinks,
+        googleStorageAlg,
+        metadataCacheAlg,
+        StorageLinksServiceConfig(CloudProvider.Gcp, workingDirectory, Paths.get("/tmp/WORKSPACE_BUCKET")),
+        d
+      )
     )
-  )
   val cloudStorageDirectory = CloudStorageDirectory(CloudStorageContainer("foo"), Some(BlobPath("bar")))
   val baseDir = RelativePath(Paths.get("foo"))
   val baseSafeDir = RelativePath(Paths.get("bar"))

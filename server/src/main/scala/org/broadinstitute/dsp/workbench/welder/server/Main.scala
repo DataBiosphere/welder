@@ -65,7 +65,7 @@ object Main extends IOApp {
         metadata => List(metadata.localPath -> metadata)
       )
       shutDownSignal <- Stream.eval(SignallingRef[IO, Boolean](false))
-      dispatcher <- Stream.resource(Dispatcher[IO])
+      dispatcher <- Stream.resource(Dispatcher.parallel[IO])
       metadataCacheAlg = new MetadataCacheInterp(metadataCache)
 
       backGroundTaskConfig = BackgroundTaskConfig(
@@ -83,7 +83,8 @@ object Main extends IOApp {
         IO(sys.addShutdownHook(backGroundTask.flushBothCacheOnce(appConfig.storageLinksJsonBlobName, appConfig.metadataJsonBlobName).unsafeRunSync()))
       )
     } yield {
-      val storageLinksServiceConfig = StorageLinksServiceConfig(appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
+      val storageLinksServiceConfig =
+        StorageLinksServiceConfig(appConfig.cloudProvider, appConfig.objectService.workingDirectory, appConfig.workspaceBucketNameFileName)
       val storageLinksService = StorageLinksService(storageLinksCache, storageAlgRef, metadataCacheAlg, storageLinksServiceConfig, dispatcher)
       val storageLinkAlg = StorageLinksAlg.fromCache(storageLinksCache)
       val objectService = ObjectService(permits, appConfig.objectService, storageAlgRef, storageLinkAlg, metadataCacheAlg)
