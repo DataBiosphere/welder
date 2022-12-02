@@ -24,7 +24,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |metadata-json-blob-name = "welder-metadata/gcs_metadata.json"
         |workspace-bucket-name-file-name = ".delocalize.json"
         |working-directory = "/tmp"
-        |is-rstudio-runtime = false
+        |should-background-sync = false
         |object-service {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
@@ -36,7 +36,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |flush-cache-interval = 1 minutes
         |sync-cloud-storage-directory-interval = 15 minutes
         |delocalize-directory-interval = 30 seconds
-        |is-rstudio-runtime = false
+        |should-background-sync = false
         |# value needs to be lower case
         |type = "gcp"
         |""".stripMargin
@@ -72,10 +72,11 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |misc-http-client-config = {
         |  wsm-url = "https://workspace.dsde-dev.broadinstitute.org/"
         |  workspace-id = "a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"
+        |  sas-token-expires-in = 8 hours
         |}
         |workspace-storage-container-resource-id = "9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"
         |staging-storage-container-resource-id = "7406737a-7001-45f8-a3bb-aad8577ecd4c"
-        |is-rstudio-runtime = false
+        |should-background-sync = false
         |object-service {
         |  working-directory = "/work"
         |  lock-expiration = 3 minutes
@@ -88,7 +89,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |flush-cache-interval = 1 minutes
         |sync-cloud-storage-directory-interval = 15 minutes
         |delocalize-directory-interval = 30 seconds
-        |is-rstudio-runtime = false
+        |should-background-sync = false
         |# value needs to be lower case
         |type = "gcp"
         |""".stripMargin
@@ -106,7 +107,8 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
-        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02")
+        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
+        8 hours
       ),
       false,
       UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"),
@@ -152,7 +154,8 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
-        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02")
+        UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
+        8 hours
       ),
       false,
       UUID.fromString("9151f3a0-fe5c-49c5-b8a1-dc15cd96b174"),

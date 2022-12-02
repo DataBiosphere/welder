@@ -8,7 +8,7 @@ Setup env vars and auth
 ```bash
 export OWNER_EMAIL="fake@gmail.com"
 export STAGING_BUCKET="jc-sample-bucket"
-export IS_RSTUDIO_RUNTIME=false # false if you don't want the Rmd file syncing background process to run
+export SHOULD_BACKGROUND_SYNC=false # false if you don't want the file syncing background process to run
 export CLOUD_PROVIDER=gcp
 export WSM_URL="dummy" # if doesn't work use the real WSM url
 export WORKSPACE_ID="dummy"
@@ -57,7 +57,7 @@ Set up environment variables
 ```
 export OWNER_EMAIL="fake@gmail.com"
 export STAGING_BUCKET="jc-sample-bucket"
-export IS_RSTUDIO_RUNTIME=false # false if you don't want the Rmd file syncing background process to run
+export SHOULD_BACKGROUND_SYNC=false # false if you don't want the file syncing background process to run
 export CLOUD_PROVIDER=gcp
 export WSM_URL="dummy" # if doesn't work use the real WSM url
 export WORKSPACE_ID="dummy"

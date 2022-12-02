@@ -26,7 +26,7 @@ trait CloudStorageAlg {
   /**
     * Overwrites the file if it already exists locally
     */
-  def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): Stream[IO, Option[AdaptedGcsMetadata]]
+  def cloudToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]]
 
   /**
     * Delocalize user's files to GCS.

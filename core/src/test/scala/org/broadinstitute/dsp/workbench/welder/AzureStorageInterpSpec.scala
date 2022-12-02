@@ -33,14 +33,14 @@ class AzureStorageInterpSpec extends AnyFlatSpec with WelderTestSuite {
         directory.mkdirs
       }
       val res = for {
-        resp <- azureStorage.gcsToLocalFile(localAbsolutePath, azurePath)
+        resp <- azureStorage.cloudToLocalFile(localAbsolutePath, azurePath)
         file = new File(localAbsolutePath.toString)
-        _ <- Stream.eval(IO.delay(file.exists() shouldBe true))
-        _ <- Stream.eval(IO(file.delete()))
+        _ <- IO.delay(file.exists() shouldBe true)
+        _ <- IO(file.delete())
       } yield {
         resp shouldBe None
       }
-      res.compile.drain.unsafeRunSync()
+      res.unsafeRunSync()
     }
   }
 
