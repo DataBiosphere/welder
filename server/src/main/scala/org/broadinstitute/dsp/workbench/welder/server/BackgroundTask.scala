@@ -46,7 +46,7 @@ class BackgroundTask(
 
   def updateStorageAlg(appConfig: AppConfig.Azure, blockerBound: Semaphore[IO], storageAlgRef: Ref[IO, CloudStorageAlg]): Stream[IO, Unit] = {
     val task = initStorageAlg(appConfig, blockerBound).use(s => storageAlgRef.set(s.cloudStorageAlg))
-    (Stream.sleep_[IO](50 minutes) ++ Stream.eval(task)).repeat
+    (Stream.sleep_[IO](appConfig.miscHttpClientConfig.sasTokenExpiresIn.minus(5 minutes)) ++ Stream.eval(task)).repeat // Refresh sas token a few minutes before it's about to expire
   }
 
   def flushBothCache(
@@ -79,8 +79,10 @@ class BackgroundTask(
   val syncCloudStorageDirectory: Stream[IO, Unit] = {
     implicit val traceIdImplicit: Ask[IO, TraceId] = Ask.const[IO, TraceId](TraceId(UUID.randomUUID().toString))
     val res = for {
+      traceId <- traceIdImplicit.ask[TraceId]
       storageAlg <- storageAlgRef.get
       storageLinks <- storageLinksCache.get
+      loggingCtx = Map("traceId" -> traceId.asString)
       _ <- storageLinks.values.toList.traverse { storageLink =>
         logger.info(s"syncing file from ${storageLink.cloudStorageDirectory}") >>
           (storageAlg
@@ -93,6 +95,10 @@ class BackgroundTask(
             .through(metadataCacheAlg.updateCachePipe))
             .compile
             .drain
+            .handleErrorWith {
+              case e =>
+                logger.error(loggingCtx, e)(s"Fail to sync cloud storage")
+            }
       }
     } yield ()
 
@@ -100,7 +106,7 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
-    if (config.isRstudioRuntime) {
+    if (config.shouldBackgroundSync) {
       val res = (for {
         storageLinks <- storageLinksCache.get
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
@@ -116,7 +122,7 @@ class BackgroundTask(
       } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
       (Stream.sleep[IO](config.delocalizeDirectoryInterval) ++ Stream.eval(res)).repeat
     } else {
-      Stream.eval(logger.info("Not running rmd sync process because this is not an Rstudio runtime"))
+      Stream.eval(logger.info("Not running background sync process because this is not a runtime which requires it (ex: Azure, RStudio)"))
     }
   }
 
@@ -223,6 +229,6 @@ final case class BackgroundTaskConfig(
     flushCacheInterval: FiniteDuration,
     syncCloudStorageDirectoryInterval: FiniteDuration,
     delocalizeDirectoryInterval: FiniteDuration,
-    isRstudioRuntime: Boolean,
+    shouldBackgroundSync: Boolean,
     ownerEmail: WorkbenchEmail
 )

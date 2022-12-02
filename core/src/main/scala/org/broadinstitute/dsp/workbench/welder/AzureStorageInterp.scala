@@ -41,12 +41,21 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
   /**
     * Overwrites the file if it already exists locally
     */
-  override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
+  override def cloudToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
       implicit ev: Ask[IO, TraceId]
-  ): Stream[IO, Option[AdaptedGcsMetadata]] =
+  ): IO[Option[AdaptedGcsMetadata]] =
     for {
-      _ <- Stream
-        .eval(azureStorageService.downloadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, localAbsolutePath, overwrite = true))
+      traceId <- ev.ask[TraceId]
+      loggingCtx = Map("traceId" -> traceId.asString)
+      _ <- azureStorageService
+        .downloadBlob(gsPath.container.asAzureCloudContainer, gsPath.blobPath.asAzure, localAbsolutePath, overwrite = true)
+        // catch the error and rethrow just so we know the file path that's causing problem
+        .handleErrorWith {
+          case e: com.azure.storage.blob.models.BlobStorageException if e.getStatusCode == 404 =>
+            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} because blob does not exist.") >> IO.raiseError(e)
+          case e =>
+            logger.error(loggingCtx, e)(s"Fail to download ${gsPath.toString} due to ${e.getMessage}") >> IO.raiseError(e)
+        }
     } yield Option.empty[AdaptedGcsMetadata]
 
   /**
@@ -108,17 +117,18 @@ class AzureStorageInterp(config: StorageAlgConfig, azureStorageService: AzureSto
       )
       r <- pattern.findFirstIn(blob.getName) match {
         case Some(blobName) =>
-          for {
-            localPath <- Stream.eval(IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName)))
-            localAbsolutePath <- Stream.fromEither[IO](Either.catchNonFatal(workingDir.resolve(localPath.asPath)))
+          val download = for {
+            localPath <- IO.fromEither(getLocalPath(localBaseDirectory, cloudStorageDirectory.blobPath, blob.getName))
+            localAbsolutePath <- IO.fromEither(Either.catchNonFatal(workingDir.resolve(localPath.asPath)))
 
             result <- localAbsolutePath.toFile.exists() match {
-              case true => Stream(None).covary[IO]
+              case true => IO.pure(None)
               case false =>
-                Stream.eval(mkdirIfNotExist(localAbsolutePath.getParent)) >>
-                  gcsToLocalFile(localAbsolutePath, CloudBlobPath(cloudStorageDirectory.container, CloudStorageBlob(blobName)))
+                mkdirIfNotExist(localAbsolutePath.getParent) >>
+                  cloudToLocalFile(localAbsolutePath, CloudBlobPath(cloudStorageDirectory.container, CloudStorageBlob(blobName)))
             }
           } yield result
+          Stream.eval(download)
         case None => Stream(None).covary[IO]
       }
     } yield r.flatMap(_ => Option.empty[AdaptedGcsMetadataCache])

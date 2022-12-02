@@ -3,17 +3,19 @@ package org.broadinstitute.dsp.workbench.welder
 import cats.effect.IO
 import io.circe.Decoder
 import org.http4s.Uri
-import java.util.UUID
 
+import java.util.UUID
 import cats.implicits._
 import org.broadinstitute.dsde.workbench.azure.SasToken
+
+import scala.concurrent.duration.FiniteDuration
 
 trait MiscHttpClientAlg {
   def getPetAccessToken(): IO[PetAccessTokenResp]
   def getSasUrl(petAccessToken: PetAccessToken, storageContainerResourceId: UUID): IO[SasTokenResp]
 }
 
-final case class MiscHttpClientConfig(wsmUrl: Uri, workspaceId: UUID)
+final case class MiscHttpClientConfig(wsmUrl: Uri, workspaceId: UUID, sasTokenExpiresIn: FiniteDuration)
 final case class PetAccessToken(value: String) extends AnyVal
 final case class PetAccessTokenResp(accessToken: PetAccessToken)
 final case class SasTokenResp(uri: Uri, token: SasToken)

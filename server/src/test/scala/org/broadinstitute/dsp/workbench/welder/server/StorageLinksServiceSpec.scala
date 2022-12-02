@@ -25,9 +25,9 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
       IO.pure(UpdateMetadataResponse.DirectMetadataUpdate)
     override def retrieveAdaptedGcsMetadata(localPath: RelativePath, gsPath: CloudBlobPath)(implicit ev: Ask[IO, TraceId]): IO[Option[AdaptedGcsMetadata]] = ???
     override def removeObject(gsPath: CloudBlobPath, generation: Option[Long])(implicit ev: Ask[IO, TraceId]): Stream[IO, RemoveObjectResult] = ???
-    override def gcsToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
+    override def cloudToLocalFile(localAbsolutePath: java.nio.file.Path, gsPath: CloudBlobPath)(
         implicit ev: Ask[IO, TraceId]
-    ): Stream[IO, Option[AdaptedGcsMetadata]] = ???
+    ): IO[Option[AdaptedGcsMetadata]] = ???
     override def delocalize(
         localObjectPath: RelativePath,
         gsPath: CloudBlobPath,
@@ -45,11 +45,11 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   })
   val emptyMetadataCache = Ref.unsafe[IO, Map[RelativePath, AdaptedGcsMetadataCache]](Map.empty)
   val metadataCacheAlg = new MetadataCacheInterp(emptyMetadataCache)
-  val config = StorageLinksServiceConfig(Paths.get("/tmp"), Paths.get("/tmp/WORKSPACE_BUCKET"))
+  val config = StorageLinksServiceConfig(CloudProvider.Gcp, Paths.get("/tmp"), Paths.get("/tmp/WORKSPACE_BUCKET"))
 
   "StorageLinksService" should "create a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
@@ -64,7 +64,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "not create duplicate storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val linkToAdd = StorageLink(baseDir, Some(baseSafeDir), cloudStorageDirectory, ".zip".r)
@@ -81,7 +81,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "initialize directories" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       val safeAbsolutePath = config.workingDirectory.resolve(baseSafeDir.path.asPath)
@@ -110,7 +110,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "list storage links" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
 
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
       for {
         initialListResult <- storageLinksService.getStorageLinks
@@ -128,7 +128,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
 
   it should "delete a storage link" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       for {
@@ -155,7 +155,7 @@ class StorageLinksServiceSpec extends AnyFlatSpec with WelderTestSuite {
   it should "gracefully handle deleting a storage link that doesn't exist" in {
     val emptyStorageLinksCache = Ref.unsafe[IO, Map[RelativePath, StorageLink]](Map.empty)
 
-    val res = Dispatcher[IO].use { d =>
+    val res = Dispatcher.parallel[IO].use { d =>
       val storageLinksService = StorageLinksService(emptyStorageLinksCache, googleStorageAlgRef, metadataCacheAlg, config, d)
 
       for {

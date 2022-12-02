@@ -29,6 +29,8 @@ object Config {
 }
 
 sealed trait AppConfig extends Product with Serializable {
+  def cloudProvider: CloudProvider
+
   def serverPort: Int
   def cleanUpLockInterval: FiniteDuration
   def flushCacheInterval: FiniteDuration
@@ -39,7 +41,7 @@ sealed trait AppConfig extends Product with Serializable {
   def objectService: ObjectServiceConfig
   def stagingBucketName: CloudStorageContainer
   def delocalizeDirectoryInterval: FiniteDuration
-  def isRstudioRuntime: Boolean
+  def shouldBackgroundSync: Boolean
 
   def getStorageLinksJsonUri: CloudBlobPath = CloudBlobPath(stagingBucketName, storageLinksJsonBlobName)
   def getMetadataJsonBlobNameUri: CloudBlobPath = CloudBlobPath(stagingBucketName, metadataJsonBlobName)
@@ -56,8 +58,10 @@ object AppConfig {
       objectService: ObjectServiceConfig,
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
-      isRstudioRuntime: Boolean
-  ) extends AppConfig
+      shouldBackgroundSync: Boolean
+  ) extends AppConfig {
+    override def cloudProvider: CloudProvider = CloudProvider.Gcp
+  }
 
   final case class Azure(
       serverPort: Int,
@@ -71,10 +75,12 @@ object AppConfig {
       stagingBucketName: CloudStorageContainer,
       delocalizeDirectoryInterval: FiniteDuration,
       miscHttpClientConfig: MiscHttpClientConfig,
-      isRstudioRuntime: Boolean,
+      shouldBackgroundSync: Boolean,
       workspaceStorageContainerResourceId: UUID,
       stagingStorageContainerResourceId: UUID
-  ) extends AppConfig
+  ) extends AppConfig {
+    override def cloudProvider: CloudProvider = CloudProvider.Azure
+  }
 }
 
 final case class EnvironmentVariables(currentUser: WorkbenchEmail)

@@ -41,6 +41,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
   override def getSasUrl(petAccessToken: PetAccessToken, storageContainerResourceId: UUID): IO[SasTokenResp] = {
     val uri =
       (config.wsmUrl / "api" / "workspaces" / "v1" / config.workspaceId.toString / "resources" / "controlled" / "azure" / "storageContainer" / storageContainerResourceId.toString / "getSasToken")
+        .withQueryParam("sasExpirationDuration", config.sasTokenExpiresIn.toSeconds)
     httpClient.expect[SasTokenResp](
       Request[IO](
         method = Method.POST,

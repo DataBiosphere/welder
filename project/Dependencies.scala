@@ -1,18 +1,18 @@
 import sbt._
 
 object Dependencies {
-  val circeVersion = "0.14.2"
+  val circeVersion = "0.14.3"
   val http4sVersion = "1.0.0-M35"
-  val grpcCoreVersion = "1.49.2"
+  val grpcCoreVersion = "1.51.0"
   val scalaTestVersion = "3.2.14"
 
-  val workbenchLibsHash = "e6ad8a1"
+  val workbenchLibsHash = "1a6839f"
   val workbenchGoogle2V = s"0.25-$workbenchLibsHash"
   val workbenchAzureV = s"0.1-$workbenchLibsHash"
 
   val common = List(
-    "com.github.pureconfig" %% "pureconfig" % "0.17.1",
-    "co.fs2" %% "fs2-io" % "3.2.14",
+    "com.github.pureconfig" %% "pureconfig" % "0.17.2",
+    "co.fs2" %% "fs2-io" % "3.4.0",
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
     "io.circe" %% "circe-parser" % circeVersion,
@@ -27,8 +27,8 @@ object Dependencies {
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV % "test" classifier "tests", //for generators/mocks
     "ca.mrvisser" %% "sealerate" % "0.0.6",
-    "com.google.cloud" % "google-cloud-nio" % "0.124.16" % "test",
-    "ch.qos.logback" % "logback-classic" % "1.4.3",
+    "com.google.cloud" % "google-cloud-nio" % "0.124.21" % "test",
+    "ch.qos.logback" % "logback-classic" % "1.4.5",
     "net.logstash.logback" % "logstash-logback-encoder" % "7.2" // for structured logging in logback
   )
 
