@@ -62,7 +62,7 @@ object Settings {
   lazy val commonSettings =
     commonBuildSettings ++ List(
       organization := "org.broadinstitute.dsp.workbench",
-      scalaVersion := "2.13.10",
+      scalaVersion := "2.13.12",
       resolvers ++= commonResolvers,
       scalacOptions ++= commonCompilerSettings,
       scalafmtOnCompile := true,
