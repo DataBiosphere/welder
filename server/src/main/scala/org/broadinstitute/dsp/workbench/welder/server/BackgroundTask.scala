@@ -106,17 +106,28 @@ class BackgroundTask(
   }
 
   val delocalizeBackgroundProcess: Stream[IO, Unit] = {
+    println(s"Background sync enabled: ${config.shouldBackgroundSync}")
     if (config.shouldBackgroundSync) {
       val res = (for {
         storageLinks <- storageLinksCache.get
+        _ <- logger.info(s"Background sync enabled: ${config.shouldBackgroundSync}")
         implicit0(tid: Ask[IO, TraceId]) <- IO(TraceId(UUID.randomUUID().toString)).map(tid => Ask.const[IO, TraceId](tid))
         _ <- storageLinks.values.toList.traverse { storageLink =>
           findFilesWithPattern(config.workingDirectory.resolve(storageLink.localBaseDirectory.path.asPath), storageLink.pattern).traverse_ { file =>
             val gsPath = getCloudBlobPath(storageLink, new File(file.getName))
-            checkSyncStatus(
-              gsPath,
-              RelativePath(java.nio.file.Paths.get(file.getName))
-            )
+            // Because of the locking mechanism in place for notebooks, we want to exclude ipynb files from the background delocalization process
+            val patternToExclude = ".*.ipynb$".r
+            println(s"storageLink: ${storageLink}")
+            println(s"gspath: ${gsPath}")
+            println(s"file: ${file}")
+            println(s"filename: ${file.getName}")
+            println(s"relative path: ${RelativePath(java.nio.file.Paths.get(file.getPath))}")
+            if (!patternToExclude.findFirstIn(file.getName).isDefined) {
+              checkSyncStatus(
+                gsPath,
+                RelativePath(java.nio.file.Paths.get(file.getPath))
+              )
+            } else logger.info("Not syncing .ipynb file") // TODO remove just for debugging
           }
         }
       } yield ()).handleErrorWith(r => logger.info(r)(s"Unexpected error encountered ${r}"))
