@@ -6,7 +6,7 @@ object Dependencies {
   val grpcCoreVersion = "1.51.0"
   val scalaTestVersion = "3.2.14"
 
-  val workbenchLibsHash = "3ae05f8"
+  val workbenchLibsHash = "437e7c3"
   val workbenchGoogle2V = s"0.35-$workbenchLibsHash"
   val workbenchAzureV = s"0.6-$workbenchLibsHash"
 

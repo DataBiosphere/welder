@@ -13,3 +13,4 @@ nginx*
 storage_links.json
 gcs_metadata.json
 .run/
+.vscode/
