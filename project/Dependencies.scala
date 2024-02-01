@@ -1,10 +1,10 @@
 import sbt._
 
 object Dependencies {
-  val circeVersion = "0.15.0-M1"
+  val circeVersion = "0.14.3"
   val http4sVersion = "1.0.0-M38"
   val grpcCoreVersion = "1.51.0"
-  val scalaTestVersion = "3.2.17"
+  val scalaTestVersion = "3.2.14"
 
   val workbenchLibsHash = "437e7c3"
   val workbenchGoogle2V = s"0.35-$workbenchLibsHash"
@@ -21,7 +21,7 @@ object Dependencies {
     "org.http4s" %% "http4s-dsl" % http4sVersion,
     "org.log4s" %% "log4s" % "1.10.0",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
-     "org.scalatestplus" %% "scalacheck-1-16" % "3.2.14.0" % Test,
+    "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
