@@ -21,7 +21,7 @@ object Dependencies {
     "org.http4s" %% "http4s-dsl" % http4sVersion,
     "org.log4s" %% "log4s" % "1.10.0",
     "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
-    "org.scalatestplus" %% "scalacheck-1-15" % "3.2.11.0" % Test,
+     "org.scalatestplus" %% "scalacheck-1-16" % "3.2.14.0" % Test,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V,
     "org.broadinstitute.dsde.workbench" %% "workbench-google2" % workbenchGoogle2V % "test" classifier "tests", //for generators
     "org.broadinstitute.dsde.workbench" %% "workbench-azure" % workbenchAzureV,
