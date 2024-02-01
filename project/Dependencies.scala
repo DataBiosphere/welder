@@ -7,8 +7,8 @@ object Dependencies {
   val scalaTestVersion = "3.2.14"
 
   val workbenchLibsHash = "3ae05f8"
-  val workbenchGoogle2V = s"0.25-$workbenchLibsHash"
-  val workbenchAzureV = s"0.1-$workbenchLibsHash"
+  val workbenchGoogle2V = s"0.35-$workbenchLibsHash"
+  val workbenchAzureV = s"0.6-$workbenchLibsHash"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.2",
