@@ -2,13 +2,13 @@ import sbt._
 
 object Dependencies {
   val circeVersion = "0.14.3"
-  val http4sVersion = "1.0.0-M35"
+  val http4sVersion = "1.0.0-M38"
   val grpcCoreVersion = "1.51.0"
   val scalaTestVersion = "3.2.14"
 
-  val workbenchLibsHash = "1a6839f"
-  val workbenchGoogle2V = s"0.25-$workbenchLibsHash"
-  val workbenchAzureV = s"0.1-$workbenchLibsHash"
+  val workbenchLibsHash = "1c0cf92"
+  val workbenchGoogle2V = s"0.36-$workbenchLibsHash"
+  val workbenchAzureV = s"0.7-$workbenchLibsHash"
 
   val common = List(
     "com.github.pureconfig" %% "pureconfig" % "0.17.2",
