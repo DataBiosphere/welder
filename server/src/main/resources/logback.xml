@@ -3,7 +3,7 @@
 <!--  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />-->
   <property name="WORKING_DIRECTORY" value="/work" />
 
-  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+  <appender name="FILE" class="ch.qos.logback.classic.AsyncAppender">
     <file>${WORKING_DIRECTORY}/.welder.log</file>
 
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
@@ -25,18 +25,21 @@
     </rollingPolicy>
   </appender>
 
-  <logger name="org.broadinstitute.dsp.workbench.welder" level="INFO" additivity="false">
-    <appender-ref ref="FILE"/>
-  </logger>
+<!--  <logger name="org.broadinstitute.dsp.workbench.welder" level="INFO" additivity="false">-->
+<!--    <appender-ref ref="FILE"/>-->
+<!--  </logger>-->
 
-  <logger name="org.http4s.server.blaze.Http1ServerStage" level="INFO" additivity="false">
-    <appender-ref ref="FILE"/>
-  </logger>
+<!--  <logger name="org.http4s.server.blaze.Http1ServerStage" level="INFO" additivity="false">-->
+<!--    <appender-ref ref="FILE"/>-->
+<!--  </logger>-->
 
-  <appender class="ch.qos.logback.core.ConsoleAppender" name="CONSOLE">
+  <appender name="CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
     <param name="Threshold" value="INFO"/>
-    <encoder>
-      <pattern>%d{dd/MM/yyyy HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern>
+
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <fieldNames>
+        <level>severity</level>
+      </fieldNames>
     </encoder>
   </appender>
 
