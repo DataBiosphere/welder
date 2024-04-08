@@ -25,13 +25,13 @@
     </rollingPolicy>
   </appender>
 
-  <logger name="org.broadinstitute.dsp.workbench.welder" level="INFO" additivity="false">
-    <appender-ref ref="FILE"/>
-  </logger>
+<!--  <logger name="org.broadinstitute.dsp.workbench.welder" level="INFO" additivity="false">-->
+<!--    <appender-ref ref="FILE"/>-->
+<!--  </logger>-->
 
-  <logger name="org.http4s.server.blaze.Http1ServerStage" level="INFO" additivity="false">
-    <appender-ref ref="FILE"/>
-  </logger>
+<!--  <logger name="org.http4s.server.blaze.Http1ServerStage" level="INFO" additivity="false">-->
+<!--    <appender-ref ref="FILE"/>-->
+<!--  </logger>-->
 
   <appender class="ch.qos.logback.core.ConsoleAppender" name="CONSOLE">
     <param name="Threshold" value="INFO"/>
