@@ -3,7 +3,7 @@
 <!--  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />-->
   <property name="WORKING_DIRECTORY" value="/work" />
 
-  <appender name="FILE" class="ch.qos.logback.classic.AsyncAppender">
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
     <file>${WORKING_DIRECTORY}/.welder.log</file>
 
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
@@ -33,7 +33,7 @@
 <!--    <appender-ref ref="FILE"/>-->
 <!--  </logger>-->
 
-  <appender name="CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
     <param name="Threshold" value="INFO"/>
 
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
@@ -43,9 +43,17 @@
     </encoder>
   </appender>
 
-  <root level="INFO">
+  <appender name="async-file" class="ch.qos.logback.classic.AsyncAppender">
     <appender-ref ref="FILE" />
-    <appender-ref ref="CONSOLE"/>
+  </appender>
+
+  <appender name="async-console" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="CONSOLE" />
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="async-file" />
+    <appender-ref ref="async-console"/>
   </root>
 
 </configuration>
