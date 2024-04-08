@@ -33,7 +33,6 @@ jobs:
 
           # export image name from the log
           image=$(grep 'naming to' build.log | head -1 | awk '{print $(NF-1)}')
-          echo "1111 $image"
           echo "::set-output name=image::${image}"
 
       # scan the image
