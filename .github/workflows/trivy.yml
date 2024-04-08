@@ -32,7 +32,7 @@ jobs:
           sbt -no-colors server/docker:publishLocal | tee build.log
 
           # export image name from the log
-          image=$(grep 'naming to' build.log | head -1 | awk '{print $NF}')
+          image=$(grep 'naming to' build.log | head -1 | awk '{print $(NF-1)}')
           echo "1111 $image"
           echo "::set-output name=image::${image}"
 
