@@ -97,7 +97,7 @@ object Settings {
     Docker / packageName := "broad-dsp-gcr-public/welder-server",
     // user, uid, group, and gid are all replicated in the Jupyter container
     Docker / daemonUser := "welder-user",
-    Docker / daemonUserUid := Some("1001"),
+    Docker / daemonUserUid := Some("2001"),
     Docker / daemonGroup := "users",
     Docker / daemonGroupGid := Some("100"),
     dockerEntrypoint := List(entrypoint),
