@@ -20,6 +20,9 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
   implicit def doneCheckable[A]: DoneCheckable[Option[A]] = (a: Option[A]) => a.isDefined
 
   override def getPetAccessToken(): IO[PetAccessTokenResp] =
+    // Check if the pet managed identity ID is present in the VM userData.
+    // If it is, include it in the msi_res_id param to distinguish it from other identities
+    // potentially assigned to the VM.
     getPetManagedIdentityId().flatMap { petManagedIdentityIdOpt =>
       val queryParams = Map("api-version" -> "2018-02-01", "resource" -> "https://management.azure.com/") ++
         petManagedIdentityIdOpt.map(mi => Map("msi_res_id" -> mi)).getOrElse(Map.empty)
@@ -55,7 +58,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
         Map("api-version" -> "2021-01-01", "format" -> "text")
       )
 
-    // Using `client.run` and base64-decoding the entity stream.
+    // This uses `client.run` and base64-decodes the entity stream directly.
     // I was having issues reading this data with `client.exportOr[String]`.
     httpClient
       .run(
