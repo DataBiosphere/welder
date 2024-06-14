@@ -1,18 +1,19 @@
 package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
+import cats.syntax.all._
+import fs2._
 import org.broadinstitute.dsde.workbench.DoneCheckable
-import org.broadinstitute.dsde.workbench.google2.{streamFUntilDone, streamUntilDoneOrTimeout}
+import org.broadinstitute.dsde.workbench.google2.streamUntilDoneOrTimeout
 import org.broadinstitute.dsp.workbench.welder.MiscHttpClientAlgCodec.{decodePetAccessTokenResp, decodeSasTokenResp}
 import org.http4s.QueryParamEncoder.stringQueryParamEncoder
+import org.http4s._
 import org.http4s.circe.CirceEntityCodec.circeEntityDecoder
 import org.http4s.client.Client
 import org.http4s.headers.Authorization
-import org.http4s._
 import org.typelevel.ci.CIString
 
-import java.nio.charset.StandardCharsets
-import java.util.{Base64, UUID}
+import java.util.UUID
 import scala.concurrent.duration.DurationInt
 
 class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig) extends MiscHttpClientAlg {
@@ -54,14 +55,22 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
         Map("api-version" -> "2021-01-01", "format" -> "text")
       )
 
-    val getId = httpClient.expectOption[String](
-      Request[IO](
-        method = Method.GET,
-        uri = uri,
-        headers = Headers(Header.Raw.apply(CIString("Metadata"), "true"))
+    httpClient
+      .run(
+        Request[IO](
+          method = Method.GET,
+          uri = uri,
+          headers = Headers(Header.Raw.apply(CIString("Metadata"), "true"))
+        )
       )
-    )
-    streamFUntilDone(getId, 5, 2 seconds).compile.lastOrError
-      .map(_.map(s => new String(Base64.getDecoder.decode(s), StandardCharsets.UTF_8)))
+      .use { resp =>
+        resp.contentLength.filter(_ > 0).traverse { _ =>
+          resp.bodyText
+            .through(text.base64.decode[IO])
+            .through(text.utf8.decode)
+            .compile
+            .foldMonoid
+        }
+      }
   }
 }
