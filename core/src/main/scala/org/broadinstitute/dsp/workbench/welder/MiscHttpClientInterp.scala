@@ -55,6 +55,8 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
         Map("api-version" -> "2021-01-01", "format" -> "text")
       )
 
+    // Using `client.run` and testing contentLength in the response to handle empty responses as None.
+    // `client.expectOption[String]` was throwing an exception when the content-length was 0.
     httpClient
       .run(
         Request[IO](
