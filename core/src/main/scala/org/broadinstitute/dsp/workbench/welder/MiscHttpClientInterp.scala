@@ -19,7 +19,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
   implicit def doneCheckable[A]: DoneCheckable[Option[A]] = (a: Option[A]) => a.isDefined
 
   override def getPetAccessToken(): IO[PetAccessTokenResp] =
-    getPetManagedIdentityId.flatMap { petManagedIdentityIdOpt =>
+    getPetManagedIdentityId().flatMap { petManagedIdentityIdOpt =>
       val queryParams = Map("api-version" -> "2018-02-01", "resource" -> "https://management.azure.com/") ++
         petManagedIdentityIdOpt.map(mi => Map("msi_res_id" -> mi)).getOrElse(Map.empty)
       val uri = (Uri.unsafeFromString("http://169.254.169.254") / "metadata" / "identity" / "oauth2" / "token").withQueryParams(queryParams)
@@ -54,7 +54,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
         Map("api-version" -> "2021-01-01", "format" -> "text")
       )
 
-    val getId = httpClient.expectOption[Array[Byte]](
+    val getId = httpClient.expectOption[String](
       Request[IO](
         method = Method.GET,
         uri = uri,
@@ -62,6 +62,6 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
       )
     )
     streamFUntilDone(getId, 5, 2 seconds).compile.lastOrError
-      .map(_.map(b => new String(Base64.getDecoder.decode(b), StandardCharsets.UTF_8)))
+      .map(_.map(s => new String(Base64.getDecoder.decode(s), StandardCharsets.UTF_8)))
   }
 }
