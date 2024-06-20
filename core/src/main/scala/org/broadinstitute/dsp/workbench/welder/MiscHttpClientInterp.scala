@@ -52,7 +52,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
     )
   }
 
-  private def getPetManagedIdentityId(): IO[Option[String]] = {
+  private[welder] def getPetManagedIdentityId(): IO[Option[String]] = {
     val uri = (Uri.unsafeFromString("http://169.254.169.254") / "metadata" / "instance" / "compute" / "userData")
       .withQueryParams(
         Map("api-version" -> "2021-01-01", "format" -> "text")

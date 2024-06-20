@@ -1,13 +1,62 @@
 package org.broadinstitute.dsp.workbench.welder
 
-import io.circe.parser.decode
+import _root_.io.circe.parser.decode
+import _root_.io.circe.syntax._
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
+import fs2._
 import org.broadinstitute.dsde.workbench.azure.SasToken
+import org.broadinstitute.dsp.workbench.welder.MiscHttpClientAlgCodec._
+import org.http4s.client.Client
+import org.http4s.headers.`Content-Length`
+import org.http4s.{Entity, Headers, Response, Uri}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.broadinstitute.dsp.workbench.welder.MiscHttpClientAlgCodec._
-import org.http4s.Uri
+
+import java.nio.charset.Charset
+import java.util.{Base64, UUID}
+import scala.concurrent.duration._
 
 class MiscHttpClientInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
+  val petId = "pet-1234"
+  val petToken = "pet-token"
+  val config = MiscHttpClientConfig(Uri.unsafeFromString("https://wsm"), UUID.randomUUID(), 1 hour)
+
+  def mockClient(petIdInUserData: Boolean): Client[IO] = Client.apply[IO] { request =>
+    val responseBody = request.uri.path.segments.map(_.toString) match {
+      case Vector("metadata", "identity", "oauth2", "token") =>
+        Map("access_token" -> petToken).asJson.noSpaces.getBytes(Charset.defaultCharset())
+      case Vector("metadata", "instance", "compute", "userData") if petIdInUserData =>
+        Base64.getEncoder.encode(petId.getBytes(Charset.defaultCharset()))
+      case _ => Array.empty[Byte]
+    }
+    Resource.eval(IO(Response[IO](entity = Entity(Stream.emits(responseBody)), headers = Headers(`Content-Length`.fromLong(responseBody.length.toLong)))))
+  }
+
+  it should "get the pet managed identity id from userData" in {
+    val client = new MiscHttpClientInterp(mockClient(true), config)
+    val returnedPetId = client.getPetManagedIdentityId().unsafeRunSync()
+    returnedPetId shouldBe Some(petId)
+  }
+
+  it should "not get the pet managed identity id if userData is empty" in {
+    val client = new MiscHttpClientInterp(mockClient(false), config)
+    val returnedPetId = client.getPetManagedIdentityId().unsafeRunSync()
+    returnedPetId shouldBe None
+  }
+
+  it should "get a pet access token when userData is present" in {
+    val client = new MiscHttpClientInterp(mockClient(true), config)
+    val returnedPetToken = client.getPetAccessToken().unsafeRunSync()
+    returnedPetToken shouldBe PetAccessTokenResp(PetAccessToken(petToken))
+  }
+
+  it should "get a pet access token when userData is not present" in {
+    val client = new MiscHttpClientInterp(mockClient(false), config)
+    val returnedPetToken = client.getPetAccessToken().unsafeRunSync()
+    returnedPetToken shouldBe PetAccessTokenResp(PetAccessToken(petToken))
+  }
+
   it should "decode pet access token properly" in {
     val inputString =
       """
