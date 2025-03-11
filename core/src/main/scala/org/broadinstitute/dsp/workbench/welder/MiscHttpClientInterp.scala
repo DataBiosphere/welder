@@ -24,7 +24,7 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
     // If it is, include it in the msi_res_id param to distinguish it from other identities
     // potentially assigned to the VM.
     getPetManagedIdentityId().flatMap { petManagedIdentityIdOpt =>
-      val queryParams = Map("api-version" -> "2018-02-01", "resource" -> "https://management.azure.com/") ++
+      val queryParams = Map("api-version" -> "2018-02-01", "resource" -> config.azureManagementUrl) ++
         petManagedIdentityIdOpt.map(mi => Map("msi_res_id" -> mi)).getOrElse(Map.empty)
       val uri = (Uri.unsafeFromString("http://169.254.169.254") / "metadata" / "identity" / "oauth2" / "token").withQueryParams(queryParams)
 
@@ -78,4 +78,5 @@ class MiscHttpClientInterp(httpClient: Client[IO], config: MiscHttpClientConfig)
         }
       }
   }
+
 }
