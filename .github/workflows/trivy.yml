@@ -7,7 +7,8 @@ jobs:
     name: DSP AppSec Trivy check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - uses: sbt/setup-sbt@v1
 
       # fetch SBT package
       - uses: olafurpg/setup-scala@v10
