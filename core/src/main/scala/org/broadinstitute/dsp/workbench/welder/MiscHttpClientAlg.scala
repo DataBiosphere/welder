@@ -15,7 +15,7 @@ trait MiscHttpClientAlg {
   def getSasUrl(petAccessToken: PetAccessToken, storageContainerResourceId: UUID): IO[SasTokenResp]
 }
 
-final case class MiscHttpClientConfig(wsmUrl: Uri, workspaceId: UUID, sasTokenExpiresIn: FiniteDuration)
+final case class MiscHttpClientConfig(wsmUrl: Uri, azureManagementUrl: String, workspaceId: UUID, sasTokenExpiresIn: FiniteDuration)
 final case class PetAccessToken(value: String) extends AnyVal
 final case class PetAccessTokenResp(accessToken: PetAccessToken)
 final case class SasTokenResp(uri: Uri, token: SasToken)

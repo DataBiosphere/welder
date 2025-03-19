@@ -20,7 +20,7 @@ import scala.concurrent.duration._
 class MiscHttpClientInterpSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with WelderTestSuite {
   val petId = "pet-1234"
   val petToken = "pet-token"
-  val config = MiscHttpClientConfig(Uri.unsafeFromString("https://wsm"), UUID.randomUUID(), 1 hour)
+  val config = MiscHttpClientConfig(Uri.unsafeFromString("https://wsm"), "https://management.azure.com/", UUID.randomUUID(), 1 hour)
 
   def mockClient(petIdInUserData: Boolean): Client[IO] = Client.apply[IO] { request =>
     val responseBody = request.uri.path.segments.map(_.toString) match {

@@ -71,6 +71,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
         |working-directory = "/tmp"
         |misc-http-client-config = {
         |  wsm-url = "https://workspace.dsde-dev.broadinstitute.org/"
+        |  azure-management-url = "https://management.azure.com/"
         |  workspace-id = "a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"
         |  sas-token-expires-in = 8 hours
         |}
@@ -107,6 +108,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
+        "https://management.azure.com/",
         UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
         8 hours
       ),
@@ -154,6 +156,7 @@ class ConfigSpec extends AnyFlatSpec with Matchers {
       30 seconds,
       MiscHttpClientConfig(
         Uri.unsafeFromString("https://workspace.dsde-dev.broadinstitute.org/"),
+        "https://management.azure.com/",
         UUID.fromString("a5a1f1e1-bcb0-49d9-b589-ea4d7c9d6f02"),
         8 hours
       ),
