@@ -11,7 +11,7 @@ import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
 
 object Settings {
-  lazy val artifactory = "https://broadinstitute.jfrog.io/broadinstitute/"
+  lazy val artifactory = "https://us-central1-maven.pkg.dev/dsp-artifact-registry/"
 
   lazy val commonResolvers = List(
     "artifactory-releases" at artifactory + "libs-release",
