@@ -41,8 +41,7 @@ class MetadataCacheInterp(metadataCache: MetadataCache)(implicit logger: Structu
 
   val updateCachePipe: Pipe[IO, Option[AdaptedGcsMetadataCache], Unit] = in => {
     in.unNone.flatMap { metadata =>
-      logger.info(s"(LM) Updating metadata cache for local path: ${metadata.localPath}") >>
-        logger.info(s"(LM) Updating metadata generation: ${metadata.localFileGeneration}") >>
+      logger.info(s"(LM) Updating metadata cache for local path: ${metadata.localPath} and generation ${metadata.localFileGeneration}")
       val res = metadataCache.modify { mp =>
         val newCache = mp + (metadata.localPath -> metadata)
         (newCache, ())
