@@ -156,6 +156,10 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
+      _ <- logger.info(s"(LM) Existing metadata $existingMetadata")
+      _ <- logger.info(s"(LM) Previous metadata $previousMeta")
+      _ <- logger.info(s"(LM) Object path $localObjectPath")
+      _ <- logger.info(s"(LM) Local path $localAbsolutePath")
       calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
       _ <- previousMeta match {
