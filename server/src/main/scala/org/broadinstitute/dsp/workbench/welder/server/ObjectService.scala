@@ -300,8 +300,6 @@ class ObjectService(
       implicit ev: Ask[IO, TraceId]
   ): IO[Unit] = {
     val lockMetadataToPush = lock.map(_.toMetadataMap).getOrElse(Map.empty)
-    logger.info(s"(LM) Lock metadata: ${lockMetadataToPush}")
-    logger.info(s"(LM) Generation: ${generation}")
     for {
       storageAlg <- storageAlgRef.get
       delocalizeResp <- storageAlg.delocalize(localObjectPath, cloudBlobPath, generation, lockMetadataToPush).recoverWith {

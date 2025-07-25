@@ -156,10 +156,6 @@ class BackgroundTask(
       traceId <- ev.ask[TraceId]
       localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
       previousMeta <- metadataCacheAlg.getCache(localObjectPath)
-      _ <- logger.info(s"(LM) Existing metadata $existingMetadata")
-      _ <- logger.info(s"(LM) Previous metadata $previousMeta")
-      _ <- logger.info(s"(LM) Object path $localObjectPath")
-      _ <- logger.info(s"(LM) Local path $localAbsolutePath")
       calculatedCrc32c <- Crc32c.calculateCrc32ForFile(localAbsolutePath)
 
       _ <- previousMeta match {
@@ -197,16 +193,13 @@ class BackgroundTask(
             if (generation == 0L) {
               for {
                 // in this case, the local cache is empty but the file has a generation in GCS
+                // this happens when the file is created by another user or the VM is recreated
                 // if the user is the same as the one who last modified the file, we update the local cache with the remote generation
-                // this is because the user is most likely re-creating their Rstudio environment
-                _ <- logger.info(s"Generation mismatch for $localObjectPath, checking if the user is the same")
+                _ <- logger.info(s"Generation mismatch for $localObjectPath, no local metadata, checking if the user is the same")
                 cloudFileMetaOpt <- storageAlg.retrieveAdaptedGcsMetadata(localObjectPath, gsPath)
                 cloudUserMeta <- storageAlg.retrieveUserDefinedMetadata(gsPath)
-                _ <- logger.info(s"Cloud user metadata: $cloudUserMeta")
-                _ <- logger.info(s"Cloud file metadata: $cloudFileMetaOpt")
                 sameUser = cloudUserMeta("lastModifiedBy").equals(hashedOwnerEmail.asString)
                 _ <- if (sameUser && cloudFileMetaOpt.isDefined) {
-                  logger.info(s"User is the same, updating local cache for $localObjectPath with generation ${cloudFileMetaOpt.get.generation}")
                   metadataCacheAlg.updateCache(localObjectPath, cloudFileMetaOpt.get)
                 } // If the generation is 0L and the user is not the same, we raise an error
                 else IO.raiseError(e)
