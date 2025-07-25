@@ -203,7 +203,7 @@ class BackgroundTask(
                   metadataCacheAlg.updateCache(localObjectPath, cloudFileMetaOpt.get)
                 } // If the generation is 0L and the user is not the same, we raise an error
                 else IO.raiseError(e)
-            } yield None
+              } yield None
             } else {
               // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
               // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.

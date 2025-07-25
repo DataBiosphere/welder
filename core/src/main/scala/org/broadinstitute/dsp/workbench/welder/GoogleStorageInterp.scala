@@ -116,8 +116,8 @@ class GoogleStorageInterp(config: StorageAlgConfig, googleStorageService: Google
     val localAbsolutePath = config.workingDirectory.resolve(localObjectPath.asPath)
     for {
       traceId <- ev.ask[TraceId]
-      fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
       _ <- logger.info(Map(TRACE_ID_LOGGING_KEY -> traceId.asString))(s"Delocalizing file ${localAbsolutePath.toString}")
+      fs2path = fs2.io.file.Path.fromNioPath(localAbsolutePath)
       _ <- (Files[IO].readAll(fs2path) through googleStorageService.streamUploadBlob(
         gsPath.container.asGcsBucket,
         gsPath.blobPath.asGcs,

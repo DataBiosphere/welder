@@ -2,9 +2,8 @@ package org.broadinstitute.dsp.workbench.welder
 
 import cats.effect.IO
 import fs2.{Pipe, Stream}
-import org.typelevel.log4cats.StructuredLogger
 
-class MetadataCacheInterp(metadataCache: MetadataCache)(implicit logger: StructuredLogger[IO]) extends MetadataCacheAlg {
+class MetadataCacheInterp(metadataCache: MetadataCache) extends MetadataCacheAlg {
   def updateRemoteStateCache(localPath: RelativePath, remoteState: RemoteState): IO[Unit] =
     metadataCache.modify { mp =>
       val previousMeta = mp.get(localPath)
