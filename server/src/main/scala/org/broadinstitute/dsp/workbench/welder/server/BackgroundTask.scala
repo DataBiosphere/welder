@@ -190,9 +190,21 @@ class BackgroundTask(
         .delocalize(localObjectPath, gsPath, generation, updatedMetadata)
         .recoverWith {
           case e: GenerationMismatch =>
-            if (generation == 0L)
-              IO.raiseError(e)
-            else {
+            if (generation == 0L) {
+              for {
+                // in this case, the local cache is empty but the file has a generation in GCS
+                // this happens when the file is created by another user or the VM is recreated
+                // if the user is the same as the one who last modified the file, we update the local cache with the remote generation
+                _ <- logger.info(s"Generation mismatch for $localObjectPath, no local metadata, checking if the user is the same")
+                cloudFileMetaOpt <- storageAlg.retrieveAdaptedGcsMetadata(localObjectPath, gsPath)
+                cloudUserMeta <- storageAlg.retrieveUserDefinedMetadata(gsPath)
+                sameUser = cloudUserMeta("lastModifiedBy").equals(hashedOwnerEmail.asString)
+                _ <- if (sameUser && cloudFileMetaOpt.isDefined) {
+                  metadataCacheAlg.updateCache(localObjectPath, cloudFileMetaOpt.get)
+                } // If the generation is 0L and the user is not the same, we raise an error
+                else IO.raiseError(e)
+              } yield None
+            } else {
               // In the case when the file is already been deleted from GCS, we try to delocalize the file with generation being 0L
               // This assumes the business logic we want is always to recreate files that have been deleted from GCS by other users.
               // If the file is indeed out of sync with remote, both delocalize attempts will fail due to generation mismatch
