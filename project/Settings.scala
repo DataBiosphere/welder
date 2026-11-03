@@ -77,6 +77,7 @@ object Settings {
 
   lazy val commonDockerSettings = List(
     maintainer := "workbench-interactive-analysis@broadinstitute.org",
+    // 2026-11-02: this comment forces a full rebuild on the latest blessed base image (CTM-739).
     dockerBaseImage := "us.gcr.io/broad-dsp-gcr-public/base/jre:17-debian",
     dockerRepository := Some("us.gcr.io"),
     dockerExposedPorts := List(8080),
